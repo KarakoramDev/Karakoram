@@ -17,8 +17,10 @@ const InstallDir = "/opt/karakoram/keycloak-" + Version + "/keycloak-" + Version
 
 // Spec contains only this consumer's credentials, never source administrator credentials.
 type Spec struct {
-	Version              string `json:"version"`
-	Host                 string `json:"host"`
+	Version string `json:"version"`
+	Host    string `json:"host"`
+	// IPv6 selects IPv6-capable HTTP binding; omitted retains IPv4 binding.
+	IPv6                 bool   `json:"ipv6,omitempty"`
 	Port                 int    `json:"port"`
 	Database             string `json:"database"`
 	Username             string `json:"username"`

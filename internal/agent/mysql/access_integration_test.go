@@ -26,7 +26,8 @@ import (
 
 type nativeAccessDeps struct{ db *sql.DB }
 
-func (nativeAccessDeps) GaleraAccess() bool { return false }
+func (nativeAccessDeps) GaleraAccess() bool        { return false }
+func (nativeAccessDeps) AccessRestoreFenced() bool { return false }
 
 func (d nativeAccessDeps) LocalAccessDB(context.Context) (*sql.DB, error) { return d.db, nil }
 

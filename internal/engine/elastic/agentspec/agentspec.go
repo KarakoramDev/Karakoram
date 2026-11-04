@@ -80,6 +80,9 @@ type Spec struct {
 	Component string `json:"component"`
 	// Version is the exact Elastic Stack version installed under Home().
 	Version string `json:"version"`
+	// IPv4 selects IPv4-only private listeners. Omitted retains IPv6-capable
+	// binding for existing retained configurations.
+	IPv4 bool `json:"ipv4,omitempty"`
 	// HeapMB is the JVM heap for Elasticsearch/Logstash (Xms=Xmx) and the
 	// Node.js --max-old-space-size for Kibana. Zero leaves product defaults.
 	HeapMB int `json:"heapMB,omitempty"`

@@ -5,6 +5,7 @@ package mysql
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -21,6 +22,12 @@ type gtidEvents struct{ events []domain.Event }
 func (e *gtidEvents) Record(_ context.Context, event domain.Event) error {
 	e.events = append(e.events, event)
 	return nil
+}
+
+type gtidEventFunc func(context.Context, domain.Event) error
+
+func (f gtidEventFunc) Record(ctx context.Context, event domain.Event) error {
+	return f(ctx, event)
 }
 
 func TestPXCQuorumGTIDDurableLatchAndBaseline(t *testing.T) {
@@ -49,6 +56,8 @@ func TestPXCQuorumGTIDDurableLatchAndBaseline(t *testing.T) {
 	b.native[bad] = st
 	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err == nil {
 		t.Fatal("divergence accepted")
+	} else if conflict, ok := err.(*myspec.GTIDQuorumError); !ok || !conflict.Diverged {
+		t.Fatalf("divergence lost typed False discriminator: %v", err)
 	}
 	incident := activeGTIDIncident(s)
 	if incident == nil || !incident.SafeThrough.Equal(lastSafe) {
@@ -78,7 +87,7 @@ func TestPXCQuorumGTIDDurableLatchAndBaseline(t *testing.T) {
 	found := false
 	for _, c := range status.Conditions {
 		if c.Type == "GTIDHistorySafe" {
-			found = c.Status == "False" && strings.Contains(c.Message, bad) && strings.Contains(c.Message, "safe through")
+			found = c.Status == "False" && c.Reason == "GTIDHistoryDiscontinuityLatched" && strings.Contains(c.Message, bad) && strings.Contains(c.Message, "safe through")
 		}
 	}
 	if !found {
@@ -111,6 +120,326 @@ func TestPXCQuorumGTIDDurableLatchAndBaseline(t *testing.T) {
 	}
 	if gtidContinuitySafe(s, lastSafe.Add(-time.Second), full.MySQL.EndTime) {
 		t.Fatal("cleared latch admitted old crossing chain")
+	}
+}
+
+func TestPXCFullAcknowledgesOnlyExistingFrozenDeltas(t *testing.T) {
+	const current = "11111111-2222-3333-4444-555555555555"
+	const local = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	p, rc, b := setupPXC(t)
+	converge(t, p, rc, b)
+	s, _ := load(rc.Cluster)
+	for _, m := range s.data() {
+		st := b.native[m.Name]
+		st.GTIDExecuted = current + ":1-10"
+		b.native[m.Name] = st
+	}
+	bad := s.data()[2].Name
+	st := b.native[bad]
+	st.GTIDExecuted += "," + local + ":1-3"
+	b.native[bad] = st
+	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err == nil {
+		t.Fatal("frozen difference not detected")
+	}
+	start := activeGTIDIncident(s).DetectedAt.Add(time.Second)
+	full := &domain.Backup{Name: "ack", Type: "full", Phase: domain.PhaseSucceeded, StartedAt: &start, MySQL: &domain.MySQLBackup{EndTime: start.Add(time.Second)}}
+	if err := establishGTIDBaseline(t.Context(), rc, s, full); err != nil {
+		t.Fatal(err)
+	}
+	// Reload from the sealed journal, not only the in-memory state.
+	s, _ = load(rc.Cluster)
+	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != nil || activeGTIDIncident(s) != nil {
+		t.Fatalf("acknowledged condition re-latched: %v", err)
+	}
+	st.GTIDExecuted = current + ":1-11," + local + ":1-3"
+	b.native[bad] = st
+	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != nil {
+		t.Fatalf("normal active lag after acknowledgement: %v", err)
+	}
+	st.GTIDExecuted = current + ":1-11," + local + ":1-4"
+	b.native[bad] = st
+	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err == nil || activeGTIDIncident(s) == nil {
+		t.Fatal("growing frozen delta did not re-latch")
+	}
+}
+
+func TestPXCAcknowledgedAllowanceRetiresAndBindsIdentity(t *testing.T) {
+	const current = "11111111-2222-3333-4444-555555555555"
+	const local = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	for _, scenario := range []string{"shrink-regrow", "equal-regrow", "reversed", "epoch", "group", "server", "native-server", "volume", "service"} {
+		t.Run(scenario, func(t *testing.T) {
+			p, rc, b := setupPXC(t)
+			converge(t, p, rc, b)
+			s, _ := load(rc.Cluster)
+			for _, m := range s.data() {
+				st := b.native[m.Name]
+				st.GTIDExecuted = current + ":1-10"
+				b.native[m.Name] = st
+			}
+			bad := s.data()[2].Name
+			setLocal := func(name, suffix string) {
+				st := b.native[name]
+				st.GTIDExecuted = current + ":1-10" + suffix
+				b.native[name] = st
+			}
+			reload := func() {
+				var err error
+				s, err = load(rc.Cluster)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = loadGTIDJournal(t.Context(), rc, s); err != nil {
+					t.Fatal(err)
+				}
+			}
+			setLocal(bad, ","+local+":1-3")
+			if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err == nil {
+				t.Fatal("initial divergence not detected")
+			}
+			reload()
+			start := activeGTIDIncident(s).DetectedAt.Add(time.Second)
+			full := &domain.Backup{Name: "ack", Type: "full", Phase: domain.PhaseSucceeded, StartedAt: &start, MySQL: &domain.MySQLBackup{EndTime: start.Add(time.Second)}}
+			if err := establishGTIDBaseline(t.Context(), rc, s, full); err != nil {
+				t.Fatal(err)
+			}
+			reload()
+			if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != nil {
+				t.Fatalf("unchanged acknowledgement rejected: %v", err)
+			}
+			reload()
+			switch scenario {
+			case "shrink-regrow", "equal-regrow":
+				shrunken := "," + local + ":1-2"
+				if scenario == "equal-regrow" {
+					shrunken = ""
+				}
+				setLocal(bad, shrunken)
+				if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != nil {
+					t.Fatalf("healed difference rejected: %v", err)
+				}
+				reload()
+				if s.GTIDIncidents[0].Acknowledged[bad].GTIDExecuted != current+":1-10,"+local+":1-3" {
+					t.Fatal("original acknowledgement evidence was mutated")
+				}
+				setLocal(bad, ","+local+":1-3")
+			case "reversed":
+				setLocal(bad, "")
+				setLocal(s.data()[0].Name, ","+local+":1")
+			case "epoch":
+				s.Formation.FormationEpoch++
+			case "group":
+				s.Formation.GroupName = "replacement-group"
+			case "server":
+				s.find(bad).ServerUUID = "aaaaaaaa-1111-2222-3333-444444444444"
+			case "native-server":
+				st := b.native[bad]
+				st.ServerUUID = "aaaaaaaa-1111-2222-3333-444444444444"
+				b.native[bad] = st
+			case "volume":
+				s.find(bad).VolumeID += "-replacement"
+			case "service":
+				s.find(bad).ServiceID += "-replacement"
+			}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			reload()
+			if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err == nil {
+				t.Fatal("retired or foreign-incarnation difference accepted")
+			}
+			reload()
+			if activeGTIDIncident(s) == nil || len(s.GTIDIncidents) != 2 {
+				t.Fatal("new incident did not survive journal reload")
+			}
+		})
+	}
+}
+
+func TestPXCBaselineAuditFollowsDurableTransitionAndRetries(t *testing.T) {
+	p, rc, b := setupPXC(t)
+	converge(t, p, rc, b)
+	s, _ := load(rc.Cluster)
+	s.GTIDIncidents = []gtidIncident{{DetectedAt: time.Unix(10, 0), Audited: true}}
+	if err := persistGTIDHistory(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	attempts := 0
+	rc.Events = gtidEventFunc(func(ctx context.Context, event domain.Event) error {
+		if event.Reason != "GTIDHistoryBaselineEstablished" {
+			t.Fatalf("unexpected event: %s", event.Reason)
+		}
+		durable, _ := load(rc.Cluster)
+		if err := loadGTIDJournal(ctx, rc, durable); err != nil {
+			t.Fatal(err)
+		}
+		if activeGTIDIncident(durable) != nil || !durable.GTIDIncidents[0].BaselineAuditPending || durable.GTIDIncidents[0].Allowance == nil {
+			t.Fatal("audit preceded the durable baseline transition")
+		}
+		attempts++
+		if attempts == 1 {
+			return context.Canceled
+		}
+		return nil
+	})
+	start := time.Unix(20, 0)
+	full := &domain.Backup{Name: "ack", Type: "full", Phase: domain.PhaseSucceeded, StartedAt: &start, MySQL: &domain.MySQLBackup{EndTime: start.Add(time.Second)}}
+	rc.Secrets = &accessFaultSecrets{SecretStore: rc.Secrets, key: "mysql/gtid/history"}
+	if err := establishGTIDBaseline(t.Context(), rc, s, full); err == nil || attempts != 0 {
+		t.Fatalf("failed journal commit emitted a baseline event: %v, attempts=%d", err, attempts)
+	}
+	s, _ = load(rc.Cluster)
+	if err := loadGTIDJournal(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if activeGTIDIncident(s) == nil {
+		t.Fatal("failed journal write cleared the durable incident")
+	}
+	if err := establishGTIDBaseline(t.Context(), rc, s, full); err != context.Canceled {
+		t.Fatalf("expected recorder failure: %v", err)
+	}
+	s, _ = load(rc.Cluster)
+	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = load(rc.Cluster)
+	if err := loadGTIDJournal(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 2 || s.GTIDIncidents[0].BaselineAuditPending {
+		t.Fatal("durable pending audit did not retry")
+	}
+}
+
+func TestPXCPendingBaselineAuditCannotBlockSafetyTransitions(t *testing.T) {
+	const current = "11111111-2222-3333-4444-555555555555"
+	const local = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	for _, scenario := range []string{"growth", "healing"} {
+		t.Run(scenario, func(t *testing.T) {
+			p, rc, b := setupPXC(t)
+			converge(t, p, rc, b)
+			s, _ := load(rc.Cluster)
+			for _, m := range s.data() {
+				st := b.native[m.Name]
+				st.GTIDExecuted = current + ":1-10"
+				b.native[m.Name] = st
+			}
+			bad := s.data()[2].Name
+			setLocal := func(suffix string) {
+				st := b.native[bad]
+				st.GTIDExecuted = current + ":1-10" + suffix
+				b.native[bad] = st
+			}
+			reload := func() {
+				var err error
+				s, err = load(rc.Cluster)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = loadGTIDJournal(t.Context(), rc, s); err != nil {
+					t.Fatal(err)
+				}
+			}
+			setLocal("," + local + ":1-3")
+			if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err == nil {
+				t.Fatal("initial divergence not detected")
+			}
+			reload()
+			rc.Events = gtidEventFunc(func(context.Context, domain.Event) error {
+				return context.Canceled
+			})
+			start := activeGTIDIncident(s).DetectedAt.Add(time.Second)
+			full := &domain.Backup{Name: "ack", Type: "full", Phase: domain.PhaseSucceeded, StartedAt: &start, MySQL: &domain.MySQLBackup{EndTime: start.Add(time.Second)}}
+			if err := establishGTIDBaseline(t.Context(), rc, s, full); err != context.Canceled {
+				t.Fatalf("expected pending baseline audit: %v", err)
+			}
+			reload()
+			if !s.GTIDIncidents[0].BaselineAuditPending || activeGTIDIncident(s) != nil {
+				t.Fatal("baseline transition was not committed before recorder failure")
+			}
+			if scenario == "healing" {
+				setLocal("," + local + ":1-2")
+				err := checkPXCQuorumGTIDs(t.Context(), rc, s)
+				var persistence *gtidHistoryPersistenceError
+				if !errors.Is(err, context.Canceled) || !errors.As(err, &persistence) {
+					t.Fatalf("expected typed recorder outage during healing: %v", err)
+				}
+				reload()
+				if got := s.GTIDIncidents[0].Allowance.Histories[bad].GTIDExecuted; got != current+":1-10,"+local+":1-2" {
+					t.Fatalf("recorder outage prevented durable narrowing: %s", got)
+				}
+				setLocal("," + local + ":1-3")
+			} else {
+				setLocal("," + local + ":1-4")
+			}
+			err := checkPXCQuorumGTIDs(t.Context(), rc, s)
+			var persistence *gtidHistoryPersistenceError
+			if !errors.Is(err, context.Canceled) || !errors.As(err, &persistence) {
+				t.Fatalf("expected typed recorder outage during divergence: %v", err)
+			}
+			reload()
+			if len(s.GTIDIncidents) != 2 || activeGTIDIncident(s) == nil || !s.GTIDIncidents[0].BaselineAuditPending {
+				t.Fatal("recorder failure discarded divergence or older pending baseline")
+			}
+			// Equality is not authority to erase the incident. Recovery must
+			// still emit the older baseline event after the new incident exists.
+			setLocal("")
+			events := &gtidEvents{}
+			rc.Events = events
+			if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != nil {
+				t.Fatal(err)
+			}
+			reload()
+			if activeGTIDIncident(s) == nil || len(s.GTIDIncidents) != 2 || s.GTIDIncidents[0].BaselineAuditPending {
+				t.Fatal("recorder recovery erased the latch or lost the old audit")
+			}
+			if len(events.events) != 2 || events.events[0].Reason != "GTIDHistoryBaselineEstablished" || events.events[1].Reason != "GTIDHistoryDiverged" {
+				t.Fatalf("pending events did not recover across incidents: %+v", events.events)
+			}
+		})
+	}
+}
+
+func TestPXCRestoreActivationCertifiesSharedInverseHistory(t *testing.T) {
+	const stateUUID = "60dbb8ee-d39a-11f1-928e-f3cac64ca389"
+	const active = "9f244711-2c65-ee0e-6d71-0c3539b35c76"
+	const historical = "de66497c-d38f-11f1-b461-b39f3845b42b"
+	p, rc, b := setupPXC(t)
+	converge(t, p, rc, b)
+	rc.Cluster.Spec.Backup.Storage = ""
+	s, _ := load(rc.Cluster)
+	bad := s.data()[2].Name
+	prior := b.action
+	b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
+		if r.URL.Path != "/v1/mysql/galera-status" {
+			return prior != nil && prior(w, r, name)
+		}
+		set := active + ":1-206," + historical + ":1-165"
+		if name == bad {
+			set = active + ":1-207," + historical + ":1-165"
+		}
+		_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, ClusterSize: 3, StateUUID: stateUUID, GTIDExecuted: set})
+		return true
+	}
+	cp := backupCheckpoint{Step: "activate", Generation: 1, Request: &myspec.Restore{}, GTIDCertification: &pxcRestoreCertification{Certified: true}}
+	op := &domain.Operation{ID: "restored", Kind: "initial-restore"}
+	if _, err := p.runRestore(t.Context(), rc, op, cp); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = load(rc.Cluster)
+	if activeGTIDIncident(s) != nil || s.LastGTIDSafeAt.IsZero() {
+		t.Fatal("restored shared history did not establish safe baseline")
+	}
+	// Even a now-compatible restore is not authority to erase old evidence.
+	s.GTIDIncidents = []gtidIncident{{DetectedAt: time.Now(), Members: []string{bad}}}
+	if err := persistGTIDHistory(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.runRestore(t.Context(), rc, op, cp); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = load(rc.Cluster)
+	if activeGTIDIncident(s) == nil {
+		t.Fatal("restore silently erased an existing incident")
 	}
 }
 

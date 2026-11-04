@@ -138,7 +138,7 @@ func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 			}
 		}
 		if a.Backup.Pitr != nil {
-			s.Backup.PITR = domain.PITRConfig{Enabled: a.Backup.Pitr.Enabled, OplogSpanMinutes: value(a.Backup.Pitr.OplogSpanMinutes)}
+			s.Backup.PITR = domain.PITRConfig{Enabled: a.Backup.Pitr.Enabled, AutoReanchor: a.Backup.Pitr.AutoReanchor, OplogSpanMinutes: value(a.Backup.Pitr.OplogSpanMinutes)}
 		}
 	}
 	if a.Tls != nil {
@@ -232,8 +232,8 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	}
 	a.Backup = &api.BackupSpec{Storage: optionalString(s.Backup.Storage), Schedules: &schedules}
 	a.Backup.Drill = drillPolicyAPI(s.Backup.Drill)
-	if s.Backup.PITR.Enabled || s.Backup.PITR.OplogSpanMinutes != 0 {
-		a.Backup.Pitr = &api.PITRSpec{Enabled: s.Backup.PITR.Enabled}
+	if s.Backup.PITR.Enabled || s.Backup.PITR.OplogSpanMinutes != 0 || s.Backup.PITR.AutoReanchor != nil {
+		a.Backup.Pitr = &api.PITRSpec{Enabled: s.Backup.PITR.Enabled, AutoReanchor: s.Backup.PITR.AutoReanchor}
 		if s.Backup.PITR.OplogSpanMinutes != 0 {
 			a.Backup.Pitr.OplogSpanMinutes = &s.Backup.PITR.OplogSpanMinutes
 		}
@@ -294,16 +294,16 @@ func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api
 
 func memberRole(m domain.MemberStatus) api.MemberRole {
 	config := m.Role == "mongod-cfg" || m.Set == "cfg" || strings.HasPrefix(m.Role, "config-")
-	switch m.Role {
+	// Native engines may report roles in upper case (MySQL reports PRIMARY/SECONDARY).
+	switch role := strings.ToLower(m.Role); role {
 	case "primary", "secondary":
 		if config {
-			return api.MemberRole("config-" + m.Role)
+			return api.MemberRole("config-" + role)
 		}
-		return api.MemberRole(m.Role)
-	case "gateway", "auth", "rest", "realtime", "storage", "imgproxy", "meta", "studio", "functions", "pooler", "analytics", "vector":
-		return api.MemberRole(m.Role)
-	case "broker", "master", "data", "master,data", "kibana", "logstash", "apm", "replica", "standalone", "proxy":
-		return api.MemberRole(m.Role)
+		return api.MemberRole(role)
+	case "gateway", "auth", "rest", "realtime", "storage", "imgproxy", "meta", "studio", "functions", "pooler", "analytics", "vector",
+		"broker", "master", "data", "master,data", "kibana", "logstash", "apm", "replica", "standalone", "proxy":
+		return api.MemberRole(role)
 	}
 	if m.Role == "mongos" || m.Role == "router" {
 		return api.MemberRole("router")

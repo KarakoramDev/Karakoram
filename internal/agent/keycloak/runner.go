@@ -50,9 +50,13 @@ func Render(s kcspec.Spec, dataDir string) (agent.ProcessSpec, map[string][]byte
 		return agent.ProcessSpec{}, nil, err
 	}
 	dir := filepath.Join(dataDir, "karakoram", "keycloak")
+	listenHost := "0.0.0.0"
+	if s.IPv6 {
+		listenHost = "::"
+	}
 	pairs := [][2]string{
 		{"db", "postgres"}, {"health-enabled", "true"}, {"http-enabled", "true"},
-		{"http-host", "0.0.0.0"}, {"http-port", "8080"},
+		{"http-host", listenHost}, {"http-port", "8080"},
 		{"http-management-host", "127.0.0.1"}, {"http-management-port", "9000"},
 		{"http-management-scheme", "http"}, {"db-url", s.JDBCURL(filepath.Join(dir, "ca.pem"))},
 		{"db-username", s.Username}, {"db-password", s.Password},

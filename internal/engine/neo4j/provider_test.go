@@ -40,21 +40,23 @@ func (a testAgents) Dial(context.Context, domain.ClusterRef, string) (*agentapi.
 }
 
 type agentState struct {
-	config              agentapi.MemberConfig
-	spec                neo4jspec.Spec
-	password            string
-	rotations, restarts int
-	failPasswordReply   bool
-	credentialMismatch  bool
-	userCode            int
-	users               map[string]neo4jspec.User
-	userPasswords       map[string]string
-	adminErrorCode      int
-	recoveryReceipt     string
-	recoveryPassword    string
-	recoveries          int
-	failRecoveryReply   bool
-	failRecoveryJob     bool
+	config                       agentapi.MemberConfig
+	spec                         neo4jspec.Spec
+	password                     string
+	rotations, restarts, reloads int
+	failPasswordReply            bool
+	credentialMismatch           bool
+	userCode                     int
+	users                        map[string]neo4jspec.User
+	userPasswords                map[string]string
+	adminErrorCode               int
+	recoveryReceipt              string
+	recoveryPassword             string
+	recoveries                   int
+	failRecoveryReply            bool
+	failRecoveryJob              bool
+	bootstrapFailures            int
+	configurationError           string
 }
 
 func setup(t *testing.T) (*Provider, *engine.Context, *fake.Backend, *agentState) {
@@ -95,12 +97,20 @@ func setup(t *testing.T) (*Provider, *engine.Context, *fake.Backend, *agentState
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/reload":
+			a.reloads++
+			if a.bootstrapFailures > 0 {
+				a.bootstrapFailures--
+				a.configurationError = "Neo4j credential recovery interrupted"
+				http.Error(w, "interrupted", http.StatusServiceUnavailable)
+				return
+			}
+			a.configurationError = ""
 			pull()
 			json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
 		case "/v1/status":
 			json.NewEncoder(w).Encode(agentapi.Status{Agent: agentapi.AgentBuild{Version: "agent-version", Commit: "agent-commit", Build: "agent-build"}, ConfigVersion: a.config.ConfigVersion, Processes: map[string]agentapi.ProcessStatus{"neo4j": {State: "running"}}})
 		case "/v1/neo4j/readiness":
-			json.NewEncoder(w).Encode(neo4jspec.Readiness{Ready: a.config.ConfigVersion > 0, ConfigVersion: a.config.ConfigVersion, Version: a.spec.Version, Edition: "community", AppliedRestartToken: a.spec.RestartToken, CredentialMismatch: a.credentialMismatch || a.password != a.spec.AdminPassword})
+			json.NewEncoder(w).Encode(neo4jspec.Readiness{Ready: a.config.ConfigVersion > 0, ConfigurationError: a.configurationError, ConfigVersion: a.config.ConfigVersion, Version: a.spec.Version, Edition: "community", AppliedRestartToken: a.spec.RestartToken, CredentialMismatch: a.credentialMismatch || a.password != a.spec.AdminPassword})
 		case "/v1/processes/neo4j/restart", "/v1/processes":
 			a.restarts++
 			json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})

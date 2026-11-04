@@ -24,6 +24,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sys/unix"
 )
 
 type Runner struct {
@@ -73,14 +74,20 @@ func privateDir(path string) error {
 	if err := os.MkdirAll(path, 0700); err != nil {
 		return err
 	}
-	info, err := os.Lstat(path)
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return err
 	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return errors.New("postgres directory must not be a symlink")
+	d := os.NewFile(uintptr(fd), path)
+	defer d.Close()
+	info, err := d.Stat()
+	if err != nil {
+		return err
 	}
-	return os.Chmod(path, 0700)
+	if !postgresFileOwned(info) {
+		return errors.New("postgres directory must be agent-owned")
+	}
+	return d.Chmod(0700)
 }
 func command(ctx context.Context, binary string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
@@ -91,6 +98,10 @@ func command(ctx context.Context, binary string, args ...string) ([]byte, error)
 	return out, err
 }
 func localConnect(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error) {
+	return localConnectWith(ctx, s, p, pgx.ConnectConfig)
+}
+
+func localConnectionConfig(s pgspec.Spec, p paths) (*pgx.ConnConfig, error) {
 	cfg, err := pgx.ParseConfig("")
 	if err != nil {
 		return nil, err
@@ -113,11 +124,40 @@ func localConnect(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error
 		// must be selected at connection startup, never with a later SET.
 		cfg.RuntimeParams["citus.use_secondary_nodes"] = "never"
 	}
-	c, err := pgx.ConnectConfig(ctx, cfg)
+	return cfg, nil
+}
+
+func localPeerConnect(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error) {
+	cfg, err := localConnectionConfig(s, p)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Password = ""
+	return pgx.ConnectConfig(ctx, cfg)
+}
+
+func localConnectWith(ctx context.Context, s pgspec.Spec, p paths, connect func(context.Context, *pgx.ConnConfig) (*pgx.Conn, error)) (*pgx.Conn, error) {
+	cfg, err := localConnectionConfig(s, p)
+	if err != nil {
+		return nil, err
+	}
+	if s.LocalPeerAuth {
+		cfg.Password = ""
+		if c, err := connect(ctx, cfg); err == nil {
+			return c, nil
+		}
+		cfg.Password = s.Superuser.Password
+	}
+	c, err := connect(ctx, cfg)
+	if err != nil && s.AlternateSuperuser != nil {
+		cfg.User = s.AlternateSuperuser.Username
+		cfg.Password = s.AlternateSuperuser.Password
+		c, err = connect(ctx, cfg)
+	}
 	if err != nil && recoveryCredentialsPending(s, p) && s.Bootstrap.RecoverySuperuser != nil {
 		cfg.User = s.Bootstrap.RecoverySuperuser.Username
 		cfg.Password = s.Bootstrap.RecoverySuperuser.Password
-		c, err = pgx.ConnectConfig(ctx, cfg)
+		c, err = connect(ctx, cfg)
 	}
 	return c, err
 }
@@ -168,6 +208,11 @@ func roleStatements(s pgspec.Spec) ([]string, error) {
 		result = append(result, "SET LOCAL citus.enable_ddl_propagation = off")
 	}
 	for _, c := range []pgspec.Credentials{s.Superuser, s.Monitor, s.Replication, s.Rewind} {
+		if c.Username == s.Superuser.Username && s.AlternateSuperuser != nil {
+			// Only the receipt-backed operation may change the administrator
+			// while an old/new credential transition is active.
+			continue
+		}
 		verifier, err := secrets.SCRAMVerifier(c.Password)
 		if err != nil {
 			return nil, err
@@ -316,7 +361,7 @@ func (e *Runner) systemRoleSQL(s pgspec.Spec) ([]string, error) {
 	if s.Role != pgspec.RoleData {
 		return nil, nil
 	}
-	digest := hash([]any{s.Superuser, s.Monitor, s.Replication, s.Rewind, dataAccessDefinition(s.DataAccess)})
+	digest := hash([]any{s.Superuser, s.AlternateSuperuser, s.Monitor, s.Replication, s.Rewind, dataAccessDefinition(s.DataAccess)})
 	if e.roleSQL == nil || e.roleSQLHash != digest {
 		statements, err := roleStatements(s)
 		if err != nil {
@@ -345,6 +390,9 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		if err = privateDir(d); err != nil {
 			return nil, err
 		}
+	}
+	if err = prepareLocalPeerAuthentication(ctx, s, &p); err != nil {
+		return nil, err
 	}
 	statements, err := e.systemRoleSQL(s)
 	if err != nil {

@@ -116,6 +116,68 @@ Ready additionally requires the deployment and every live proxy instance to
 finish applying its published configuration and expose a working writer route.
 First successful traffic can therefore substantially precede fresh Ready.
 
+#### Proxy resource changes are not a zero-outage contract
+
+Nomad does **not** advertise the internal `ResourceUpdatePreservesServing`
+capability. `SetResources` on a running stateless, non-relay service registers a
+new job version without a provider-issued stop. Its update policy is one canary,
+`max_parallel = 1`, automatic promotion/revert, and health based on service
+checks. As [Nomad's update semantics](https://developer.hashicorp.com/nomad/docs/job-specification/update)
+specify, the canary starts without stopping predecessors, but promotion permits
+**destructive** updates of the remaining allocations, one at a time. This is not
+start-first replacement of every instance.
+
+The checks are TCP connects to each declared TCP port except agent port 9443,
+with a 2-second interval, 1-second timeout and 10-second minimum healthy time.
+There is no authenticated agent readiness, configuration-revision or ONLINE
+writer check in Nomad's promotion gate. A listening ProxySQL port is not proof
+of a usable writer route. Discovery deliberately remains available during
+bootstrap so that the agent can obtain configuration; it is not a traffic
+admission gate. Operator-managed load balancers need their own readiness and
+membership policy.
+
+A fresh MySQL/PXC proxy allocation has no retained configuration cache. Its
+agent immediately pulls sealed member configuration from the control plane,
+retrying initial failures every 5 seconds, then renders the cold-start
+`proxysql.cnf` (including users, backends and routing rules), starts ProxySQL and
+applies runtime configuration through its admin interface. Later periodic pulls
+run every 60 seconds. Native Group Replication/Galera writer discovery is
+asynchronous (configured monitor interval 1 second, health-check timeout 800 ms);
+those intervals do not bound time to an ONLINE writer. TCP can become healthy
+before application and writer admission finish. Engine readiness rechecks every
+live instance's configuration acknowledgement and writer after the backend
+operation, but cannot retroactively prevent early traffic or predecessor
+retirement. No fixed time-to-admission or zero-outage resource change is promised.
+
+A canary that fails before promotion leaves incumbents serving; automatic
+revert targets the last stable job. Failure after promotion cannot promise the
+original allocations remain intact. Failed/cancelled deployment or a
+superseded/reverted job fails the operation with resource, host-port capacity and
+application-readiness guidance rather than acknowledging the requested update.
+When Nomad reports a deployment matching the registered job version, polling
+waits for its success and exactly the requested number of active, running
+allocations, not merely a healthy canary. Without a matching deployment,
+completion falls back to a complete evaluation and that allocation count;
+resource operations do not independently require every allocation's target
+version and healthy flag. Neither path establishes engine readiness.
+
+`StatelessRolloutSurge = 1` budgets one extra allocation; it is not a serving
+guarantee or capacity reservation. The canary needs spare CPU, memory, allocation
+disk and, when published, a free host-port slot on an eligible node. Missing
+capacity keeps the rollout pending with `BackendPlacementFailed` diagnostics
+without a provider-issued stop of incumbents; restore capacity rather than
+expecting an automatic stop to free it. Native deployment deadlines can still
+fail/revert the rollout. Count-only updates below retain their separate
+incumbent-preservation path; engines requiring serving-preserving resource
+updates must keep their maintenance/redeployment path.
+
+ProxySQL `upgrade-agents` likewise uses ordinary job redeployment: a canary
+followed by potentially destructive replacements with TCP-only promotion checks.
+Count-only incumbent preservation does not establish a new-build serving
+guarantee. Plan maintenance and endpoint interruption even with replicas; the
+engine still waits for every instance's exact build, configuration and writer
+readiness before moving to data members.
+
 Count-only changes (including increases and cancelling an unplaceable scale-up
 back to the serving count) do not require canary capacity. The provider compares
 the current owned job with the jobs embedded in healthy serving allocations,

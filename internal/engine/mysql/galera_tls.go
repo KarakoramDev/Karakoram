@@ -123,6 +123,9 @@ func (p *Core) reconcileGaleraTrafficRotation(ctx context.Context, rc *engine.Co
 	if q == nil {
 		return false, nil
 	}
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	switch q.Stage {
 	case "fence":
 		for _, name := range q.Members {
@@ -178,7 +181,17 @@ func (p *Core) reconcileGaleraTrafficRotation(ctx context.Context, rc *engine.Co
 		s.Formation.Reformation = &reformation{State: "observing"}
 		q.Stage = "reform"
 	case "reform":
-		busy, err := p.reconcileGaleraFormation(ctx, rc, s)
+		// Explicit TLS recovery retains serialized native joins. Previously
+		// admitted members keep their historical mapping proof: the epoch
+		// change does not create a new certification owner or client hold.
+		if busy, err := reconcilePXCFormationCertification(ctx, rc, s); err != nil || busy {
+			return true, err
+		}
+		// Only an independently admitted birth/empty join may acquire controls.
+		if err := beginPXCFormationCertification(ctx, rc, s); err != nil {
+			return true, err
+		}
+		busy, err := p.reconcileFormation(ctx, rc, s)
 		if err != nil || busy {
 			return true, err
 		}

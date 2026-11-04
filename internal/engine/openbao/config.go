@@ -35,7 +35,11 @@ func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) (i
 	if agentURL == "" {
 		agentURL = p.options.ControlPlaneURL
 	}
-	options, err := parseOptions(rc.Cluster.Spec.EngineOptions)
+	engineOptions := rc.Cluster.Spec.EngineOptions
+	if rc.Operation != nil && rc.Operation.Kind == domain.OperationUpgradeAgents {
+		engineOptions = m.EngineOptions
+	}
+	options, err := parseOptions(engineOptions)
 	if err != nil {
 		return infra.RuntimeSpec{}, err
 	}

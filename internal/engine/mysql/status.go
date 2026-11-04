@@ -58,17 +58,42 @@ func publicConnection(ctx context.Context, rc *engine.Context, conn domain.Conne
 	return conn, nil
 }
 func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, err error) {
+	ctx = normalMySQLReads(ctx)
+	if engine.ObservationPassCache(ctx) == nil {
+		ctx = engine.WithObservationPass(ctx)
+	}
 	defer func() { engine.ApplyDeploymentStatus(rc, &status) }()
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return status, err
 	}
+	defer func() { applyMySQLRuntimeRecoveryStatus(&status, s, now(rc)) }()
 	status = domain.ClusterStatus{Phase: domain.PhaseCreating, Version: rc.Cluster.Spec.Version, ObservedAt: now(rc), ObservedGeneration: rc.Cluster.Status.ObservedGeneration, Members: []domain.MemberStatus{}, Conditions: []domain.Condition{}, Connection: discovery(rc, s), Placement: domain.Placement{Groups: map[string][]string{}}}
 	if s.Suspended {
 		status.Phase = domain.PhaseSuspended
 		return status, nil
 	}
-	observed := observeStatusMembers(ctx, rc, s.Members)
+	var observed []memberObservation
+	var quorumErr error
+	if rc.Cluster.Spec.Provider == "pxc" {
+		// Required readiness reads and continuity sampling fit under the same
+		// outer status-sweep deadline. Neither depends on the other's RPCs.
+		// Readiness gets an immutable cluster snapshot: the quorum check alone
+		// owns journal/state writes to the caller's Cluster.Internal.
+		readRC, readCluster := *rc, *rc.Cluster
+		readRC.Cluster = &readCluster
+		required := make(chan []memberObservation, 1)
+		go func() {
+			required <- observeStatusMembers(ctx, &readRC, s.Members)
+		}()
+		quorumErr = checkPXCQuorumGTIDs(ctx, rc, s)
+		observed = <-required
+	} else {
+		observed = observeStatusMembers(ctx, rc, s.Members)
+	}
+	if deferred, deferredErr, ok := deferredMySQLObservation(rc, s, observed); ok {
+		return deferred, deferredErr
+	}
 	healthy := len(s.data()) == rc.Cluster.Spec.Components.Engine.Replicas && len(s.Members) > 0
 	writer := false
 	primary := ""
@@ -87,7 +112,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 		if o.agentObserved {
-			member.Agent = domain.AgentStatus{Version: o.agent.Agent.Version, Commit: o.agent.Agent.Commit, Build: o.agent.Agent.Build, Healthy: true, ConfigVersion: o.agent.ConfigVersion, LastSeen: now(rc)}
+			member.Agent = domain.AgentStatus{Version: o.agent.Agent.Version, Commit: o.agent.Agent.Commit, Build: o.agent.Agent.Build, Healthy: true, ConfigVersion: o.agent.ConfigVersion, LastSeen: o.agentAt}
 			member.Uptime = o.agent.UptimeSeconds
 			member.Resources = engine.MemberResources(o.agent.Resources, &m.Resources)
 		}
@@ -117,9 +142,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				primary = m.Name
 			}
 		}
-		service, e := rc.Backend.GetService(ctx, m.Name)
-		if e != nil {
-			return status, e
+		service := o.infrastructure.service
+		if o.infrastructureErr != nil {
+			return status, o.infrastructureErr
 		}
 		if service == nil || service.Status != infra.StatusRunning && service.Status != infra.StatusActive {
 			member.Health = false
@@ -128,10 +153,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		// have no infrastructure identity yet. Observe them as unavailable
 		// without asking the backend for containers of a nonexistent service.
 		if service != nil {
-			containers, e := rc.Backend.Containers(ctx, m.Name)
-			if e != nil {
-				return status, e
-			}
+			containers := o.infrastructure.containers
 			for _, container := range containers {
 				if container.PlacementGroup != "" {
 					member.PlacementGroup = container.PlacementGroup
@@ -148,9 +170,16 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	status.Conditions = append(status.Conditions, domain.Condition{Type: "WriterReady", Status: boolCondition(writer), Reason: "PrimaryObservation", Message: primary, LastTransitionTime: now(rc)})
 	if rc.Cluster.Spec.Provider == "pxc" {
 		condition := domain.Condition{Type: "GTIDHistorySafe", Status: "True", Reason: "QuorumHistoryCompatible", LastTransitionTime: now(rc)}
-		if e := checkPXCQuorumGTIDs(ctx, rc, s); e != nil {
+		if e := quorumErr; e != nil {
 			healthy = false
 			condition.Status, condition.Reason, condition.Message = "Unknown", "QuorumComparisonUnavailable", e.Error()
+			if _, comparison := e.(*myspec.GTIDQuorumError); !comparison {
+				condition.Reason = "GTIDHistoryPersistenceUnavailable"
+				condition.Message = "GTID history journal, state or audit persistence unavailable; continuity cannot be certified until persistence recovers"
+				if _, persistence := e.(*gtidHistoryPersistenceError); persistence {
+					condition.Message = e.Error()
+				}
+			}
 			if conflict, ok := e.(*myspec.GTIDQuorumError); ok && conflict.Diverged {
 				condition.Status, condition.Reason = "False", "GTIDHistoryDiverged"
 				for i := range status.Members {
@@ -167,6 +196,21 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			condition.Status, condition.Reason, condition.Message = "False", "GTIDHistoryDiscontinuityLatched", incident.message()
 		}
 		status.Conditions = append(status.Conditions, condition)
+		if s.RestoreGTIDBlocked != "" {
+			healthy = false
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "RestoreGTIDCertified", Status: "False", Reason: "GTIDMappingCertificationBlocked", Message: s.RestoreGTIDBlocked + "; restore again or delete; restart/backup blocked until certified", LastTransitionTime: now(rc)})
+		} else if s.RestoreGTIDUnavailable != "" {
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "RestoreGTIDCertified", Status: "Unknown", Reason: "RestoreCertificationUnavailable", Message: s.RestoreGTIDUnavailable, LastTransitionTime: now(rc)})
+		} else if s.RestoreGTIDFence != "" && (s.Formation.GTIDCertification == nil || s.Formation.GTIDCertification.Owner != s.RestoreGTIDFence) {
+			healthy = false
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "RestoreGTIDCertified", Status: "Unknown", Reason: "GTIDMappingCertificationInProgress", Message: "Client SQL is fenced while the restored PXC formation certifies replicated GTID mapping", LastTransitionTime: now(rc)})
+		}
+		mappingCondition, mappingReady := pxcFormationMappingCondition(s)
+		mappingCondition.LastTransitionTime = now(rc)
+		status.Conditions = append(status.Conditions, mappingCondition)
+		if !mappingReady {
+			healthy = false
+		}
 	}
 	if r := s.Formation.Reformation; r != nil && r.Blocked != "" {
 		healthy = false
@@ -187,6 +231,13 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			status.Phase = domain.PhaseUpgrading
 		}
 		status.Conditions = append(status.Conditions, domain.Condition{Type: "MySQLMaintenance", Status: "True", Reason: "RollingMaintenance", Message: s.Rolling.Stage, LastTransitionTime: now(rc)})
+		if s.Rolling.Stage == "scale-failed" {
+			status.Phase = domain.PhaseDegraded
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "MySQLProxyScale", Status: "False", Reason: "ScaleFailed", Message: "ProxySQL scale operation failed; observing surviving replicas and waiting for backend-proven recovery or a superseding desired count", LastTransitionTime: now(rc)})
+		}
+	}
+	if s.ProxyAdmissionWait != "" {
+		status.Conditions = append(status.Conditions, domain.Condition{Type: "MySQLProxyAdmission", Status: "False", Reason: "WaitingForProxyAdmission", Message: s.ProxyAdmissionWait, LastTransitionTime: now(rc)})
 	}
 	if s.Replacement != nil || s.TLSRotation != nil || s.GaleraTLS != nil {
 		status.Phase = domain.PhaseUpdating
@@ -207,4 +258,90 @@ func boolCondition(v bool) string {
 		return "True"
 	}
 	return "False"
+}
+
+func deferredMySQLObservation(rc *engine.Context, s *state, observed []memberObservation) (domain.ClusterStatus, error, bool) {
+	deferred := false
+	for _, observation := range observed {
+		deferred = deferred || errors.Is(observation.err, engine.ErrObservationBudgetExhausted) || errors.Is(observation.infrastructureErr, engine.ErrObservationBudgetExhausted)
+	}
+	if !deferred {
+		return domain.ClusterStatus{}, nil, false
+	}
+	status := engine.DeferredObservation(rc.Cluster.Status, now(rc))
+	result := &engine.ObservationBudgetError{}
+	var causes []error
+	for i, observation := range observed {
+		metadataCause := observedFailureCause(observation.metadataErr)
+		nativeCause := observedFailureCause(observation.nativeErr)
+		platformCause := observedFailureCause(observation.infrastructureErr)
+		metadataFailure := metadataCause != nil
+		nativeFailure := nativeCause != nil
+		platformFailure := platformCause != nil
+		for _, err := range [3]error{metadataCause, nativeCause, platformCause} {
+			if err != nil {
+				causes = append(causes, err)
+			}
+		}
+		negative := metadataFailure || nativeFailure || platformFailure
+		if observation.nativeObserved && s.Members[i].Role != "proxy" && observation.status.MemberState != "ONLINE" {
+			negative = true
+		}
+		if observation.agentObserved && observation.agent.ConfigVersion < s.Members[i].ConfigVersion {
+			negative = true
+		}
+		if observation.infrastructureObserved {
+			service := observation.infrastructure.service
+			negative = negative || service == nil || service.Status != infra.StatusRunning && service.Status != infra.StatusActive
+		}
+		if negative {
+			result.Failures = append(result.Failures, engine.ObservationFailure{Member: s.Members[i].Name, Agent: metadataFailure})
+		}
+	}
+	for _, failure := range result.Failures {
+		for i := range status.Members {
+			if status.Members[i].Name == failure.Member {
+				status.Members[i].Health = false
+				if failure.Agent {
+					status.Members[i].Agent.Healthy = false
+				}
+			}
+		}
+	}
+	result.Cause = errors.Join(causes...)
+	if incident := activeGTIDIncident(s); incident != nil {
+		condition := domain.Condition{Type: "GTIDHistorySafe", Status: "False", Reason: "GTIDHistoryDiscontinuityLatched", Message: incident.message(), LastTransitionTime: now(rc)}
+		replaced := false
+		for i := range status.Conditions {
+			if status.Conditions[i].Type == condition.Type {
+				status.Conditions[i] = condition
+				replaced = true
+			}
+		}
+		if !replaced {
+			status.Conditions = append(status.Conditions, condition)
+		}
+	}
+	return status, result, true
+}
+
+// Strip only budget deferrals from joined failures; a concurrent HTTP/platform
+// failure must not disappear merely because another component ran out of time.
+func observedFailureCause(err error) error {
+	if err == nil || err == engine.ErrObservationBudgetExhausted {
+		return nil
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		var causes []error
+		for _, cause := range joined.Unwrap() {
+			if actual := observedFailureCause(cause); actual != nil {
+				causes = append(causes, actual)
+			}
+		}
+		return errors.Join(causes...)
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok && errors.Is(err, engine.ErrObservationBudgetExhausted) {
+		return observedFailureCause(wrapped.Unwrap())
+	}
+	return err
 }

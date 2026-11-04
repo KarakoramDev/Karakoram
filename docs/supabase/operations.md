@@ -108,6 +108,16 @@ the engine and proxy component bounds. Database/proxy settings, managed access
 revisions, and Supabase engine options still participate in database configuration
 convergence, including extension preload changes.
 
+The embedded PostgreSQL core's ProxySQL count/resource updates follow
+[PostgreSQL maintenance and readiness rules](../postgres/operations.md#agent-rollout-and-maintenance-windows):
+scale-in and resource changes always wait for a maintenance window, including
+serving-preserving resource updates. Count scale-out also waits unless the backend
+guarantees serving preservation for the deployed proxy runtime.
+Every requested live proxy must apply the configuration and report native
+readiness with an ONLINE writer before applied bounds are committed, including
+after a control-plane restart. This is separate from optional Supabase component
+scaling and does not imply that those components have the same rollout contract.
+
 Database slot-retention blockers report `Ready=False/SlotWALRetention`, including
 when all optional components are healthy. An optional-component failure does not
 overwrite that independent database diagnosis. Disabling the offending optional
@@ -488,6 +498,22 @@ karactl -n NS supabase rotate-jwt-secret appapi --yes
 The CLI masks credential fields by default in every output format. Protect revealed output, clipboard and redirected files. SMTP reads a hidden prompt or first stdin line, never a password argument. SMTP settings other than the password belong in `engineOptions.auth.smtp`.
 
 JWT rotation replaces signing/API-key material and rolls dependent service configuration; old application JWTs/keys stop working as the new configuration takes effect. It is not a dual-key overlap rollout. Coordinate clients and follow the returned operation. Independent dashboard password, database-role passwords and encryption keys are retained. Dashboard username is `supabase`. Service-role/secret keys bypass ordinary application restrictions and must never be embedded in public clients.
+
+The PostgreSQL administrator rotates separately with
+`karactl -n NS system-users rotate appapi postgres --yes`. Upgrade all PostgreSQL
+data agents first; incompatible agents return 409 with `upgrade-agents` guidance.
+The operation changes the writable PostgreSQL primary, publishes the new sealed
+password, then reconfigures/restarts and waits for acknowledgement from enabled
+components, including `meta`, `studio` and `functions`, before retiring the old
+management fallback. Those components can be briefly unavailable during refresh.
+Other service-role passwords, JWT signing keys, dashboard and encryption keys
+are unchanged. Supavisor uses its independent managed credentials and native
+client-verifier lookup. Bindings and Data MCP use dedicated non-superuser roles,
+not `postgres`, and do not require credential rotation as part of this operation.
+External clients must reconnect with the newly revealed administrator password;
+existing PostgreSQL sessions are not terminated. See
+[administrator rotation](../postgres/access-and-tls.md#administrator-credential-containment).
+
 
 ## Security boundaries
 

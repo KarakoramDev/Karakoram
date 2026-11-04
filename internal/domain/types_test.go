@@ -3,7 +3,10 @@
 
 package domain
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestNames(t *testing.T) {
 	for _, name := range []string{"ab", "mongo1234567"} {
@@ -24,5 +27,25 @@ func TestNames(t *testing.T) {
 	}
 	if ValidateDatabaseUserName("app-user") != nil || ValidateDatabaseUserName("bad\x00user") == nil {
 		t.Fatal("database name validation")
+	}
+}
+
+func TestOperationDefersPITRReanchorLifecycle(t *testing.T) {
+	at := time.Now().UTC()
+	for _, kind := range []string{OperationUpgradeAgents, OperationReplaceMember} {
+		for _, phase := range []Phase{PhasePending, PhaseRunning, PhaseSucceeded, PhaseFailed, PhaseCancelled} {
+			t.Run(kind+"/"+string(phase), func(t *testing.T) {
+				active := phase == PhasePending || phase == PhaseRunning
+				completed := at.Add(-PITRReanchorStabilityPeriod + time.Second)
+				op := Operation{Kind: kind, Phase: phase, CompletedAt: &completed}
+				if !OperationDefersPITRReanchor(op, at) {
+					t.Fatal("maintenance did not defer reanchor")
+				}
+				completed = at.Add(-PITRReanchorStabilityPeriod)
+				if got := OperationDefersPITRReanchor(op, at); got != active {
+					t.Fatalf("at stability boundary got %v, want %v", got, active)
+				}
+			})
+		}
 	}
 }

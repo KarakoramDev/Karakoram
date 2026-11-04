@@ -22,3 +22,24 @@ func TestAgentStatusReportsExecutableBuild(t *testing.T) {
 		t.Fatal(response.Code, status.Agent)
 	}
 }
+
+type restoreCertificationEngine struct{ Engine }
+
+func (restoreCertificationEngine) SupportsMySQLRestoreCertification() bool { return true }
+
+func TestAgentStatusNegotiatesMySQLRestoreCertification(t *testing.T) {
+	a, _, _ := fakeNode(t, "/bin/true")
+	for _, supported := range []bool{false, true} {
+		if supported {
+			a.engine = restoreCertificationEngine{Engine: a.engine}
+		}
+		response := requestNode(a, "GET", "/v1/status", "", "token")
+		var status agentapi.Status
+		if err := json.Unmarshal(response.Body.Bytes(), &status); err != nil {
+			t.Fatal(err)
+		}
+		if response.Code != 200 || status.MySQLRestoreCertification != supported {
+			t.Fatalf("capability mismatch: status=%+v supported=%t", status, supported)
+		}
+	}
+}

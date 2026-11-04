@@ -73,6 +73,9 @@ type fakeApplication struct {
 	logs                   string
 	wiping                 bool
 	upload                 []byte
+	proxyRollout           *fakeProxyRollout
+	neverHealthyProxy      bool
+	healthyHistory         []int
 }
 type fakeDeployment struct {
 	id, status, createdAt string
@@ -217,7 +220,13 @@ func (f *fakeAPI) shutdown(a *fakeApplication) {
 }
 func (f *fakeAPI) apply(a *fakeApplication) { f.applyReplicas(a, fakeInt(a.row, "replicas")) }
 func (f *fakeAPI) applyReplicas(a *fakeApplication, replicas int) {
-	f.shutdown(a)
+	f.applyReplicaSpec(a, replicas, false)
+}
+func (f *fakeAPI) applyReplicaSpec(a *fakeApplication, replicas int, preserveIncumbents bool) {
+	a.proxyRollout = nil
+	if !preserveIncumbents {
+		f.shutdown(a)
+	}
 	a.taskPolls = 0
 	a.appliedPorts = fakeRowsCopy(a.ports)
 	// A custom EndpointSpec replaces Dokploy's separately configured ports.
@@ -281,10 +290,15 @@ func (f *fakeAPI) applyReplicas(a *fakeApplication, replicas int) {
 	if endpoint, ok := a.row["endpointSpecSwarm"].(map[string]any); ok {
 		endpointMode = fakeString(endpoint, "Mode")
 	}
+	forceUpdate := 0
+	if previous := f.services[name]; previous != nil {
+		template, _ := previous["Spec"].(map[string]any)["TaskTemplate"].(map[string]any)
+		forceUpdate = fakeInt(template, "ForceUpdate") + 1
+	}
 	f.services[name] = map[string]any{"ID": id, "Spec": map[string]any{
 		"Name": name, "Mode": map[string]any{"Replicated": map[string]any{"Replicas": replicas}},
 		"EndpointSpec": map[string]any{"Ports": published, "Mode": endpointMode},
-		"TaskTemplate": map[string]any{"ContainerSpec": map[string]any{"Image": image, "Labels": a.row["labelsSwarm"]}},
+		"TaskTemplate": map[string]any{"ForceUpdate": forceUpdate, "ContainerSpec": map[string]any{"Image": image, "Labels": a.row["labelsSwarm"]}},
 	}}
 	f.images[image] = true
 	a.row["applicationStatus"] = "done"
@@ -309,7 +323,12 @@ func (f *fakeAPI) advanceDeployments(a *fakeApplication) {
 			if d.polls >= 2 {
 				d.status = "done"
 				d.finishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-				f.apply(a)
+				update, _ := a.row["updateConfigSwarm"].(map[string]any)
+				if a.row["healthCheckSwarm"] != nil && fakeString(update, "FailureAction") == "pause" && fakeString(update, "Order") == "start-first" {
+					f.beginProxyRollout(a)
+				} else {
+					f.apply(a)
+				}
 				if a.queued > 0 {
 					a.queued--
 					f.deploy(a)
@@ -616,6 +635,11 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				a.taskPolls++
+				if a.proxyRollout != nil {
+					f.advanceProxyRollout(a)
+					respond(a.tasks)
+					return
+				}
 				if a.taskPolls >= 2 && !a.holdTasks {
 					for _, task := range a.tasks {
 						if task["state"] == "running" {
@@ -781,6 +805,11 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		update, _ := a.row["updateConfigSwarm"].(map[string]any)
 		order := fakeString(update, "Order")
 		a.reloadOrders = append(a.reloadOrders, order)
+		if a.row["healthCheckSwarm"] != nil && fakeString(update, "FailureAction") == "pause" && order == "start-first" {
+			f.beginProxyRollout(a)
+			respond(true)
+			return
+		}
 		running := 0
 		for _, task := range a.tasks {
 			if task["state"] == "running" {

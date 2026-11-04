@@ -154,7 +154,7 @@ func (e *Engine) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		return nil, errors.New("Neo4j stock configuration unavailable")
 	}
 	bolt, https := e.ports(false)
-	files, err := render(s, baseDir(n), string(stock), false, bolt, https, e.listenAddress)
+	files, err := render(s, baseDir(n), string(stock), false, bolt, https, e.listenerAddress())
 	if err != nil {
 		return nil, err
 	}

@@ -46,8 +46,21 @@ internal state to bypass observation.
 PXC deployment initially starts only the agent. All data runtimes must deploy
 before the control plane publishes the seed's bootstrap epoch; only that seed
 may start mysqld until it forms a Primary component. Remaining members then start
-as SST/IST joiners. A runtime deployment is not permission to launch an
-uninitialized seed as an ordinary joiner.
+as SST/IST joiners **one at a time**: a current-formation Synced receipt for the
+previous joiner releases the next identity. The same barrier covers scale-up
+and restored/recovered follower cohorts, including legacy agents. A runtime
+deployment or reachable agent is not native Synced proof or permission to launch
+an uninitialized seed as an ordinary joiner.
+
+During create-from-backup, fresh PXC followers have never started mysqld and
+therefore have no previous SST identity receipt. The explicit restore action
+authorizes SST only after proving their stopped data directory is empty and
+has no previous identity, transfer, or bootstrap evidence. This authorization
+is durable and resumable; it does not start the follower or bypass serialized
+join admission. Existing-data followers still require their own older identity
+receipt before the restore action may quarantine and replace their dataset.
+The correction is agent-side: replacing only the control plane does not update
+already deployed agents.
 
 Galera's local bind address is distinct from its advertised member names.
 For agents advertising `capability=mysql-galera-listen-host` on their
@@ -78,27 +91,206 @@ join checkpoint, so its first configuration contains an eligible backend.
 A pending proxy deployment does not block that initial data join, including
 when reconciliation resumes a proxy deployment accepted by an earlier version.
 
+For Group Replication and Galera, managed ProxySQL hostgroups also enforce TLS
+in `mysql_hostgroup_attributes.servers_defaults`, with the same weight and backend
+connection limit as explicit server rows. Native discovery or revival of a
+previously offline member must not fall back to a plaintext monitor connection.
+A native `Access denied` monitor error can represent rejection of an account's
+`REQUIRE SSL` policy, not only an incorrect password; inspect the native SSL/auth
+counters before changing credentials.
+
+This policy is rendered and applied by the **proxy member agent**. Updating only
+the control plane or restarting an old ProxySQL process does not install it.
+Use the [agent rollout](#agent-rollout) to update existing MySQL/PXC data and
+ProxySQL agents. A process restart alone does not replace the agent executable.
+Preserve data identities, a verified backup and availability evidence for
+valuable clusters.
+Do not disable TLS or blindly rotate the shared monitor credential as a workaround.
+
 Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy provider state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
+
+For MySQL/PXC PITR, check **BinlogArchive** as well as the recovery-window end.
+`False/ArchiveFailed` and its Warning event mean the writer's last archive pass
+failed; the agent log contains the native diagnostic. Fix the reported cause
+and retain native binlogs while the next scheduled pass retries the backlog.
+The recovery window must advance after uploads, not merely after application
+writes. For a parser stall after DDL, install corrected member agents and follow
+the [archive upgrade/recovery guidance](backups.md#upgrading-an-archive-stalled-after-ddl).
+If unarchived logs were purged, the existing window remains bounded; a new full
+backup establishes a new baseline, not a repair of the missing interval.
 
 ### PXC GTID history safety
 
 `GTIDHistorySafe=True` means a freshly observed healthy, same-Galera-history
-majority agrees on historical SID components, differs only by nested
-current-state SID prefixes, and has no active continuity latch. Normal
-active-write lag is accepted; equal counts, SID spelling and Galera sequence
-numbers alone do not establish GTID equivalence. Restored historical namespaces
-are legitimate when shared by the quorum; an unshared extra namespace is not
-treated as ordinary replication lag.
+majority has compatible executed histories and no active continuity latch.
+Nested prefixes in the active cluster SID are ordinary write lag. PXC may use
+the state UUID directly or its bitwise inverse: the inverse is accepted only
+when shared by every eligible member and the direct SID is absent. If both
+namespaces exist, neither is exempted without an explicit full acknowledgement.
+All other namespaces must agree, apart from previously acknowledged member
+differences. Equal counts and Galera sequence numbers do not prove equivalence.
+Before acquiring certification fences or proxy holds, restore negotiates the
+optional agent status capability `mysqlRestoreCertification` on every deployed
+data member and proxy. With support on all participants, restore certifies a
+replicated managed-schema probe before activating the new backup generation.
+Capability negotiation itself owns no controls. Client-fence ownership is
+recorded only when the post-installation fencing window begins. Preflight
+rejection releases untouched restore ownership; native restore polling failure
+retains its frozen checkpoint and original mysqld holds. Failures before
+certification starts release any acquired client controls and resume that
+original recovery path instead of inventing a certification failure.
+ProxySQL processes receive durable restore-owned
+stop holds before native re-formation/certification; ordinary direct SQL is
+fenced with `offline_mode` from restored startup. The privileged local agent can
+still execute the probe. Each member must actually advance the same direct or
+inverse namespace as the restored seed, not merely contain an SST-copied SID.
+While all restored members are temporarily `deployed` rather than `joined`, the
+proxy configuration retains the initialized, admitted restored seed as its sole
+candidate if no joined backend exists. This keeps strict agent validation valid
+during fence acquisition and release/recovery; it does not start a held proxy or
+claim the seed is ready. Native monitoring still decides backend eligibility.
+Unowned restores and uninitialized/unadmitted seeds receive no such candidate.
+A disagreeing follower is quarantined and re-provisioned by SST from that seed,
+with a new formation epoch and at most two attempts per member. Probe histories,
+mapping evidence and remedy progress are checkpointed for crash recovery.
+Persistent mixed mapping blocks activation and reports
+`RestoreGTIDCertified=False/GTIDMappingCertificationBlocked` with operator
+guidance. Success, blocked failure and terminal cleanup release the native fence
+and explicitly release/start every held proxy; reload alone never clears a hold.
+Cleanup attempts all proxy releases even if a data agent is unavailable.
+Terminal-cleanup-pending is checkpointed before release. Normal restore recovery,
+including initial-restore Sync and control-plane restart, retries every owned
+release until cleanup completes; failed certification then settles blocked
+without activating. Pre-certification cleanup preserves its original checkpoint.
+Existing GTID incidents are never silently cleared. There is no pre-restore
+executed-set cache.
+
+Terminal recovery is independent of whether the original queue operation is still
+Running: the persisted restore checkpoint owns pending releases. Native-status
+failure must not prevent attempts to release every proxy hold. Recovery retries
+its checkpointed releases and compares actual member histories.
+A direct/inverse mismatch remains a durable GTID incident; repair the
+minority from trusted history before acknowledging it with a fresh full.
+
+If any deployed agent lacks the capability, restore follows the legacy path
+without new certification fences, proxy holds or probe endpoints. It reports
+`RestoreGTIDCertified=Unknown/RestoreCertificationUnavailable`: agents are
+outdated/incompatible. Certified restores require corrected agents on **every
+data member and every deployed proxy**. A genuinely changed data-member CPU or
+memory resource target performs rolling stop/redeploy, but does not replace
+proxy agents. Redeploy outdated PXC proxies through a genuinely changed
+`spec.components.extra.proxy.resources` target; the whole proxy stops and
+redeploys, so plan a client interruption even with multiple replicas. Verify
+that all participants advertise certification support before restoring.
+**This v0.4.3 existing-cluster certification rollout is not verified live.**
+It is distinct from the GR-only monitor-TLS correction. Use a maintenance
+window, check capacity and preserve a verified backup and independent recovery
+path; expect writer-handoff interruptions or single-member downtime. Do not
+roll a cluster that has lost its majority.
+Alternatively, restore/clone a verified backup into a new v0.4.3 cluster and
+verify member builds, data and client writes before switching clients.
+`karactl clusters restart` restarts native processes, not member agents.
+On v0.4.5, use [agent rollout](#agent-rollout) only after its native safety gates
+are satisfied. See also
+[existing-cluster rollout](../upgrade.md#existing-clusters-and-member-artifacts).
+The post-restore history comparator remains fully active: real mixed accounting
+still records a durable latch and Degraded status, never a silently cleared
+incident. The automatic full after an uncertified restore cannot acknowledge
+that incident; operator-requested fresh full acknowledgement still requires its
+normal complete identity proof.
+
+Automatic re-provisioning requires either explicit in-progress restore ownership
+or a durable empty-member admission captured before a new managed volume is
+initialized. Birth formation negotiates agent capability and fences client SQL/
+proxies before certifying a replicated probe SID mapping. Empty scale/replace
+joins fence and unroute only the new members: existing writers and ProxySQL keep
+running, and the privileged probe executes on a fenced joiner while the seed
+remains authoritative. Certification is required before Ready. A disagreeing
+empty member may receive at most two seed-pinned SST
+remedies, and only if it has no unique frozen/local GTID history beyond the seed.
+Unique data or unproven lifecycle permission fails closed without SST. Legacy
+agents acquire no new holds and report `GTIDMappingCertified=Unknown` /
+`CertificationUnavailable`; native history comparison remains active.
+Admission records native Synced/phase progress durably. Five minutes without
+progress fails closed with an explicit stalled-join diagnostic and retryable
+member/proxy fence cleanup; it cannot leave later joiners or client holds waiting
+silently forever. Legacy restore follower starts use the same launch barrier.
+
+Successful certification retires the empty-member erase permission before client
+fence release. Formation certification belongs only to birth, lifecycle-proven
+empty joins, or explicit restore. A new history incident or changed epoch on
+already admitted members never creates a new certification owner or client hold.
+An older certificate is reported as historical/unavailable if its epoch or
+incarnations no longer match; serialized native join admission still applies.
+Already initialized data never gains automatic erase permission from a history
+incident. A rolling restart is not data repair.
+The certificate and any original GTID incident are separate: SST, consistent
+mapping and equal histories never silently acknowledge a real incident.
+
+There is no separate retry-certification API. A cleanup-complete blocked birth
+or restore permits a new trusted-source restore; a disposable blocked birth can
+also be deleted/re-created. A blocked empty
+scale join can be withdrawn by scaling back to the previously admitted member
+count; a pending replacement can be cancelled before retirement. These exits
+retire only the unadmitted cohort and release its owned fences, preserving the
+existing cluster and any prior GTID latch. A Synced replacement waiting for its
+maintenance window is not a stalled join. Neither exit grants data-discard
+permission over old admitted members or acknowledges a real incident.
 
 `GTIDHistorySafe=False` / `GTIDHistoryDiscontinuityLatched` records a durable divergence
 boundary, the detection time and affected members. The condition appears in the
 cluster API and the overview's conditions table. A later restart, equal GTID
 sets, SST or forced re-formation does not silently erase that observation.
-`Unknown` / `QuorumComparisonUnavailable` means a safe majority comparison
-cannot currently be established.
+The `GTIDHistorySafe` condition uses these reasons:
+
+| Status | Reason | Meaning |
+| --- | --- | --- |
+| True | `QuorumHistoryCompatible` | A compatible configured-member majority is observable, with no active latch. |
+| Unknown | `QuorumComparisonUnavailable` | Current continuity certification is unavailable: majority shortage, interrupted observation, or parent deadline/cancellation during journal work. The message distinguishes `comparison`, `observation-budget` and `observation-lock`, with per-member `eligible`, `rpc-error`, `timeout`, `not-eligible(...)` or `no-observation` outcomes. |
+| Unknown | `GTIDHistoryPersistenceUnavailable` | History journal loading, state/journal persistence, audit recording or journal-lock acquisition failed independently of parent cancellation; this is not evidence of incompatible histories. |
+| False | `GTIDHistoryDiverged` | The comparison proves incompatible history. |
+| False | `GTIDHistoryDiscontinuityLatched` | A recorded divergence remains active, including after later equal observations. |
+
+PXC Status starts continuity checking concurrently with required readiness reads;
+neither needs the other's RPC results. Both run inside the existing five-second
+status-sweep deadline. Readiness uses an immutable cluster snapshot while the
+quorum checker owns history-state writes. A completed same-pass sample remains
+available to subsequent Sync checks rather than requiring another RPC sweep.
+Quorum sampling has its own four-second absolute reservation per observation
+pass, matching the existing agent read timeout. Its observation lock is acquired
+first with a separate one-second wait; journal-lock waiting is also bounded to
+one second. Invalidation and retries do not renew the sampling budget.
+
+Synchronous backup admission (`CreateBackup`/`ValidateBackup`) and PITR-window
+requests also reach this check. Outside the status wrapper, a comparison can
+spend up to six seconds on these lock waits plus quorum RPCs, in addition to
+journal/audit I/O and the endpoint's other work. Parent deadlines may shorten
+every stage, and persistence I/O retains that deadline; six seconds is not an
+end-to-end HTTP latency guarantee. Repeated callers share the sampling deadline
+but may each wait for locks. Parent cancellation/deadline during journal work
+is reported as observation-budget exhaustion, not a storage outage.
+New divergence is authoritative only after the history journal loads and any
+acknowledged frozen-history allowance is evaluated. Cancellation before that
+point reports observation-incomplete, not a new divergence; an already-active
+incident still takes precedence.
+
+Configured members, including planned or unreachable members, remain in the
+majority denominator: five members require three compatible reports.
+`no-observation` includes missing agent/service identity, undeployed stages and
+the pass's optional-action retry cap. Agent SQL, transport and durable identity
+refresh failures appear as `rpc-error`; raw agent error bodies and GTIDs are not
+published in the discriminator. Persistent faults can keep Unknown indefinitely;
+there is no automatic time-based promotion to safe.
+
 The safe watermark advances only when every configured member is successfully
 observed eligible in the same component. An available majority with an unseen
 member does not certify that unseen member's intervening history.
+An active-SID prefix difference at identical `wsrep_last_committed` positions
+on all Synced members is held as a possible in-flight observation race. If it
+persists in at least two independent complete samples across five seconds, it
+latches as divergence, even after a full acknowledged earlier frozen differences.
+The safe watermark does not advance while that suspicion is unresolved. A cache
+hit is not another independent sample.
 
 The guard does **not** stop database service or prohibit full backups. It blocks
 operations that would claim GTID continuity across the unsafe interval:
@@ -106,16 +298,57 @@ incremental backup chains and PITR/binlog replay spanning it. An independently
 valid backup and archived target before the recorded safe boundary remain
 restorable. Do not equate the detection timestamp with the first unsafe
 transaction: an IST can replay an older transaction under a different GTID.
+Comparison unavailability also permits a full backup, but an unavailable durable
+journal/state/audit fails backup admission closed because continuity state cannot
+be reliably loaded or recorded. Incrementals still require a compatible majority
+and no active incident.
+For PXC-4493 mixed accounting after activation, re-provision the affected member
+from trusted history using managed replacement/SST, then take the fresh full.
+A mysqld restart is **not** a repair: it may change the mapping for future
+transactions while retaining incompatible old namespaces and restarting numbering
+inside the direct SID. Do not mistake that permanent prefix offset for write lag.
+The history latch leaves managed replacement, explicit full acknowledgement,
+trusted-source restore and deletion available. Replacement fences only its new
+joiner; restore and deletion retain their own explicit lifecycle disruptions.
+Acknowledgement checks current direct/inverse SID accounting without fencing
+clients; an old consistent birth certificate is not proof that a later mixed
+mapping was repaired. Incompatible namespace presence, non-prefix differences,
+or differences in both current namespaces refuse acknowledgement. One shared
+namespace may have ordinary nested-prefix write lag only when its complement is
+identical frozen history across all members. Existing mixed probe evidence must
+also be repaired. While an incident is active, the saved mapping certificate is
+reported as unproven rather than certifying current assignment. Full backup
+artifacts remain available if acknowledgement is refused; the latch stays set.
+
+Control-plane upgrade also retires an obsolete post-admission whole-cluster
+certification owner when it had no new empty-member admission. Its owned native
+fences and every proxy hold are released retryably before restoring the previous
+historical certificate. Probe evidence and the real GTID incident are retained;
+the cluster stays Degraded-latched until explicit acknowledgement, without
+requiring a member-agent upgrade or erasing any member's data.
 
 Preserve logs, executed GTID sets and application evidence. Identify the trusted
 quorum and use managed member replacement to provision fresh data from it;
 verify both application contents and GTID history. Take a **new full backup**
 after detection to establish a fresh PITR baseline. That explicit, successful
 full backup is the operator acknowledgement: no flag, restart or status edit
-clears the latch. Successful completion records the new baseline and clears the
-active continuity latch; old chains retain their unsafe boundary. A failed,
-cancelled or already-running old full backup cannot clear it. A new conflict
-creates a new latch.
+clears the latch. Successful completion requires a complete healthy same-component
+member sample and records its directed frozen-SID differences in the sealed
+journal. The same acknowledged differences do not immediately re-latch; new,
+growing or reversed differences do. This acknowledges history, not data repair
+or asynchronous-replica safety. Old chains retain their unsafe boundary. A failed,
+cancelled or already-running old full backup cannot clear it. Missing members
+cannot authorize an acknowledgement. Each complete successful comparison durably
+narrows the usable allowance: healed or removed differences are retired and
+regrowth latches again, even after restart or SST. Original acknowledgement
+evidence remains immutable. Allowances are bound to formation epoch/group,
+managed service/volume/server identities and the server UUID read with executed
+history; replacement or re-formation invalidates them. Agents must report that
+native UUID to establish an acknowledgement. The journal transition is durable
+before `GTIDHistoryBaselineEstablished` is emitted; recorder failures retry.
+Recorder outages never prevent committing a newly observed divergence or retiring
+healed allowances. Pending baseline events remain retryable even after a newer
+incident is recorded; equal histories cannot erase that newer latch.
 
 Both transitions are audited as cluster events: `GTIDHistoryDiverged`
 (Warning; boundary, detection time and affected members) when the latch is
@@ -128,16 +361,153 @@ attach an asynchronous replica across the affected history merely because rows
 or later sets match. An inverse SID alone is not an error: compare the complete
 history with quorum. See [backup continuity boundaries](backups.md#pxc-gtid-continuity).
 
+## Agent rollout
+
+```sh
+karactl -n NS clusters upgrade-agents CLUSTER --wait
+```
+
+MySQL `single`, Group Replication and PXC support the same-version
+`upgrade-agents` operation. It freezes the control-plane agent build and member
+order, preserves each member's applied database version, runtime, volume and
+resources, and journals completed and in-flight members across control-plane
+restarts. Current agents are skipped unless `--include-current` is supplied.
+If the control-plane executable changes again, finish recovery of an already
+submitted member, then submit a new rollout for the new build; the original
+operation never silently retargets.
+
+Admission and every new disruption wait for outstanding runtime recovery,
+confirmed volume loss, identity conflicts and queued/running member replacement.
+A stale `ONLINE` report never makes a lost member a healthy rollout peer.
+Operations are serialized per cluster: automatic replacement queueing cannot
+preempt an active rollout. If recovery appears mid-rollout, settle the current
+member and its routing withdrawal without submitting another executable, then
+fail the incomplete rollout with a recovery diagnostic so replacement can claim
+ownership without retrying the rollout. Re-run `upgrade-agents` after recovery.
+A known deployment receipt still requires its exact target build; confirmed
+storage loss instead releases the drain without native readmission and retains
+the independent loss routing fence. Cancellation follows the same cleanup path.
+Replacement admission refuses outstanding rollout drains, including the
+readmission acknowledgement phase.
+
+The proxy phase comes first: deploy the ProxySQL **service**, then require
+every live instance to acknowledge the published configuration/credentials,
+report a healthy writer and report the exact frozen agent build. Infrastructure
+completion alone is insufficient. On Dokploy, a running, deployed, volume-less,
+serving-probe-marked incumbent and marked incoming build use serial start-first
+replacement with native serving admission and spare capacity. The chosen policy
+is checkpointed before submission and retained on receipt-missing replay,
+including `--include-current`. A legacy/unmarked first upgrade and cold/stopped
+deployment use ordinary deployment; a successful marked upgrade enables later
+serving-preserving rollouts. Zerops ordinary whole-service deployment and Nomad's
+TCP-gated canary followed by potentially destructive replacement have no
+new-build serving guarantee and may interrupt the entire endpoint even with
+replicas. Count/resource serving contracts are not executable-rollout contracts.
+Plan a maintenance window and client reconnection on every backend.
+
+An already current proxy is not redeployed, but still must pass the same
+all-instance configuration/credentials and healthy-writer checks before data
+maintenance starts.
+
+Data secondaries/non-writers follow, with the initially observed writer last.
+Before each Group Replication data restart, all configured members must be
+`ONLINE`, the group must have a primary, and removing that member must retain a
+configured majority. Before disrupting a primary, the existing handoff selects
+a secondary containing its observed GTIDs, waits for reader admission on every
+serving proxy, elects it, and waits for that new primary in writer HG10.
+`RECOVERING` is not completion: the member must return `ONLINE` with the exact
+target build and be readmitted by every serving proxy.
+
+PXC requires safe GTID-history observations with no latched divergence, and a
+full-size Primary component whose members are all Synced, ready and connected.
+Before restarting its routed writer, the rollout selects a caught-up,
+proxy-eligible survivor, withdraws the old writer from proxy configuration and
+waits for the selected survivor in HG10 on every proxy. The temporary routing
+withdrawal does not retire the data identity or alter Galera peers. The existing
+same-member/same-volume restart keeps its joined admission and certification
+fences; it rejoins through normal Galera IST when available (SST otherwise),
+never by acquiring fresh empty-member replacement authority. Completion requires
+Synced in the full Primary component, exact build and proxy readmission.
+
+Each new member disruption waits for the maintenance window, including retries
+after a deferred submission. Closing the window does not abandon a member after
+actual writer handoff or a receipted deployment: native recovery and exact build
+acknowledgement finish before stopping between members. Merely selecting a
+handoff target does not bypass the window. A crash or transport failure can leave an
+unreceipted deployment intent with an uncertain outcome. Cancellation never
+submits that deployment again: it waits for native health and proxy routing to
+settle at the old or target build, then stops. Normal replay rechecks the window
+and native safety before resubmission. The operation also reuses retained-member
+native rejoin for peers while ordinary synchronization is paused.
+
+The checkpoint records the member's pre-upgrade instance builds. On normal
+replay after a lost deployment reply, native readiness and the exact frozen
+target on every expected instance prove completion when that target differs
+from the recorded pre-upgrade build, regardless of `--include-current`.
+For an explicit refresh whose instances already reported that same target,
+build identity cannot prove whether the deployment was accepted: the backend
+contract has no deployment lookup. That ambiguous case conservatively redeploys
+through the maintenance and native-safety gates and can repeat an accepted
+same-build refresh. Cancellation still never submits another deployment.
+
+If an operation becomes terminal without running its cleanup, ordinary
+synchronization settles any orphaned PXC writer-routing withdrawal using native
+readiness and a healthy routed writer, readmits the member, then releases its
+owner marker. This recovery accepts the old or target build, never starts an
+agent deployment, and must complete before another operation is admitted.
+
+Cancellation is not rollback. Single topology has no writer handoff and incurs
+**database downtime** while its sole runtime is redeployed.
+
+Rolling maintenance, replacement, scale, restore, recovery, pending structural
+work and TLS rotation must finish before starting the rollout. Operation steps
+and messages identify the member, writer handoff, native readiness and build
+wait; `AgentsCurrent` remains the shared build inventory. Unknown/stale native
+or proxy evidence is never permission to advance.
+
 ## Restart, configuration and scale
 
 - Dynamic allowlisted parameters can apply live. Startup-only parameters and resource changes use managed rolling maintenance. Keep configuration in the specification, not `SET PERSIST`.
 - MySQL `single` restarts cause downtime. Groups maintain secondaries first, then move the primary and finish its maintenance. Require a majority throughout; applications reconnect after writer movement.
+- ProxySQL replica-count-only changes avoid service-wide restart only when the backend guarantees serving-preserving scaling. Every live replica must acknowledge the desired proxy configuration and report a healthy writer before the new count is committed; at least one serving replica must remain. Scale-up can proceed outside the maintenance window; scale-in waits for the window, including after control-plane restart.
+- ProxySQL resource-only changes similarly avoid service-wide stop/redeploy only when the backend guarantees a serving-preserving resource update and approves that particular transition. The version, replica count and acknowledged startup/runtime configuration must be unchanged. The control plane checkpoints intent before updating the running service, adopts the backend operation on replay, and commits resources only after operation completion and configuration/writer readiness on every expected live instance. Resource updates **still require a maintenance window**, including a recheck immediately before submission: unlike count-only scale-up, they can replace serving instances.
+- Unsupported resource transitions, combined resource/count changes, version or startup/runtime changes (such as enabling the reader port), and older deployments without an acknowledged runtime hash retain service-wide stop/redeploy. These changes can briefly interrupt the entire application endpoint; schedule a maintenance window. Serving-preserving backend rollouts are not a promise that existing client sessions survive replacement; applications must reconnect.
+- The serving-probe runtime marker is excluded from the acknowledged runtime hash: upgrading the control plane does **not** restart an otherwise unchanged legacy proxy or invalidate an existing Nomad count-only fast path. Backends that require the probe, such as Dokploy, independently refuse no-stop updates until a successfully deployed runtime carries the marker; their next requested count/resource change uses stop/redeploy once. Update member executables as required by the backend's proxy-health contract; the marker alone is not evidence of health.
+- A terminal ProxySQL resource-update failure remains blocked with an actionable maintenance wait; it never commits the requested resources, blindly resubmits the terminal receipt, or enters replica-count recovery. Restore backend health and supersede the failed resource target to request a new operation. That explicit recovery uses window-gated stop/redeploy, even when reverting to the last committed resources: a partial failed rollout is not proof of backend rollback. A completed backend update with stale, missing or writer-unready proxy instances remains pending until every expected live instance is ready.
+- A terminal Nomad ProxySQL scale failure is reported as `MySQLProxyScale=False / ScaleFailed`. The control plane observes surviving replicas instead of waiting forever for the failed target or blindly retrying placement. A backend-proven, placement-free recovery may resume scaling; a different desired replica count can supersede the failure. Reverting to the surviving count still requires healthy backend state and per-instance configuration acknowledgements.
+- Managed rolling changes and restarts wait for each rejoined member to be admitted `ONLINE` by **every serving ProxySQL instance**, not merely native `ONLINE`/Synced. Group Replication also waits for the selected secondary in reader HG20 before election and for that same new primary in writer HG10 before taking the old writer offline. Replacement and scale-down use the same retirement barriers. PXC checks a surviving writer candidate in its managed HG10/HG11/HG20 before taking a member offline; its Galera monitor continues to select the routed writer. HG30 and `SHUNNED` never satisfy these waits. `MySQLProxyAdmission=False / WaitingForProxyAdmission` identifies a blocked target; maintenance retries without a timeout that permits an unsafe handoff. These barriers are control-plane-side and work with existing agents.
+- Handoff candidates must satisfy both native GTID containment and admission on every serving proxy before selection. If a later native election replaces a checkpointed writer, maintenance checkpoints the newly observed native writer and waits for that identity in HG10 everywhere; stale HG10 placement for the former writer cannot release the barrier.
+- PXC replacement joiners remain deliberately unrouted while final-membership certification owns their routing fence. They may enter retirement of their predecessor before that fence is released; retirement still requires an already admitted surviving writer candidate. Proxy admission must not bypass certification or prevent diagnostic replacement, trusted-source restore, or deletion.
+- Updated MySQL/PXC proxy agents set the monitor DNS-cache TTL to 5 seconds and refresh to 1 second in both startup and runtime configuration, including single-server proxies. A proxy configuration reload converges this policy after the new agent is deployed; a control-plane upgrade alone does not change the old agent's DNS policy. Proxy admission remains required even with the shorter cache.
 - Group primary handoff sends a validated UUID literal to MySQL: parameterized execution is rejected by the native UDF initializer even when a valid UUID is bound. Failed handoffs return bounded, sanitized native diagnostics in operation errors/events; a rejected handoff does not authorize restarting the current primary. This behavior is implemented in the agent, so replacing only the control plane does not update existing agents.
 - PXC maintenance preserves a Primary component, waits for healthy Synced members and avoids intentionally removing a majority. Rejoining members use IST when available, SST otherwise. Do not continue a rolling change while state transfer or quorum health is unresolved. A member whose previous launch never reached Synced (an interrupted IST/SST) waits 130 seconds before relaunching so the previous donor's retries expire; see [hostile cluster traffic](access-and-tls.md#hostile-cluster-traffic). A member evicted by Galera for an inconsistency is not rejoined automatically; replace it.
 - MySQL allows `single`→`group`, adopting the existing data as the seed; `group`→`single` is rejected. Groups scale 3↔5. PXC remains `cluster`, 3↔5 only. Cross-engine driver conversion is unsupported.
 - Replacement introduces a new member identity before retiring the old one. Use the managed replace action; do not copy data identity or a stale bootstrap flag into another member. Disk shrink is not supported.
 - Suspension with retained volumes preserves the dataset and identities. Resume after all members stop uses the full-outage recovery rules below; it is not an unconditional restart into a writable cluster.
 - Resume and runtime recovery restore the previously admitted public TCP policy even while the maintenance window is closed. A pending exposure or allowlist/IP-family change remains deferred and its generation is not acknowledged until the window opens or the generation receives a maintenance override. Admission survives control-plane restarts separately from runtime route receipts. Legacy state migrates acknowledged policy or a matching retained exposure hash; if neither identifies the old policy, recovery stays private until admission.
+
+During PXC replacement or scale-in, a retiring member retains its own local
+Galera peer identity in its configuration until resource cleanup completes,
+including reloads after mysqld stops. It is excluded from other members' Galera
+join peers and from proxy routing. This keeps strict agent validation valid
+without re-admitting the retiring member. A control-plane update can resume
+an older in-flight retirement blocked by a missing local peer; no member-agent
+upgrade or validator relaxation is required.
+Before a donor/seed retires, its logical donor references move to a healthy
+already-admitted survivor, never to an unproven joiner. This also repairs stale
+donor references in an existing stopped-retirement checkpoint.
+
+A timed-out or blocked empty-join certificate cannot starve an already
+irreversible old-member retirement, including after the queue operation fails.
+The native retirement resumes under its original durable ownership; the historical
+queue result remains unchanged. The joining member stays unrouted while final
+membership is re-probed using the same admission, evidence and bounded remedies.
+If the probe agrees on current SID mapping but copied unique frozen history
+remains, certification stays blocked and that member remains unrouted. Cleanup
+releases its owned controls and leaves explicit full acknowledgement, trusted-source
+restore and deletion available. A full may acknowledge the history under the
+current-accounting rules; it does not silently certify or route that member,
+erase its unique data, or repair mixed native mapping.
 
 PXC cluster-traffic certificate rotation is an **offline exception** to normal rolling maintenance: all data members stop, replace the dedicated traffic CA and shared traffic leaf/key, and recover using the full-outage position rules below. Reformed members reject credentials signed by the old traffic root. Plan database downtime and verify recovery readiness first. SQL and agent trust remain separate from the traffic CA. Fence a compromised member's secret/network access before distributing replacements; shared traffic trust has no independent per-member revocation. Ordinary membership changes do not rotate the traffic identity or require this TLS outage.
 
@@ -187,9 +557,72 @@ The CLI command is `karactl -n NS mysql recover-quorum CLUSTER -f recovery.json`
 Full-outage recovery below compares stopped members' recovered positions and is distinct from this live-minority action.
 
 
+## Confirmed volume loss
+
+MySQL Group Replication and PXC automatically queue managed add-before-remove
+replacement only after **confirmed** loss of a member's initialized volume.
+An unreachable agent, storage API failure or unknown mount is not confirmed
+loss and never authorizes an empty data directory. `VolumeLost` / `VOLUME_LOST`
+keeps the cluster Degraded while evidence or replacement is pending.
+An identity-conflict status is not affirmative loss evidence: restoring the
+original retained volume after such a conflict does not authorize replacement.
+Confirmed-lost predecessors cannot restart/rejoin while replacement is pending.
+Their absence does not block disk-growth preflight or PXC capability negotiation;
+survivors, the new joiner and deployed proxies must still negotiate certification.
+
+- GR requires fresh ONLINE observations of every survivor in the configured
+  group, a writable primary and a survivor majority of configured membership.
+  A donor's executed GTIDs must contain the lost member's last known persisted
+  set. Missing survivor GTIDs/group identity or an observation error refuses
+  automation. Older agents without the group-name observation must be upgraded
+  before this new automatic recovery can be admitted.
+- PXC requires a Primary component, every survivor Synced/ready/connected, one
+  state UUID and a configured-member majority. A latched history divergence or
+  absence of an SST donor containing the lost member's last known GTIDs refuses
+  automation. A lost seed/pinned donor is re-pinned to a qualified survivor;
+  existing joining-member certification still fences SST and routing.
+  A survivor withdrawn by an agent rollout is not an eligible donor or writer;
+  settle its drain before replacement admission.
+- Replacement creates a new member/storage identity before retiring the old
+  one. ProxySQL acknowledges exclusion of the lost member, its exact runtime
+  is fenced, and surviving native membership must confirm removal. No live
+  database observation of the lost member is required, and its old runtime is
+  never initialized on an empty volume.
+- `single` is refused because there is no retained replica. Recover original
+  storage or restore a backup into a new cluster; ordinary retained-volume
+  runtime restarts still cause singleton downtime.
+
+Inspect the precise status reason and queued operation. Reconciliation reuses
+one deterministic operation ID and does not requeue terminal operations. After
+resolving a terminal failure, inspect retained data before requesting managed
+replacement again. No automatic `pc.bootstrap` or `recover-quorum` is introduced.
+Read-only runtime/storage discovery shares the bounded MySQL observation pass
+with native health and agent status; it does not add a timeout per member.
+Replacement admission still obtains fresh surviving-data proof before queueing.
+
+Runtime recovery discovers loss before orphaned rollout-drain settlement. If the
+withdrawn member itself is confirmed lost and its rollout owner is terminal or
+missing, settlement releases only the drain ownership, without waiting for native
+health or readmitting that identity. Confirmed loss keeps it out of proxy routing;
+the next reconciliation can queue replacement. A live rollout owner retains its
+drain until the serialized operation completes or terminates.
+This is distinct from retained-data full-outage re-formation below.
+See [ADR 0067](../adr/0067-mysql-lost-volume-replacement.md).
+
 ## Full-outage recovery
 
 All members must be stopped/fenced before choosing a seed. Recovery fails closed if evidence is missing or incompatible; do not choose the first reachable member.
+
+For a previously formed GR cluster with equal GTID histories and complete,
+valid stopped-member identity evidence, the control plane automatically re-forms
+the group after a whole-group outage, such as power loss or all nodes rebooting.
+The same path supports suspending and resuming a GR cluster that keeps its
+volumes (`karactl clusters delete --keep-volumes` + `karactl clusters resume`).
+The v0.4.3 correction to the offline-probe timeout is control-plane-side, with
+no agent change required. Whole-group recovery and retained-volume suspend/resume
+were live-verified on Nomad with three GR members and exact data checks.
+The PXC/Galera re-formation path is verified by tests only; no general
+recovery-time guarantee follows from the GR measurements.
 
 | MySQL Group Replication | PXC / Galera |
 | --- | --- |
@@ -199,6 +632,41 @@ All members must be stopped/fenced before choosing a seed. Recovery fails closed
 | Bootstrap only that seed, then join the others normally | Mark only the selected seed safe, bootstrap with its recovered position, then rejoin the others |
 
 After a crash, `grastate.dat` often contains sequence `-1`; `safe_to_bootstrap` alone cannot rank data freshness. Graceful suspension uses the same evidence-based resume policy rather than assuming shutdown order. An ordinary PXC restart also recovers its local position before rejoining; it must not turn stale bootstrap intent into a new independent cluster. Bootstrap authorization is bound to a formation epoch, preventing an old desired configuration from replaying bootstrap.
+
+Offline GTID/identity and Galera position recovery are native operations, not
+four-second health observations. GR probes have a **60-second total** control-plane
+and agent budget; the agent permits **40 seconds for private-server startup and
+recovery**, leaving the remaining total budget for observation and graceful
+shutdown. Galera recovered-position probes retain their **180-second** budget.
+These are fixed native-route limits, not RAM-scaled guarantees. Up to three members
+are probed concurrently after every member passes cheap deployed/stopped checks.
+A failed native probe does not prevent the other probes completing. A blocked
+sweep backs off in memory for 15 seconds, doubling to five minutes; success or a
+change of recovery state/epoch resets this throttle. Restarting the control plane
+also clears the throttle, but never supplies missing evidence.
+The operation remains cancelable and does not inherit
+the read-only reconciliation sweep's shared observation deadline. These budgets,
+prechecks and retry throttle also apply to retained-volume suspend/resume and
+PXC traffic-TLS re-formation. Slow disks or extensive crash recovery can still
+exhaust the budget; blocked conditions identify unavailable,
+invalid or timed-out members without exposing native error payloads. Every member
+must supply valid evidence in the same sweep before seed selection; partial
+observations never authorize bootstrap or substitute for fresh evidence on retry.
+
+Control-plane mutations are serialized by namespace and cluster name, including
+access changes, reconciliation, operations and cluster cleanup. A slow native
+recovery probe holds only that cluster's mutation gate; access changes and
+operations for unrelated clusters can proceed. Waiting for this gate honors the
+caller's context deadline. Idle gates are removed after their last holder/waiter
+leaves.
+
+Backup-object deletion has separate coordination: retained-backup deletion,
+live-cluster backup deletion and repository cleanup exclude each other and active
+control-plane backup/restore steps, including clones reading another cluster's
+sealed backup credentials. Backup/restore steps can otherwise run concurrently.
+This is in-process coordination, not an S3 transaction or a lock on asynchronous
+agent uploads. Existing incarnation-scoped repository paths and backup/restore
+admission still apply; do not delete storage objects manually during recovery.
 
 PXC state transfer uses upstream SST behavior rather than custom keep-list overrides. Managed data-identity tracking permits UUID regeneration only for an explicitly authorized state transfer and records the accepted identity after Synced state. Re-formation/restoration may explicitly reset a stopped joiner's own dataset for SST; an arbitrary identity mismatch is not permission to erase or initialize it. This is distinct from independent [backup restore](backups.md#offline-restore-and-clone), which creates new replication history.
 
@@ -283,8 +751,9 @@ This does not alter formed GR clusters or reopen consumed multi-member epochs.
 If the create may contain valuable data, retain its volumes and seek
 evidence-based recovery instead; there is no public Group Replication
 `reset-bootstrap-epoch` action. Updating only the control plane cannot undo an
-agent's durable claim or change its native renderer. MySQL does not support
-`upgrade-agents`.
+agent's durable claim or change its native renderer. The v0.4.5
+[agent rollout](#agent-rollout) requires completed formation and cannot repair
+an unformed or consumed bootstrap epoch.
 
 ### Native startup and agent connectivity
 

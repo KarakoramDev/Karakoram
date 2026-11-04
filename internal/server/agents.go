@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -130,7 +131,21 @@ func (s *Server) InternalHandler() http.Handler {
 			err = engine.ErrNotSupported
 		}
 		if err != nil {
-			_ = s.failure(err).write(w)
+			failure := s.failure(err)
+			// Older agents decode only ErrorResponse.error. Preserve the
+			// structured response as well, using only the sanitized diagnostic.
+			if safe, ok := failure.body.(api.Error); ok {
+				diagnostic := safe.Message
+				var resource *domain.ResourceError
+				if errors.As(err, &resource) {
+					diagnostic = resource.Reason + ": " + diagnostic
+				}
+				failure.body = struct {
+					api.Error
+					LegacyError string `json:"error"`
+				}{Error: safe, LegacyError: diagnostic}
+			}
+			_ = failure.write(w)
 			return
 		}
 		_ = ok(cfg).write(w)

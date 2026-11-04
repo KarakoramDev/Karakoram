@@ -108,6 +108,8 @@ func opsFixture(t *testing.T, handler http.HandlerFunc) (*Provider, *engine.Cont
 	st := &opsStore{storage: domain.BackupStorage{Namespace: domain.DefaultNamespace, Name: "archive", Type: "s3", Bucket: "backups", Prefix: "saved", EndpointURL: "https://storage.example", Region: "us-east-1", Credentials: domain.StorageCredentials{AccessKeyID: "access", SecretAccessKey: "secret"}}, backup: domain.Backup{Namespace: domain.DefaultNamespace, Name: "snapshot-one", Cluster: "test", Storage: "archive", Type: "snapshot", Phase: domain.PhasePending}}
 	sec := &opsSecrets{values: map[string][]byte{secretCA: ca, secretAdmin: []byte("admin-password"), secretElastic: []byte("elastic-password"), secretLogstash: []byte("logstash-password"), secretAPM: []byte("apm-password"), secretKibanaToken: []byte("kibana-token"), secretKibanaTokenName: []byte("kk-original")}}
 	rc := &engine.Context{Cluster: &domain.Cluster{Namespace: domain.DefaultNamespace, Name: "test", Spec: domain.ClusterSpec{Provider: "elasticsearch", Version: "9.5.5", Topology: domain.Topology{Type: "cluster"}}}, Store: st, Secrets: sec, Dialer: opsDialer{u.Host}, Clock: engine.RealClock{}, Agents: opsAgents{agentapi.ClientOptions{BaseURL: server.URL, Token: "agent-token", CAPEM: ca}}}
+	// Native config generation requires the backend's private address family.
+	rc.Backend = &coreInfra{}
 	s := &state{UID: "unique", ConfigVersion: 1, ClusterUUID: "formed", Storages: []string{storageIdentity(&st.storage)}, Repositories: map[string]*repository{}, NextIndex: map[string]int{}, Members: []*member{{Name: "example.com", Kind: kindNode, Stage: stageJoined, Version: "9.5.5", ConfigVersion: 1}}}
 	p := New(ProviderOptions{})
 	p.ApplyDefaults(&rc.Cluster.Spec)

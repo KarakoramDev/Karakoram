@@ -92,12 +92,25 @@ func (p *Core) backupStorage(ctx context.Context, rc *engine.Context, name, name
 	return store.GetBackupStorage(ctx, namespace, name)
 }
 func mysqlAction(ctx context.Context, rc *engine.Context, member, action string, request, response any) error {
+	switch action {
+	case myspec.ActionStatus, myspec.ActionGaleraStatus, myspec.ActionProxyStatus, myspec.ActionArchiveStatus:
+		return mysqlReadAction(ctx, rc, member, action, request, response)
+	case myspec.ActionBackupInfo, myspec.ActionPITRCoverage, myspec.ActionRestoreStatus, myspec.ActionOfflineGTID:
+		// Request-bearing reads are not memoized, but are not mutations.
+	default:
+		invalidateMySQLReadObservation(ctx, rc)
+	}
 	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), member)
 	if err != nil {
 		return err
 	}
 	return a.Engine(ctx, "mysql", action, request, response)
 }
+
+const (
+	restoreStopUntouched = "untouched"
+	restoreStopStarted   = "started"
+)
 
 type backupCheckpoint struct {
 	Step           string          `json:"step"`
@@ -109,6 +122,13 @@ type backupCheckpoint struct {
 	Preflighted    bool            `json:"preflighted,omitempty"`
 	PlanDigest     string          `json:"planDigest,omitempty"`
 	RecheckID      string          `json:"recheckID,omitempty"`
+	// Empty belongs to older checkpoints and retains conservative Offline
+	// inference. New restores persist untouched/started intent explicitly.
+	StopBoundary      string                   `json:"stopBoundary,omitempty"`
+	GTIDCertification *pxcRestoreCertification `json:"gtidCertification,omitempty"`
+	// Retain the exact terminal blocked owner only until replacement preflight
+	// crosses the native-stop boundary; an untouched failure must restore it.
+	PreviousBlockedRestore *domain.Operation `json:"previousBlockedRestore,omitempty"`
 }
 
 func backupResult(cp backupCheckpoint, done bool) engine.OpResult {
@@ -160,7 +180,7 @@ func backupMemberIdentity(ctx context.Context, rc *engine.Context, s *state, ide
 	// A PITR baseline must anchor the stream that is actually archived.
 	// Numeric GTID equality cannot authorize replay from another member.
 	if rc.Cluster.Spec.Backup.PITR.Enabled {
-		writer, err := archiveWriter(ctx, rc, s)
+		writer, _, err := archiveWriter(ctx, rc, s)
 		if err != nil {
 			return "", err
 		}
@@ -189,6 +209,11 @@ func backupMemberIdentity(ctx context.Context, rc *engine.Context, s *state, ide
 	return primary, nil
 }
 func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Operation, cp backupCheckpoint) (engine.OpResult, error) {
+	p.backupCleanupMu.RLock()
+	defer p.backupCleanupMu.RUnlock()
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	name, err := operationResource(op, "backup")
 	if err != nil {
 		return backupResult(cp, false), err
@@ -200,12 +225,9 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 	if b.Phase == domain.PhaseSucceeded {
 		s, e := load(rc.Cluster)
 		if e != nil {
-			return backupResult(cp, false), e
+			return completedBackupResult(e), nil
 		}
-		if e = establishGTIDBaseline(ctx, rc, s, b); e != nil {
-			return backupResult(cp, false), e
-		}
-		return backupResult(backupCheckpoint{Step: "done"}, true), nil
+		return completedBackupResult(establishGTIDBaseline(ctx, rc, s, b)), nil
 	}
 	if b.Type != "full" && b.Type != "incremental" {
 		return backupResult(cp, false), engine.Invalid("MySQL backup type must be full or incremental")
@@ -214,13 +236,16 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 	if err != nil {
 		return backupResult(cp, false), err
 	}
-	observationErr := checkPXCQuorumGTIDs(ctx, rc, s)
-	if observationErr != nil {
-		if _, observation := observationErr.(*myspec.GTIDQuorumError); !observation {
-			return backupResult(cp, false), observationErr
-		}
-	}
+	// A full is an independent snapshot, not a continuity claim. Do not put
+	// every native poll behind a quorum read; acknowledgement samples freshly
+	// after success and can report a separate non-retry completion outcome.
 	if b.Type == "incremental" {
+		observationErr := checkPXCQuorumGTIDs(ctx, rc, s)
+		if observationErr != nil {
+			if _, observation := observationErr.(*myspec.GTIDQuorumError); !observation {
+				return backupResult(cp, false), observationErr
+			}
+		}
 		if incident := activeGTIDIncident(s); incident != nil {
 			return backupResult(cp, false), engine.Invalid("%s", incident.message())
 		}
@@ -336,7 +361,7 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 	var response myspec.BackupResponse
 	if cp.Step == "dispatch" {
 		if rc.Cluster.Spec.Backup.PITR.Enabled {
-			writer, e := archiveWriter(ctx, rc, s)
+			writer, _, e := archiveWriter(ctx, rc, s)
 			if e != nil || writer != cp.Member {
 				return backupResult(cp, false), engine.Invalid("PITR archive writer changed before backup dispatch; take a fresh full from the current archive writer")
 			}
@@ -384,11 +409,20 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 	if err = rc.Store.UpdateBackup(ctx, b); err != nil {
 		return backupResult(cp, false), err
 	}
-	if err = establishGTIDBaseline(ctx, rc, s, b); err != nil {
-		return backupResult(cp, false), err
+	return completedBackupResult(establishGTIDBaseline(ctx, rc, s, b)), nil
+}
+
+// A native backup already recorded Succeeded is not an initiation failure.
+// Baseline acknowledgement is independently fenced and may be unavailable on
+// old agents or during observation/audit outages. Surface that outcome once
+// instead of exhausting operation retries for an immutable successful backup.
+func completedBackupResult(baselineErr error) engine.OpResult {
+	if baselineErr == nil {
+		return backupResult(backupCheckpoint{Step: "done"}, true)
 	}
-	cp.Step = "done"
-	return backupResult(cp, true), nil
+	result := backupResult(backupCheckpoint{Step: "done-baseline-pending"}, true)
+	result.Message = "Backup succeeded; GTID baseline acknowledgement or its audit could not complete. Check GTIDHistorySafe, member availability and agent compatibility; preserve existing continuity boundaries and take a fresh full after verified repair if still latched."
+	return result
 }
 
 func backupMetadataMismatch(b *domain.Backup, r *myspec.BackupResult) string {

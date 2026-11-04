@@ -227,7 +227,40 @@ func persistRestore(rc *engine.Context, op *domain.Operation, cp backupCheckpoin
 	bs.RestoreOperation = &copy
 	return saveBackupState(rc.Cluster, bs)
 }
+
+func stopRestoreDataMembers(ctx context.Context, rc *engine.Context, s *state, op *domain.Operation) error {
+	for _, m := range s.Members {
+		if m.Role == "data" {
+			m.Offline = true
+		}
+	}
+	publishRevision(s)
+	if err := save(rc.Cluster, s); err != nil {
+		return err
+	}
+	for _, m := range s.Members {
+		if m.Role != "data" {
+			continue
+		}
+		a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
+		if err != nil {
+			return err
+		}
+		if err := a.Reload(ctx); err != nil {
+			return err
+		}
+		if err := a.Process(ctx, agentapi.ProcessAction{Process: "mysqld", Action: "stop", RequestID: op.ID + "/stop/" + m.Name}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Operation, cp backupCheckpoint) (engine.OpResult, error) {
+	p.backupCleanupMu.RLock()
+	defer p.backupCleanupMu.RUnlock()
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return backupResult(cp, false), err
@@ -236,17 +269,29 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 	if err != nil {
 		return backupResult(cp, false), err
 	}
-	if bs.RestoreOperation != nil {
-		if bs.RestoreOperation.ID != op.ID {
+	handoff := bs.RestoreOperation != nil && bs.RestoreOperation.ID != op.ID
+	if handoff {
+		owner, e := terminalBlockedRestore(ctx, rc, bs)
+		if e != nil {
+			return backupResult(cp, false), e
+		}
+		if owner == nil || op.Kind != domain.OperationRestore {
 			return backupResult(cp, false), engine.ErrConflict
 		}
+		cp = backupCheckpoint{}
+	}
+	if bs.RestoreOperation != nil && !handoff {
 		if len(bs.RestoreOperation.Checkpoint) > 0 {
+			// A checkpoint is a complete snapshot, not a JSON merge patch:
+			// omitted optional flags must not retain caller-local stale values.
+			cp = backupCheckpoint{}
 			if err = json.Unmarshal(bs.RestoreOperation.Checkpoint, &cp); err != nil {
 				return backupResult(cp, false), err
 			}
 		}
 	}
 	if cp.Step == "" {
+		cp.StopBoundary = restoreStopUntouched
 		if len(s.data()) == 0 {
 			return backupResult(cp, false), engine.ErrUnavailable
 		}
@@ -291,13 +336,30 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		}
 		cp.Generation = bs.Generation + 1
 		cp.Step = "preflight"
+		if handoff {
+			if err = handoffBlockedRestore(ctx, rc, op, &cp); err != nil {
+				return backupResult(cp, false), err
+			}
+		}
+		if err = negotiatePXCRestoreCertification(ctx, rc, s, op, &cp); err != nil {
+			return backupResult(cp, false), err
+		}
 		if err = persistRestore(rc, op, cp); err != nil {
 			return backupResult(cp, false), err
 		}
 		return backupResult(cp, false), nil
 	}
-	if cp.Request == nil {
+	if cp.GTIDCertification != nil && cp.GTIDCertification.RecoveryCleanupPending {
+		err = completeRestoreGTIDRecoveryCleanup(ctx, rc, s, op, &cp)
+		return backupResult(cp, false), err
+	}
+	if cp.Request == nil && cp.Step != "certify-cleanup" && cp.Step != "certify-blocked" {
 		return backupResult(cp, false), engine.Invalid("restore checkpoint lacks frozen source")
+	}
+	if cp.Step != "certify-cleanup" && cp.Step != "certify-blocked" {
+		if err = negotiatePXCRestoreCertification(ctx, rc, s, op, &cp); err != nil {
+			return backupResult(cp, false), err
+		}
 	}
 	switch cp.Step {
 	case "preflight":
@@ -408,27 +470,36 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		if proof.State != "prepared" || proof.Stage != "ready" || proof.VerifiedRecheckID != cp.RecheckID {
 			return backupResult(cp, false), nil
 		}
-		for _, m := range s.data() {
-			m.Offline = true
+		if cp.StopBoundary == restoreStopUntouched {
+			// Return this intent before changing even desired Offline flags.
+			// The Manager atomically commits the checkpoint before another
+			// pass can issue the first physical stop for this restore.
+			cp.StopBoundary, cp.Step = restoreStopStarted, "stop"
+			if err := persistRestore(rc, op, cp); err != nil {
+				return backupResult(cp, false), err
+			}
+			return backupResult(cp, false), nil
 		}
-		publishRevision(s)
-		if err = save(rc.Cluster, s); err != nil {
+		if cp.StopBoundary != "" && cp.StopBoundary != restoreStopStarted {
+			return backupResult(cp, false), engine.Invalid("restore checkpoint has an unknown stop boundary")
+		}
+		// Older checkpoints retain their existing verified-stop path.
+		if err := stopRestoreDataMembers(ctx, rc, s, op); err != nil {
 			return backupResult(cp, false), err
 		}
-		for _, m := range s.data() {
-			a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
-			if e != nil {
-				return backupResult(cp, false), e
-			}
-			if e = a.Reload(ctx); e != nil {
-				return backupResult(cp, false), e
-			}
-			if e = a.Process(ctx, agentapi.ProcessAction{Process: "mysqld", Action: "stop", RequestID: op.ID + "/stop/" + m.Name}); e != nil {
-				return backupResult(cp, false), e
-			}
+		cp.Step = "stopped"
+	case "stop":
+		if cp.StopBoundary != restoreStopStarted || !cp.Preflighted || !myspec.ValidDigest(cp.PlanDigest) || cp.RecheckID == "" {
+			return backupResult(cp, false), engine.Invalid("restore stop lacks its committed verification intent")
+		}
+		if err := stopRestoreDataMembers(ctx, rc, s, op); err != nil {
+			return backupResult(cp, false), err
 		}
 		cp.Step = "stopped"
 	case "stopped":
+		// Native stop intent now owns this frozen source. A later failure must
+		// resume it, not revive a previous blocked restore or nest its history.
+		cp.PreviousBlockedRestore = nil
 		for _, m := range s.data() {
 			a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 			if e != nil {
@@ -498,6 +569,20 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		seed.Initialized = true
 		seed.Stage = "deployed"
 		seed.Offline = false
+		if rc.Cluster.Spec.Provider == "pxc" && !legacyPXCRestore(cp) {
+			// Fence client sessions before any restored mysqld is started.
+			s.RestoreGTIDFence, s.RestoreGTIDBlocked = op.ID, ""
+			cp.GTIDCertification.FencesOwned = true
+		}
+		if rc.Cluster.Spec.Provider == "pxc" {
+			s.RestoreGTIDBlocked = ""
+			// The restored epoch has its own certification owner; a previous
+			// formation's retired fence cannot authorize or block this seed.
+			s.Formation.GTIDCertification = nil
+			for _, m := range s.data() {
+				m.GaleraJoinFence = false
+			}
+		}
 		s.Formation.Seed = cp.Member
 		s.Formation.Blocked = ""
 		s.Formation.FormationEpoch++
@@ -533,6 +618,11 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 			return backupResult(cp, false), err
 		}
 	case "reform":
+		if rc.Cluster.Spec.Provider == "pxc" && !legacyPXCRestore(cp) {
+			if fenced, e := acquirePXCRestoreFences(ctx, rc, s, op, &cp); e != nil || !fenced {
+				return backupResult(cp, false), e
+			}
+		}
 		for _, m := range s.data() {
 			a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 			if e != nil {
@@ -560,7 +650,7 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		// configuration cannot release them. Start only members admitted by the
 		// restored formation: the seed first, then followers after it forms.
 		for _, m := range s.data() {
-			if m.Offline {
+			if m.Offline || s.Topology == "cluster" && !pxcJoinAllowed(s, m) {
 				continue
 			}
 			ok, e := configApplied(ctx, rc, m)
@@ -605,7 +695,60 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 			return backupResult(cp, false), err
 		}
 		cp.Step = "activate"
+		if rc.Cluster.Spec.Provider == "pxc" && !legacyPXCRestore(cp) {
+			cp.Step = "certify"
+		}
+	case "certify":
+		if legacyPXCRestore(cp) {
+			cp.Step = "activate"
+			break
+		}
+		if err = certifyPXCRestore(ctx, rc, s, op, &cp); err != nil {
+			return backupResult(cp, false), err
+		}
+	case "certify-cleanup":
+		if err = completeRestoreGTIDCleanup(ctx, rc, s, op, &cp); err != nil {
+			return backupResult(cp, false), err
+		}
+		return backupResult(cp, false), engine.Invalid("%s", s.RestoreGTIDBlocked)
+	case "certify-blocked":
+		if cp.GTIDCertification == nil || cp.GTIDCertification.CleanupPending || !cp.GTIDCertification.CleanupComplete {
+			if err = completeRestoreGTIDCleanup(ctx, rc, s, op, &cp); err != nil {
+				return backupResult(cp, false), err
+			}
+		}
+		return backupResult(cp, false), engine.Invalid("%s", s.RestoreGTIDBlocked)
 	case "activate":
+		if rc.Cluster.Spec.Provider == "pxc" && !legacyPXCRestore(cp) && (cp.GTIDCertification == nil || !cp.GTIDCertification.Certified) {
+			cp.Step = "certify"
+			break
+		}
+		// Certify the restored quorum's shared history, not a pre-restore GTID
+		// snapshot. Existing incidents remain durable until an explicit full.
+		if rc.Cluster.Spec.Provider == "pxc" {
+			if err = checkPXCQuorumGTIDs(ctx, rc, s); err != nil {
+				if _, observation := err.(*myspec.GTIDQuorumError); !legacyPXCRestore(cp) || !observation {
+					return backupResult(cp, false), err
+				}
+			}
+		}
+		if rc.Cluster.Spec.Provider == "pxc" && !legacyPXCRestore(cp) {
+			if err = releaseRestoreGTIDFence(ctx, rc, s, op.ID, false); err != nil {
+				return backupResult(cp, false), err
+			}
+			cp.GTIDCertification.FencesOwned = false
+			recordRestoredPXCMapping(s, cp.GTIDCertification)
+			if err = persistRestore(rc, op, cp); err != nil {
+				return backupResult(cp, false), err
+			}
+			bs, err = loadBackupState(rc.Cluster)
+			if err != nil {
+				return backupResult(cp, false), err
+			}
+		}
+		if rc.Cluster.Spec.Provider == "pxc" && legacyPXCRestore(cp) {
+			recordRestoredPXCMapping(s, cp.GTIDCertification)
+		}
 		bs.Generation = cp.Generation
 		bs.CloneComplete = true
 		// The independent target repository becomes active only after all

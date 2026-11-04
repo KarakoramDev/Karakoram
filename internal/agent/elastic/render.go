@@ -6,6 +6,7 @@ package elastic
 import (
 	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -22,6 +23,10 @@ func render(s agentspec.Spec, data, home, cluster, member string) (map[string][]
 	ca := filepath.Join(conf, "certs", "ca.crt")
 	files := map[string][]byte{"config/certs/ca.crt": []byte(s.CAPEM)}
 	p := Process{Binary: filepath.Join(home, "bin", s.Component), Dir: home}
+	listenHost := "::"
+	if s.IPv4 {
+		listenHost = "0.0.0.0"
+	}
 	var config map[string]any
 	var name string
 	var extra map[string]any
@@ -42,7 +47,7 @@ func render(s agentspec.Spec, data, home, cluster, member string) (map[string][]
 		config = map[string]any{
 			"cluster.name": clusterName, "node.name": nodeName, "node.roles": e.Roles,
 			"path.data": filepath.Join(data, "data"), "path.logs": filepath.Join(data, "logs"),
-			"network.host": "::", "network.publish_host": nodeName, "http.port": 9200, "transport.port": 9300,
+			"network.host": listenHost, "network.publish_host": nodeName, "http.port": 9200, "transport.port": 9300,
 			"discovery.seed_providers": "file", "discovery.seed_hosts": []string{},
 			"xpack.security.enabled": true, "xpack.security.autoconfiguration.enabled": false,
 			"xpack.security.transport.ssl.enabled":                 true,
@@ -88,7 +93,7 @@ func render(s agentspec.Spec, data, home, cluster, member string) (map[string][]
 			return nil, p, errors.New("missing Kibana spec")
 		}
 		config = map[string]any{
-			"server.host": "::", "server.port": 5601, "server.rewriteBasePath": false, "elasticsearch.hosts": k.ESHosts,
+			"server.host": listenHost, "server.port": 5601, "server.rewriteBasePath": false, "elasticsearch.hosts": k.ESHosts,
 			"elasticsearch.serviceAccountToken":        k.ServiceAccountToken,
 			"elasticsearch.ssl.certificateAuthorities": []string{ca}, "elasticsearch.ssl.verificationMode": "full",
 			"xpack.security.encryptionKey":              k.SecurityKey,
@@ -122,7 +127,7 @@ func render(s agentspec.Spec, data, home, cluster, member string) (map[string][]
 		config = map[string]any{"api.http.host": "127.0.0.1", "api.http.port": 9600, "path.data": filepath.Join(data, "data"), "queue.type": queue, "pipeline.ecs_compatibility": "v8"}
 		pipelines := l.Pipelines
 		if len(pipelines) == 0 {
-			pipelines = []agentspec.Pipeline{{ID: "main", Config: defaultPipeline(l.ESHosts, ca)}}
+			pipelines = []agentspec.Pipeline{{ID: "main", Config: defaultPipeline(l.ESHosts, ca, listenHost)}}
 		}
 		entries := make([]map[string]any, 0, len(pipelines))
 		seen := map[string]bool{}
@@ -156,7 +161,7 @@ func render(s agentspec.Spec, data, home, cluster, member string) (map[string][]
 			return nil, p, errors.New("missing APM Server spec")
 		}
 		config = map[string]any{
-			"apm-server.host": "[::]:8200", "apm-server.auth.secret_token": a.SecretToken, "apm-server.auth.api_key.enabled": a.APIKeys,
+			"apm-server.host": net.JoinHostPort(listenHost, "8200"), "apm-server.auth.secret_token": a.SecretToken, "apm-server.auth.api_key.enabled": a.APIKeys,
 			"output.elasticsearch.hosts": a.ESHosts, "output.elasticsearch.username": a.Writer.Username, "output.elasticsearch.password": a.Writer.Password,
 			"output.elasticsearch.ssl.certificate_authorities": []string{ca},
 			"http.enabled": true, "http.host": "127.0.0.1", "http.port": 5066, "logging.to_stderr": true,
@@ -202,14 +207,14 @@ func mergeSettings(dst, src map[string]any, reserved []string, prefix string) er
 	return nil
 }
 
-func defaultPipeline(hosts []string, ca string) string {
+func defaultPipeline(hosts []string, ca, listenHost string) string {
 	quoted := make([]string, len(hosts))
 	for i, host := range hosts {
 		quoted[i] = strconv.Quote(host)
 	}
 	return `input {
-  beats { host => "::" port => 5044 }
-  http { host => "::" port => 8080 }
+  beats { host => "` + listenHost + `" port => 5044 }
+  http { host => "` + listenHost + `" port => 8080 }
 }
 output {
   elasticsearch {

@@ -29,7 +29,7 @@ func config(s wvspec.MemberSpec) agentapi.MemberConfig {
 func TestRender(t *testing.T) {
 	s := testSpec()
 	c := config(s)
-	p, files := render("/data", s, c)
+	p, files := render("/data", s, c, "127.0.0.1")
 	if !reflect.DeepEqual(p.Args, []string{"--host", "127.0.0.1", "--port", "28080", "--scheme", "http"}) || len(files) != 0 {
 		t.Fatal(p.Args, files)
 	}
@@ -51,7 +51,7 @@ func TestRender(t *testing.T) {
 	s.TLS = true
 	s.AsyncReplication = false
 	c.TLS = agentapi.TLSConfig{CertPEM: "cert", KeyPEM: "key", CAPEM: "ca"}
-	p, files = render("/data", s, c)
+	p, files = render("/data", s, c, "127.0.0.1")
 	for _, v := range []string{"ENABLE_MODULES=backup-s3", "AWS_SECRET_ACCESS_KEY=backup-secret", "BACKUP_S3_USE_SSL=false", "ASYNC_REPLICATION_DISABLED=true", "GRPC_CERT_FILE=/data/karakoram/tls/weaviate.crt"} {
 		if !slices.Contains(p.Env, v) {
 			t.Fatal(v)
@@ -141,7 +141,7 @@ func TestApplyFingerprintHolds(t *testing.T) {
 			}
 		})
 	}
-	p1, f1 := render(h.dir, s, c)
+	p1, f1 := render(h.dir, s, c, "127.0.0.1")
 	a := fingerprint(s, p1, f1)
 	s.RestartToken += "x"
 	if a == fingerprint(s, p1, f1) {
@@ -215,4 +215,34 @@ func TestMetricsTranslation(t *testing.T) {
 		"karakoram_weaviate_objects":     {2 + 3, false},
 		"karakoram_weaviate_collections": {1, false},
 	})
+}
+
+func TestStopAndHoldApplyWithoutPrivateDNS(t *testing.T) {
+	for _, intent := range []string{"stop", "maintenance", "local-maintenance", "local-stop"} {
+		t.Run(intent, func(t *testing.T) {
+			s := testSpec()
+			s.NodeName, s.BindHost = "unresolvable.invalid", "::"
+			c := config(s)
+			h := &fakeHost{dir: t.TempDir(), states: map[string]agentapi.ProcessStatus{wvspec.Process: {PID: 1}}}
+			switch intent {
+			case "stop":
+				c.DesiredProcesses = []string{}
+			case "maintenance":
+				c.Maintenance = true
+			case "local-maintenance":
+				h.maintenance = true
+			case "local-stop":
+				h.stopped = true
+			}
+			if _, err := apply(t.Context(), h, c, s); err != nil {
+				t.Fatal("stop/hold must not require private DNS or a native executable", err)
+			}
+			if intent == "stop" && !reflect.DeepEqual(h.actions, []string{"stop"}) {
+				t.Fatal("explicit stop was not delivered", h.actions)
+			}
+			if intent != "stop" && len(h.actions) != 0 {
+				t.Fatal("hold changed process state", h.actions)
+			}
+		})
+	}
 }

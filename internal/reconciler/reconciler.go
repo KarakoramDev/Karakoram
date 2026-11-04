@@ -443,6 +443,7 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 	return nil
 }
 func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay time.Duration, err error) {
+	ctx = engine.WithObservationPass(ctx)
 	started := time.Now()
 	defer m.logStage(ref, "reconcile", started)
 	if err := holdObservation(ctx); err != nil {
@@ -671,6 +672,25 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 			return 0, err
 		}
 		if !allowed {
+			if recovery, ok := p.(engine.RecoveryOperationClaimPolicy); ok {
+				kind, policyErr := recovery.RecoveryOperationKind(ctx, &rc)
+				if policyErr != nil {
+					return 0, policyErr
+				}
+				if kind != "" {
+					remedy, claimErr := m.opts.Store.ClaimRecoveryOperation(store.WithMaintenanceTime(store.WithClusterSnapshot(ctx, c), rc.Clock.Now()), ref, kind)
+					if claimErr == nil {
+						actor, operation = remedy.Actor, remedy.ID
+						if actor == "" {
+							actor = "reconciler"
+						}
+						return m.runOperation(ctx, p, &rc, remedy)
+					}
+					if !errors.Is(claimErr, store.ErrNotFound) {
+						return 0, claimErr
+					}
+				}
+			}
 			return result.RequeueAfter, syncErr
 		}
 	}
@@ -848,6 +868,9 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			}
 		}
 	}
+	// Providers may replace or mutate cluster status while synchronizing.
+	// Preserve transition times against the last observation, not that mutation.
+	previousConditions := slices.Clone(rc.Cluster.Status.Conditions)
 	if syncErr == nil {
 		started := time.Now()
 		result, syncErr = p.Sync(ctx, rc)
@@ -938,7 +961,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 		if status.Message == "" && status.Phase != domain.PhaseReady && status.Phase != domain.PhaseDegraded {
 			status.Message = fmt.Sprintf("%s: observing platform services and member formation", status.Phase)
 		}
-		preserveTransitions(rc.Cluster.Status.Conditions, status.Conditions)
+		preserveTransitions(previousConditions, status.Conditions)
 		if status.Phase == domain.PhaseDegraded && status.Message == "" {
 			status.Message = "Member health is degraded; inspect conditions and member observations"
 		}
@@ -1107,7 +1130,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 				op.Phase = domain.PhaseCancelled
 			}
 		} else {
-			opErr = errors.New("Provider no longer supports cancellation of this operation")
+			opErr = errors.New("provider no longer supports cancellation of this operation")
 		}
 	} else {
 		dependenciesResolved = true

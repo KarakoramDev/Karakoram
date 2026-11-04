@@ -146,6 +146,51 @@ func TestCloudProtectedDefaults(t *testing.T) {
 	}
 }
 
+func TestBackupCommandBoundsStreamingMemory(t *testing.T) {
+	for _, kind := range []string{"full", "incremental"} {
+		t.Run(kind, func(t *testing.T) {
+			dir := t.TempDir()
+			bin := filepath.Join(dir, "bin")
+			if err := os.Mkdir(bin, 0700); err != nil {
+				t.Fatal(err)
+			}
+			captured := filepath.Join(dir, "arguments")
+			// Exercise runBackup's actual child command without native services.
+			// Deliberate empty output terminates before metadata/S3 finalization.
+			for name, script := range map[string]string{
+				"xtrabackup": "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + captured + "'\nexit 1\n",
+				"xbcloud":    "#!/bin/sh\ncat > /dev/null\n",
+			} {
+				if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			request := myspec.BackupRequest{Type: kind, BaseLSN: 42, ObjectPrefix: "repo/base/full", Repository: testBackupRepository()}
+			if _, err := runBackup(ctx, myspec.Spec{XtraBackupDir: dir}, paths{root: dir, data: "/data"}, request); err == nil {
+				t.Fatal("empty test source unexpectedly completed")
+			}
+			raw, err := os.ReadFile(captured)
+			if err != nil {
+				t.Fatal(err)
+			}
+			args := "\n" + string(raw)
+			for _, want := range []string{"--backup", "--stream=xbstream", "--parallel=1", "--read-buffer-size=1M"} {
+				if !strings.Contains(args, "\n"+want+"\n") {
+					t.Fatalf("missing bounded backup option %s", want)
+				}
+			}
+			if strings.Contains(args, "--use-memory") || strings.Contains(args, "--compress") {
+				t.Fatal("backup memory bound depends on prepare or compression")
+			}
+			if strings.Contains(args, "\n--incremental-lsn=42\n") != (kind == "incremental") {
+				t.Fatal("memory options changed incremental selection")
+			}
+		})
+	}
+}
+
 func TestBackupShutdownCancelsOnlyOwnedJobs(t *testing.T) {
 	p := paths{root: t.TempDir()}
 	other := paths{root: t.TempDir()}

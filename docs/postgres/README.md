@@ -15,7 +15,7 @@ Opt-in [cluster data MCP](../data-mcp.md) uses a private [pgEdge](https://www.pg
 | Topology | `single`: one member; `ha`: three or five with Patroni; [`distributed`](distributed.md): Citus coordinator + worker groups, gated by artifact availability |
 | Presets | `dev`: single; `prod`: three-member HA; both include one ProxySQL replica |
 | Data defaults / minima | Shared 1 CPU, 2 GiB RAM, 5 GB data disk / 1 GiB RAM and 5 GB disk |
-| Client service | ProxySQL 3.0.11; `components.extra.proxy`, default 1, enabled range 1–5; zero only with single-member topology/groups |
+| Client service | ProxySQL 3.0.11; `components.extra.proxy`, default 1, enabled range 1–5; zero only with single-member topology/groups; [count/resource changes](operations.md#agent-rollout-and-maintenance-windows) are serving-preserving only with an explicit backend guarantee |
 | TLS | `requireTLS`, `selfSigned` by default |
 | Recovery | pgBackRest `full` / `diff` / `incr`, opt-in PITR; [backups](backups.md) |
 | Platform features | [PostGIS, pgvector and TimescaleDB profiles](profiles.md); [consumer bindings](bindings.md); [distributed Citus](distributed.md); see [release status/provider availability](../providers.md#engine-availability) |
@@ -106,6 +106,10 @@ Availability sampling overlaps each member's platform runtime/task inventory
 with its agent and native PostgreSQL observations. ProxySQL instance checks and
 placement use the same task inventory within that sweep. HA member count must
 not add serial platform-read budgets after native health has been collected.
+Count/resource convergence additionally waits for the exact requested live proxy
+count and current configuration, native readiness and an ONLINE writer on every
+instance before committing applied bounds; a backend operation receipt alone
+does not admit new replicas.
 The bounded freshness lease is unchanged: unavailable platform or native reads
 still withdraw readiness rather than reusing a previous healthy sample.
 PITR status reuses the same sweep's unique fresh writer and recovery watermark;

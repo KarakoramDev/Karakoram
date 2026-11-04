@@ -56,6 +56,7 @@ func RenderGaleraOptions(s myspec.Spec, root string) map[string]string {
 		"wsrep_node_name": s.Member, "wsrep_node_address": galeraAddress(local.Host, g.GaleraPort),
 		"wsrep_node_incoming_address": galeraAddress(local.Host, sqlPort),
 		"wsrep_sst_method":            "xtrabackup-v2", "wsrep_sst_receive_address": galeraAddress(local.Host, g.SSTPort),
+		"wsrep_sst_donor": g.SSTDonor, "offline_mode": strconv.FormatBool(g.RestoreFence),
 		"wsrep_provider_options": "gmcast.listen_addr=tcp://" + galeraAddress(listenHost, g.GaleraPort) + ";ist.recv_addr=" + galeraAddress(local.Host, g.ISTPort) + ";gcache.size=" + g.GCacheSize + ";gcache.recover=yes;socket.ssl=true;socket.ssl_ca=" + filepath.Join(root, "galera-ca.pem") + ";socket.ssl_cert=" + filepath.Join(root, "galera-cert.pem") + ";socket.ssl_key=" + filepath.Join(root, "galera-key.pem"),
 		// Disable only upstream's auto-copy of SQL TLS paths: all replication,
 		// IST and SST channels are explicitly encrypted with the shared leaf.
@@ -158,7 +159,13 @@ func configureMySQL(n *agent.Node, s myspec.Spec, p paths) error {
 	}
 	return n.Configure("mysqld", spec)
 }
-func galeraStatusDB(ctx context.Context, db *sql.DB) (myspec.GaleraStatusResponse, error) {
+
+type galeraStatusQuerier interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func galeraStatusDB(ctx context.Context, db galeraStatusQuerier) (myspec.GaleraStatusResponse, error) {
 	var out myspec.GaleraStatusResponse
 	rows, err := db.QueryContext(ctx, "SHOW GLOBAL STATUS WHERE Variable_name IN ('wsrep_cluster_status','wsrep_local_state_comment','wsrep_ready','wsrep_connected','wsrep_cluster_size','wsrep_cluster_state_uuid','wsrep_last_committed')")
 	if err != nil {
@@ -198,7 +205,7 @@ func galeraStatusDB(ctx context.Context, db *sql.DB) (myspec.GaleraStatusRespons
 	if count != 7 {
 		return out, errors.New("galera status incomplete")
 	}
-	if err = db.QueryRowContext(ctx, "SELECT @@GLOBAL.gtid_executed").Scan(&out.GTIDExecuted); err != nil {
+	if err = db.QueryRowContext(ctx, "SELECT @@GLOBAL.gtid_executed,@@GLOBAL.server_uuid,@@GLOBAL.offline_mode").Scan(&out.GTIDExecuted, &out.ServerUUID, &out.OfflineMode); err != nil {
 		return out, err
 	}
 	return out, nil

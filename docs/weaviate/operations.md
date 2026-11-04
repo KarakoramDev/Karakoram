@@ -21,6 +21,56 @@ If an older control plane reports false Raft quorum after a restart despite thos
 
 Logs are bounded process tails, not durable archives. Use process `agent` for management diagnosis; never publish keys, signed URLs, object contents or raw secret-bearing native responses.
 
+### Startup fails with an unspecified Raft advertise address
+
+The v0.4.3 member runtime explicitly advertises the member's private IP for both
+memberlist and Raft. It resolves the existing private member hostname from inside
+the runtime, selecting IPv6 for an IPv6 bind and IPv4 for an IPv4 bind. Listener
+wildcards remain `::` or `0.0.0.0`; they are not peer addresses. The
+`CLUSTER_ADVERTISE_ADDR` environment value is a bare IP (no IPv6 brackets or port).
+Upstream formats Raft endpoints with brackets around IPv6 as needed.
+If private DNS is temporarily unavailable, the agent retains the accepted
+configuration and retries its apply with cancellation-aware backoff (one second,
+doubling to at most 30 seconds), independently of control-plane fetches. A newer
+accepted configuration supersedes the retained retry. Explicit stop intent and
+local maintenance/stop holds do not require DNS resolution.
+After an agent restart under a durable operator stop hold, the process remains
+registered but cannot start with unresolved runtime settings. Explicit start
+resolves the current member address and prepares the protected files/process
+configuration before admission releases the hold. DNS failure refuses that
+start without dropping the hold; retry start once private DNS is available.
+Maintenance-period applies preserve an already configured process specification
+rather than replacing it with unresolved settings. If that native process exits
+while maintenance suppresses restart, releasing maintenance can resume it from
+the retained valid specification even while the control plane is unavailable.
+
+
+On older runtimes, IPv6-only deployments can repeatedly exit with
+`local bind address is not advertisable` and `tcpAddress=[::]:8300`. This also
+affects single-node deployments: a singleton still opens a Raft transport.
+IPv4 backends normally auto-select a private interface, but explicit member
+advertisement removes that dependency.
+
+**Upgrading only the control plane does not update an already deployed agent
+binary.** Deliver the corrected v0.4.3 member runtime through the backend's
+authorized deployment procedure, preserving each original member identity,
+credentials, volume attachment and data. The corrected agent accepts retained
+member configurations unchanged; its next apply resolves the address and starts
+the native process with the corrected environment. For a never-ready cluster,
+do not rely on ordinary restart/upgrade operations: their native-health/quorum
+gates cannot pass before startup is repaired. Do not clear Raft data, delete
+voter volumes, or force one-node recovery. An empty failed initial provisioning
+may instead be deleted and recreated after installing the corrected artifacts,
+but only when its data is confirmed disposable.
+
+After recovery, each member's `memberlist_config` log must show its own nonempty
+private `advertise_addr` and gossip port 7946. Raft's advertised TCP endpoint
+must use that same IP with port 8300, not an unspecified address. Require stable
+processes, all expected members, a leader from the fixed voter set, synchronized
+Raft statistics, successful configuration acknowledgements and `Ready` status
+with `ClusterHealth`/`Quorum` true before declaring recovery.
+
+
 ## Restart and upgrade
 
 ```sh
@@ -31,6 +81,50 @@ karactl -n default clusters upgrade vectors --version 1.40.1 --wait
 Rolling maintenance restarts one member at a time, non-voters before voters, checking health before disruption and after acknowledgement. Configuration, resources, version, native TLS material and restart tokens participate in restart decisions. Singleton maintenance interrupts database access. Rolling order and quorum gates are not a zero-disruption or application-consistency guarantee; choose application read/write consistency appropriately.
 
 Supported versions are `1.39.12` and `1.40.1` (default). Only same-minor patch-forward or **one minor forward at a time** is allowed, and the target must be cataloged. The current cross-minor path is `1.39.12 → 1.40.1`. Downgrades, major changes and skipped minors are rejected. Rolling members can temporarily run source/target versions; wait for actual native version acknowledgement and observed desired generation before declaring convergence. Control-plane rollback does not downgrade engine data.
+
+### Agent upgrades
+
+```sh
+karactl -n default clusters upgrade-agents vectors --wait
+```
+
+The rollout redeploys agents without changing applied database versions,
+configuration, resources, identities or volume attachments. Its existing rolling
+journal freezes the target build and member order: non-voters first, then voters,
+with the observed Raft leader last. Already-current healthy agents are skipped
+unless `--include-current` is supplied.
+
+Before each new deployment, the maintenance window must be open, all members
+must be native-ready with synchronized cluster statistics, and removing the
+selected member must retain a live voting majority. Multi-member clusters require
+an applied minimum replication factor of at least two, collection replication
+factors of at least two, and native shard evidence proving that no selected
+member holds a sole replica. Unknown evidence fails closed. These gates do not
+promise uninterrupted application reads/writes at every consistency level.
+**Single-member agent upgrades cause database downtime** and do not require
+redundancy that a singleton cannot provide.
+
+The next member waits for native readiness, synchronized cluster statistics and
+the exact frozen agent build. Other rolling, replacement, scaling, rotation or
+pending structural work blocks a new rollout. Cancellation stops between members;
+an already-submitted deployment is recovered even after cancellation or window
+closure. Cancellation is not rollback. A changed control-plane build cannot
+silently retarget an existing operation; follow its diagnostic before continuing.
+An intent without a platform receipt is ambiguous, not proof that no restart
+occurred. Cancellation waits until that member is native-ready and synchronized
+on its previously observed or target agent build before retiring the intent.
+Replay rechecks the window and native safety before another submission. After
+an operation terminates, ordinary reconciliation only settles its in-flight
+member and retires the journal; it never starts the next agent deployment.
+If the sole expected member runtime is native-ready on the exact persisted target
+build, that build differs from its recorded pre-upgrade build, and cluster
+statistics are synchronized, replay adopts that member without another deployment,
+even after a control-plane build change or window closure. With `--include-current`
+on an already-target-build member, readiness alone cannot prove that deployment
+happened. The backend contract cannot recover a deployment receipt by member
+identity, so receipt loss can cause one additional gated same-build redeployment
+(and another singleton outage) rather than falsely declaring completion.
+
 
 ## Scaling
 

@@ -39,6 +39,19 @@ func serviceHandler(t *testing.T, w http.ResponseWriter, r *http.Request) bool {
 	}
 	return false
 }
+
+// Payload-only tests update a stopped runtime; running-runtime retention and
+// receipt semantics are exercised against the stateful fake API separately.
+func stoppedServiceHandler(t *testing.T, w http.ResponseWriter, r *http.Request) bool {
+	if r.URL.Path == "/service-stack/ExampleID0000000000045" && r.Method == http.MethodGet {
+		var service ServiceStack
+		_ = json.Unmarshal(fixture(t, "service"), &service)
+		service.Status = "STOPPED"
+		_ = json.NewEncoder(w).Encode(service)
+		return true
+	}
+	return serviceHandler(t, w, r)
+}
 func TestImportNoInlineAndAggregatesEveryProcess(t *testing.T) {
 	var imported ImportResult
 	if err := json.Unmarshal(fixture(t, "import"), &imported); err != nil {
@@ -139,7 +152,7 @@ func TestOpAggregateTerminalStates(t *testing.T) {
 func TestResourcesPreservesCompleteConfig(t *testing.T) {
 	var bodies []map[string]json.RawMessage
 	b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
-		if serviceHandler(t, w, r) {
+		if stoppedServiceHandler(t, w, r) {
 			return
 		}
 		if strings.HasSuffix(r.URL.Path, "/autoscaling") {
@@ -261,6 +274,7 @@ func TestAutoscalingPreservesAndClampsStartCPU(t *testing.T) {
 			}
 			var got map[string]any
 			var writes int
+			service.Status = "STOPPED"
 			b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/service-stack/"+service.ID && r.Method == http.MethodGet {
 					_ = json.NewEncoder(w).Encode(service)
@@ -362,6 +376,7 @@ func TestAutoscalingResetsFreeThresholdsExceedingCapacity(t *testing.T) {
 			putJSON(config, "verticalAutoscaling", vertical)
 			var got json.RawMessage
 			var writes int
+			service.Status = "STOPPED"
 			b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/service-stack/"+service.ID && r.Method == http.MethodGet {
 					_ = json.NewEncoder(w).Encode(service)
@@ -615,7 +630,7 @@ func TestDeployStreamsArtifactAndLifecycle(t *testing.T) {
 }
 func TestWaitCancellationAndNullAutoscaling(t *testing.T) {
 	b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
-		if serviceHandler(t, w, r) {
+		if stoppedServiceHandler(t, w, r) {
 			return
 		}
 		if strings.HasSuffix(r.URL.Path, "/autoscaling") {
@@ -671,6 +686,7 @@ func TestAutoscalingPreservesNullableAndExplicitFreeThresholds(t *testing.T) {
 		t.Run(string(override), func(t *testing.T) {
 			var service ServiceStack
 			_ = json.Unmarshal(fixture(t, "service"), &service)
+			service.Status = "STOPPED"
 			custom, _ := decodeObject(service.CustomAutoscaling["verticalAutoscaling"])
 			custom["minFreeResource"] = override
 			putJSON(service.CustomAutoscaling, "verticalAutoscaling", custom)

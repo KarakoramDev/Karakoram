@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"time"
 
@@ -92,11 +93,19 @@ func (b *Backend) reloadUpdated(ctx context.Context, a *application, m metadata,
 		}
 	}
 	if reload {
-		digest, err := b.applicationSpecification(ctx, a.ID, settings, m.DeploymentDigest)
+		o, err = b.operation(ctx, a, m, action)
 		if err != nil {
 			return infra.Op{}, err
 		}
-		o, err = b.operation(ctx, a, m, action)
+		if m.ProxyServingProbe && m.Volume == "" && (action == "scale" || action == "restart") && !stopFirst {
+			if settings == nil {
+				settings = map[string]any{}
+			}
+			if err = b.prepareProxyRollout(ctx, a, m, settings, &o); err != nil {
+				return infra.Op{}, err
+			}
+		}
+		digest, err := b.applicationSpecification(ctx, a.ID, settings, m.DeploymentDigest)
 		if err != nil {
 			return infra.Op{}, err
 		}
@@ -130,6 +139,9 @@ func (b *Backend) SetResources(ctx context.Context, hostname string, r infra.Res
 	if err != nil {
 		return infra.Op{}, err
 	}
+	if m.Pending != nil && m.Pending.HealthGated && m.Pending.Action == "restart" && reflect.DeepEqual(mergeResources(m.Resources, r), m.Resources) {
+		return encodeOp(*m.Pending), nil
+	}
 	if err = b.mutationReady(ctx, a, &m); err != nil {
 		return infra.Op{}, err
 	}
@@ -154,6 +166,9 @@ func (b *Backend) SetContainerCount(ctx context.Context, hostname string, min, m
 	if err != nil {
 		return infra.Op{}, err
 	}
+	if m.Pending != nil && m.Pending.HealthGated && m.Pending.Action == "scale" && m.Min == min && m.Max == max {
+		return encodeOp(*m.Pending), nil
+	}
 	if err = b.mutationReady(ctx, a, &m); err != nil {
 		return infra.Op{}, err
 	}
@@ -169,7 +184,7 @@ func (b *Backend) SetContainerCount(ctx context.Context, hostname string, min, m
 	if err != nil {
 		return infra.Op{}, err
 	}
-	if m.Volume == "" && max > 1 && max <= a.Replicas && m.Deployed && m.Desired != "stopped" && m.Desired != "deleting" &&
+	if !m.ProxyServingProbe && m.Volume == "" && max > 1 && max <= a.Replicas && m.Deployed && m.Desired != "stopped" && m.Desired != "deleting" &&
 		(m.Pending == nil || m.Pending.Action == "scale") && m.AppliedSpecification != "" && specification == m.AppliedSpecification {
 		tasks, err := b.tasks(ctx, a.AppName)
 		if err != nil {

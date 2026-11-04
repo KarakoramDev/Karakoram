@@ -61,14 +61,15 @@ func proxyCluster(s myspec.Spec) bool {
 func proxyConfigImage(s myspec.Spec) []proxyTable {
 	p := s.Proxy
 	groups := "writer_hostgroup,backup_writer_hostgroup,reader_hostgroup,offline_hostgroup,active,max_writers,writer_is_also_reader,max_transactions_behind"
-	image := []proxyTable{
-		{name: "mysql_group_replication_hostgroups", columns: groups},
-		{name: "mysql_galera_hostgroups", columns: groups},
-		{name: "mysql_servers", columns: "hostgroup_id,hostname,port,use_ssl,max_connections,status"},
-		{name: "mysql_users", columns: "username,password,active,default_hostgroup,use_ssl,transaction_persistent,frontend,backend"},
-		{name: "mysql_query_rules", columns: "rule_id,active,match_digest,proxy_port,destination_hostgroup,apply"},
-		{name: "global_variables", columns: "variable_name,variable_value"},
-	}
+	image := make([]proxyTable, 0, 7)
+	image = append(image,
+		proxyTable{name: "mysql_group_replication_hostgroups", columns: groups},
+		proxyTable{name: "mysql_galera_hostgroups", columns: groups},
+		proxyTable{name: "mysql_servers", columns: "hostgroup_id,hostname,port,use_ssl,max_connections,status"},
+		proxyTable{name: "mysql_users", columns: "username,password,active,default_hostgroup,use_ssl,transaction_persistent,frontend,backend"},
+		proxyTable{name: "mysql_query_rules", columns: "rule_id,active,match_digest,proxy_port,destination_hostgroup,apply"},
+		proxyTable{name: "global_variables", columns: "variable_name,variable_value"},
+	)
 	// Rules are agent-owned in full: altered match filters, flag chains or
 	// actions must not silently disable the locking-SELECT safeguard.
 	var defaultColumns, defaultValues strings.Builder
@@ -83,6 +84,14 @@ func proxyConfigImage(s myspec.Spec) []proxyTable {
 		image[1].rows = []string{"10,11,20,30,1,1,2,100"}
 	} else if proxyCluster(s) {
 		image[0].rows = []string{"10,11,20,30,1,1,0,100"}
+	}
+	if proxyCluster(s) {
+		attributes := proxyTable{name: "mysql_hostgroup_attributes", columns: "hostgroup_id,servers_defaults", rows: make([]string, 0, len(proxyManagedHostgroups))}
+		defaults := proxyQuote(proxyBackendDefaults(p))
+		for _, group := range proxyManagedHostgroups {
+			attributes.rows = append(attributes.rows, strconv.Itoa(group)+","+defaults)
+		}
+		image = append(image, attributes)
 	}
 	group := 10
 	if proxyCluster(s) {
@@ -111,7 +120,7 @@ func proxyConfigImage(s myspec.Spec) []proxyTable {
 		}
 		image[4].rows = append(image[4].rows, fmt.Sprintf("%d,1,%s,%s,%d,1", r.id, pattern, port, r.group)+defaultValues.String())
 	}
-	for _, v := range [][2]string{{"mysql-monitor_username", p.Monitor.Username}, {"mysql-monitor_password", p.Monitor.Password}, {"mysql-max_connections", strconv.Itoa(p.MaxConnections)}} {
+	for _, v := range [][2]string{{"mysql-monitor_username", p.Monitor.Username}, {"mysql-monitor_password", p.Monitor.Password}, {"mysql-max_connections", strconv.Itoa(p.MaxConnections)}, {"mysql-monitor_local_dns_cache_ttl", "5000"}, {"mysql-monitor_local_dns_cache_refresh_interval", "1000"}} {
 		image[5].rows = append(image[5].rows, proxyQuote(v[0])+","+proxyQuote(v[1]))
 	}
 	return image
@@ -163,7 +172,7 @@ func proxyConfigMatches(ctx context.Context, c *sql.Conn, s myspec.Spec, image [
 			}
 			actual := "SELECT DISTINCT " + proxyProjection(s, t, runtime) + " FROM " + name
 			if t.name == "global_variables" {
-				actual += " WHERE variable_name IN ('mysql-monitor_username','mysql-monitor_password','mysql-max_connections')"
+				actual += " WHERE variable_name IN ('mysql-monitor_username','mysql-monitor_password','mysql-max_connections','mysql-monitor_local_dns_cache_ttl','mysql-monitor_local_dns_cache_refresh_interval')"
 			}
 			if t.name == "mysql_users" {
 				actual += " GROUP BY username,password,active,default_hostgroup,use_ssl,transaction_persistent"

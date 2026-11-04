@@ -6,6 +6,13 @@ import { assignedRoles, assignedUsers, certificateDownload, clusterEmptyCopy, co
 import { fetchBackupInventory } from './backup-inventory.ts';
 import { elasticHealthNotices, elasticMemberSummary } from './detail-state.ts';
 import { upgradeType } from './detail-state.ts';
+import { backupPITRDraft } from './detail-state.ts';
+
+test('backup policy edits preserve re-anchor opt-out without introducing a default', () => {
+  assert.deepEqual(backupPITRDraft(undefined, true, 10), { enabled: true, oplogSpanMinutes: 10 });
+  assert.deepEqual(backupPITRDraft({ autoReanchor: false }, false, 20), { autoReanchor: false, enabled: false, oplogSpanMinutes: 20 });
+  assert.deepEqual(backupPITRDraft({ autoReanchor: true }, true, 15), { autoReanchor: true, enabled: true, oplogSpanMinutes: 15 });
+});
 
 const resources = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 1, maxRam: 2, minDisk: 5, maxDisk: 10 };
 const spec = { components: { engine: { replicas: 1, resources } } };

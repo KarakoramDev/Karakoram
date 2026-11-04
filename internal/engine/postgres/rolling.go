@@ -317,6 +317,8 @@ func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s 
 // needsDisruption distinguishes reloadable config (including proxy-only changes
 // and certificates) from changes that require moving the writable primary.
 func needsDisruption(p *Core, rc *engine.Context, m *member, desired domain.ComponentSpec) bool {
+	// Resource changes retain their maintenance admission even when the backend
+	// can preserve serving traffic throughout the update.
 	if m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources) || p.profilesAdded(m.Options, rc.Cluster.Spec.EngineOptions) {
 		return true
 	}

@@ -34,13 +34,17 @@ func repositoryEndpoint(s myspec.S3) (*url.URL, error) {
 	}
 	return u, nil
 }
-func s3Client(r myspec.Repository) (*minio.Client, error) {
+
+// s3Client owns a transport for one repository operation. The caller must close
+// its idle connections on every exit; otherwise each archive pass leaves a
+// separate connection pool and its TLS state alive after the client is dropped.
+func s3Client(r myspec.Repository) (*minio.Client, func(), error) {
 	if err := r.Validate(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	u, err := repositoryEndpoint(r.S3)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: !r.S3.VerifyTLS} // Explicit repository policy.
@@ -50,7 +54,7 @@ func s3Client(r myspec.Repository) (*minio.Client, error) {
 			roots = x509.NewCertPool()
 		}
 		if !roots.AppendCertsFromPEM([]byte(r.S3.CAPEM)) {
-			return nil, errors.New("repository_ca")
+			return nil, nil, errors.New("repository_ca")
 		}
 		tlsConfig.RootCAs = roots
 	}
@@ -59,7 +63,12 @@ func s3Client(r myspec.Repository) (*minio.Client, error) {
 	if r.S3.PathStyle {
 		lookup = minio.BucketLookupPath
 	}
-	return minio.New(u.Host, &minio.Options{Creds: credentials.NewStaticV4(r.S3.AccessKey, r.S3.SecretKey, ""), Secure: u.Scheme == "https", Region: r.S3.Region, BucketLookup: lookup, Transport: transport})
+	client, err := minio.New(u.Host, &minio.Options{Creds: credentials.NewStaticV4(r.S3.AccessKey, r.S3.SecretKey, ""), Secure: u.Scheme == "https", Region: r.S3.Region, BucketLookup: lookup, Transport: transport})
+	if err != nil {
+		transport.CloseIdleConnections()
+		return nil, nil, err
+	}
+	return client, transport.CloseIdleConnections, nil
 }
 
 // cloudConfig uses xbcloud's documented defaults-file support. Credentials never

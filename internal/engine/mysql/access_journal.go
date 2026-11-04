@@ -102,6 +102,9 @@ func accessResultError(result myspec.AccessResult) error {
 	}
 }
 func (p *Core) completeAccessIntent(ctx context.Context, rc *engine.Context, intent *accessIntent) error {
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	if err := accessFence(ctx, rc); err != nil {
 		return err
 	}
@@ -178,7 +181,9 @@ func (p *Core) completeAccessIntent(ctx context.Context, rc *engine.Context, int
 			if m.Role != "proxy" || m.Replicas == 0 {
 				continue
 			}
-			ok, err := proxyApplied(wait, rc, m)
+			// Readiness actively reloads stale proxies; a passive acknowledgement
+			// cannot rely on the agent's 60-second pull within this 10-second wait.
+			ok, err := ready(wait, rc, m)
 			if err != nil || !ok {
 				all = false
 			}
@@ -210,8 +215,11 @@ func (p *Core) finishPendingAccess(ctx context.Context, rc *engine.Context) erro
 	return err
 }
 func (p *Core) mutateUser(ctx context.Context, rc *engine.Context, req myspec.AccessRequest) (string, error) {
-	p.accessMu.Lock()
-	defer p.accessMu.Unlock()
+	lock, err := p.mutations.acquire(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return "", err
+	}
+	defer p.mutations.release(lock)
 	if err := accessFence(ctx, rc); err != nil {
 		return "", err
 	}

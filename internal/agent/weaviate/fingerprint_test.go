@@ -13,7 +13,7 @@ import (
 func TestRestartFingerprintComponents(t *testing.T) {
 	base := testSpec()
 	c := config(base)
-	p, files := render("/data", base, c)
+	p, files := render("/data", base, c, "127.0.0.1")
 	old := fingerprint(base, p, files)
 	cases := map[string]func(*wvspec.MemberSpec, *agent.ProcessSpec, map[string][]byte){
 		"version": func(s *wvspec.MemberSpec, _ *agent.ProcessSpec, _ map[string][]byte) { s.Version = "1.39.12" },
@@ -32,7 +32,7 @@ func TestRestartFingerprintComponents(t *testing.T) {
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
 			s := base
-			p, files := render("/data", s, c)
+			p, files := render("/data", s, c, "127.0.0.1")
 			mutate(&s, &p, files)
 			if old == fingerprint(s, p, files) {
 				t.Fatal("restart input ignored")
@@ -40,7 +40,7 @@ func TestRestartFingerprintComponents(t *testing.T) {
 		})
 	}
 	c.ConfigVersion++
-	next, files := render("/data", base, c)
+	next, files := render("/data", base, c, "127.0.0.1")
 	if old != fingerprint(base, next, files) {
 		t.Fatal("config epoch alone restarts native process")
 	}

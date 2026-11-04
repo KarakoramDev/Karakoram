@@ -21,11 +21,14 @@ type renderedFile struct {
 	name, content string
 	executable    bool
 }
-type paths struct{ root, pgdata, socket, etcd, proxy string }
+type paths struct {
+	root, pgdata, socket, etcd, proxy, ident string
+	identStaged                              bool
+}
 
 func dataPaths(dir string) paths {
 	root := filepath.Join(dir, "karakoram", "postgres")
-	return paths{root: root, pgdata: filepath.Join(dir, "postgres"), socket: filepath.Join(root, "socket"), etcd: filepath.Join(dir, "etcd"), proxy: filepath.Join(root, "proxy")}
+	return paths{root: root, pgdata: filepath.Join(dir, "postgres"), socket: filepath.Join(root, "socket"), etcd: filepath.Join(dir, "etcd"), proxy: filepath.Join(root, "proxy"), ident: filepath.Join(root, "pg_ident.conf")}
 }
 func listenHost(host string) string {
 	if host == "" {
@@ -88,6 +91,9 @@ func parameters(s pgspec.Spec, p paths) map[string]any {
 	for k, v := range map[string]any{"listen_addresses": "*", "port": 5432, "unix_socket_directories": p.socket, "password_encryption": "scram-sha-256", "archive_mode": "on", "archive_command": "/bin/true", "archive_timeout": archiveTimeout(s), "hba_file": filepath.Join(p.root, "pg_hba.conf")} {
 		m[k] = v
 	}
+	if s.LocalPeerAuth {
+		m["ident_file"] = p.ident
+	}
 	if s.ListenHost != "" {
 		m["listen_addresses"] = postgresListenHost(s.ListenHost)
 	}
@@ -122,6 +128,9 @@ func parameters(s pgspec.Spec, p paths) map[string]any {
 }
 func hba(s pgspec.Spec) []string {
 	lines := []string{"local all all scram-sha-256", "local replication all scram-sha-256", "host replication " + s.Replication.Username + " 127.0.0.1/32 scram-sha-256", "host replication " + s.Replication.Username + " ::1/128 scram-sha-256"}
+	if s.LocalPeerAuth {
+		lines = append([]string{"local all postgres peer map=karakoram-local", "local replication postgres peer map=karakoram-local"}, lines...)
+	}
 	cidrs := s.Postgres.ClientCIDRs
 	if len(cidrs) == 0 {
 		cidrs = []string{"0.0.0.0/0", "::/0"}
@@ -229,7 +238,7 @@ func restoreArgs(s pgspec.Spec, p paths) ([]string, error) {
 	return append(args, "restore"), nil
 }
 
-var localParameters = []string{"listen_addresses", "port", "unix_socket_directories", "hba_file", "ssl_cert_file", "ssl_key_file", "ssl_ca_file", "archive_command"}
+var localParameters = []string{"listen_addresses", "port", "unix_socket_directories", "hba_file", "ident_file", "ssl_cert_file", "ssl_key_file", "ssl_ca_file", "archive_command"}
 
 func dynamicConfig(s pgspec.Spec, p paths) map[string]any {
 	params := parameters(s, p)
@@ -345,6 +354,13 @@ func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error)
 			files = append(files, renderedFile{"proxy/proxysql-cert.pem", s.Proxy.ServerCert.CertPEM, false}, renderedFile{"proxy/proxysql-key.pem", s.Proxy.ServerCert.KeyPEM, false}, renderedFile{"proxy/proxysql-ca.pem", s.CAPEM, false})
 		}
 		return files, nil
+	}
+	if s.LocalPeerAuth && !p.identStaged {
+		_, mapping, err := localPeerIdentity()
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, renderedFile{"pg_ident.conf", mapping, false})
 	}
 	if statements == nil {
 		var err error

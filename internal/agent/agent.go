@@ -34,6 +34,7 @@ type Options struct {
 	ControlPlaneURL, InternalCAPEM, Token, Cluster, Member, DataDir string
 	Listen                                                          string
 	Engine                                                          string
+	ProxyServingProbe                                               bool
 	Logger                                                          *slog.Logger
 }
 
@@ -41,6 +42,7 @@ type Options struct {
 func OptionsFromEnv() (Options, error) {
 	o := Options{ControlPlaneURL: os.Getenv("KARAKORAM_URL"), InternalCAPEM: os.Getenv("KARAKORAM_INTERNAL_CA"), Token: os.Getenv("KARAKORAM_AGENT_TOKEN"), Cluster: os.Getenv("KARAKORAM_CLUSTER"), Member: os.Getenv("KARAKORAM_MEMBER"), DataDir: os.Getenv("KARAKORAM_DATA_DIR"), Listen: ":9443"}
 	o.Engine = os.Getenv("KARAKORAM_ENGINE")
+	o.ProxyServingProbe = os.Getenv("KARAKORAM_PROXY_SERVING_PROBE") == "1"
 	if o.ControlPlaneURL == "" || o.InternalCAPEM == "" || o.Token == "" || o.Cluster == "" || o.Member == "" || o.DataDir == "" {
 		return o, errors.New("all KARAKORAM_URL, INTERNAL_CA, AGENT_TOKEN, CLUSTER, MEMBER and DATA_DIR environment variables are required")
 	}
@@ -49,6 +51,12 @@ func OptionsFromEnv() (Options, error) {
 
 // Readiness dispatches the local probe, defaulting to the built-in PSMDB TCP probe.
 func Readiness(ctx context.Context, o Options, args []string, engines ...Engine) error {
+	if len(args) > 0 && args[0] == "--serving-proxy" {
+		if len(args) != 2 || !strings.HasPrefix(args[1], "--data-dir=") {
+			return errors.New("serving proxy readiness accepts --data-dir=<absolute path>")
+		}
+		return proxyServingReadiness(ctx, strings.TrimPrefix(args[1], "--data-dir="))
+	}
 	if len(args) > 0 && args[0] == "--startup" {
 		dir := o.DataDir
 		for _, arg := range args[1:] {
@@ -94,6 +102,7 @@ type nodeAgent struct {
 	startupErr      error
 	acceptedVersion int64
 	volume          *agentapi.VolumeStatus
+	applyRetry      *agentapi.MemberConfig
 }
 
 func (a *nodeAgent) config() agentapi.MemberConfig { a.mu.RLock(); defer a.mu.RUnlock(); return a.c }
@@ -148,6 +157,7 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) (changes
 		a.cert = &cert
 	}
 	a.mu.Unlock()
+	defer func() { a.retainApplyRetry(c, applyErr) }()
 	a.acceptedVersion = c.ConfigVersion
 	if err := a.volumeSafety(ctx, c); err != nil {
 		return nil, err
@@ -346,6 +356,19 @@ func Run(ctx context.Context, o Options, engines ...Engine) error {
 		return fmt.Errorf("agent startup listener: %w", err)
 	}
 	defer startup.Close()
+	if proxyServing := a.startProxyServing(); proxyServing != nil {
+		defer proxyServing.Close()
+	}
+	retryCtx, cancelRetries := context.WithCancel(ctx)
+	retriesDone := make(chan struct{})
+	go func() {
+		defer close(retriesDone)
+		a.retryApplies(retryCtx)
+	}()
+	defer func() {
+		cancelRetries()
+		<-retriesDone
+	}()
 	data, err := os.ReadFile(filepath.Join(o.DataDir, "karakoram", "config.json"))
 	if err == nil {
 		var c agentapi.MemberConfig
@@ -473,8 +496,12 @@ func (a *nodeAgent) handler() http.Handler {
 		if capability, ok := a.engine.(interface{ SupportsCertificateReloadOnly() bool }); ok {
 			certificateReloadOnly = capability.SupportsCertificateReloadOnly()
 		}
+		mysqlRestoreCertification := false
+		if capability, ok := a.engine.(interface{ SupportsMySQLRestoreCertification() bool }); ok {
+			mysqlRestoreCertification = capability.SupportsMySQLRestoreCertification()
+		}
 		agentBuild := agentapi.AgentBuild{Version: buildversion.Version, Commit: buildversion.Commit, Build: buildversion.BuildIdentity()}
-		respond(w, agentapi.Status{Agent: agentBuild, Processes: states, PBMRestoreFence: a.allowedProcess("pbm-agent"), PBMRestoreIdentity: true, CertificateReloadOnly: certificateReloadOnly, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, Error: stateError, MongoReady: mongoReady, MongoError: mongoError, Volume: a.volumeObservation(), HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds()), Resources: containerResources()}, nil)
+		respond(w, agentapi.Status{Agent: agentBuild, Processes: states, PBMRestoreFence: a.allowedProcess("pbm-agent"), PBMRestoreIdentity: true, CertificateReloadOnly: certificateReloadOnly, MySQLRestoreCertification: mysqlRestoreCertification, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, Error: stateError, MongoReady: mongoReady, MongoError: mongoError, Volume: a.volumeObservation(), HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds()), Resources: containerResources()}, nil)
 	})
 	mux.HandleFunc("POST /v1/reload", func(w http.ResponseWriter, r *http.Request) {
 		changed, err := a.reload(r.Context())

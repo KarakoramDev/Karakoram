@@ -39,11 +39,12 @@ type fakeBackend struct {
 	leader            string
 	action            func(http.ResponseWriter, *http.Request, string) bool
 	agentBuild        agentapi.AgentBuild
+	proxyConfigs      map[string]*myspec.Proxy
 }
 
 func (*fakeBackend) Name() string { return "fake" }
 func (*fakeBackend) Capabilities() infra.Capabilities {
-	return infra.Capabilities{HorizontalScaling: true, Placement: true, PublicTCP: true}
+	return infra.Capabilities{HorizontalScaling: true, ReplicaScalePreservesServing: true, Placement: true, PublicTCP: true}
 }
 func (*fakeBackend) Layout() infra.Layout {
 	return infra.Layout{AppDir: "/srv/application", VolumeRoot: "/srv/volumes", User: "app", PrivateAddressFamily: infra.AddressFamilyIPv4}
@@ -196,7 +197,18 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 		case "/v1/mysql/offline-gtid":
 			json.NewEncoder(w).Encode(b.offline[name])
 		case "/v1/mysql/proxy-status":
-			json.NewEncoder(w).Encode(myspec.ProxyStatusResponse{Backends: []myspec.ProxyBackend{{Hostgroup: 10, Host: b.leader, Port: 3306, Status: "ONLINE"}}})
+			var status myspec.ProxyStatusResponse
+			for peer, native := range b.native {
+				if native.MemberState != "ONLINE" {
+					continue
+				}
+				group := myspec.ProxyReaderGroup
+				if peer == b.leader || native.MemberRole == "PRIMARY" {
+					group = myspec.ProxyWriterGroup
+				}
+				status.Backends = append(status.Backends, myspec.ProxyBackend{Hostgroup: group, Host: peer, Port: 3306, Status: "ONLINE"})
+			}
+			json.NewEncoder(w).Encode(status)
 		case "/v1/reload", "/v1/process":
 			json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
 		case "/v1/mysql/bootstrap":
@@ -284,6 +296,14 @@ func (b *fakeBackend) apply(t *testing.T, p *Core, rc *engine.Context) {
 		}
 		b.applied[m.Name] = cfg.ConfigVersion
 		if m.Role == "proxy" {
+			// The fake agent serves its last applied immutable config, not
+			// mutable control-plane state during concurrent Status reads.
+			b.mu.Lock()
+			if b.proxyConfigs == nil {
+				b.proxyConfigs = make(map[string]*myspec.Proxy)
+			}
+			b.proxyConfigs[m.Name] = sp.Proxy
+			b.mu.Unlock()
 			continue
 		}
 		status := b.native[m.Name]

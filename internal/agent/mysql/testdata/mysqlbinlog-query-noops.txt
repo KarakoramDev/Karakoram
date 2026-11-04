@@ -1,0 +1,231 @@
+# The proper term is pseudo_replica_mode, but we use this compatibility alias
+# to make the statement usable on server versions 8.0.24 and older.
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+# at 4
+#261104 16:02:41 server id 1  end_log_pos 127 CRC32 0x6b4d4926 	Start: binlog v 4, server v 8.4.11-11 created 261104 16:02:41
+# at 127
+#261104 16:02:41 server id 1  end_log_pos 198 CRC32 0xe69f19bf 	Previous-GTIDs
+# 11111111-2222-3333-4444-555555555555:1-17
+# at 198
+#261104 16:03:09 server id 1  end_log_pos 275 CRC32 0xdd74a7ee 	GTID	last_committed=0	sequence_number=1	rbr_only=no	original_committed_timestamp=1793808189329455	immediate_commit_timestamp=1793808189329455	transaction_length=194
+# original_commit_timestamp=1793808189329455 (2026-11-04 16:03:09.329455 UTC)
+# immediate_commit_timestamp=1793808189329455 (2026-11-04 16:03:09.329455 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189329455*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:18'/*!*/;
+# at 275
+#261104 16:03:09 server id 1  end_log_pos 392 CRC32 0x08e46499 	Query	thread_id=9	exec_time=0	error_code=0	Xid = 43
+SET TIMESTAMP=1793808189/*!*/;
+SET @@session.pseudo_thread_id=9/*!*/;
+SET @@session.foreign_key_checks=1, @@session.sql_auto_is_null=0, @@session.unique_checks=1, @@session.autocommit=1/*!*/;
+SET @@session.sql_mode=1168113696/*!*/;
+SET @@session.auto_increment_increment=1, @@session.auto_increment_offset=1/*!*/;
+/*!\C utf8mb4 *//*!*/;
+SET @@session.character_set_client=255,@@session.collation_connection=255,@@session.collation_server=255/*!*/;
+SET @@session.lc_time_names=0/*!*/;
+SET @@session.collation_database=DEFAULT/*!*/;
+/*!80011 SET @@session.default_collation_for_utf8mb4=255*//*!*/;
+/*!80016 SET @@session.default_table_encryption=0*//*!*/;
+CREATE DATABASE example
+/*!*/;
+# at 392
+#261104 16:03:09 server id 1  end_log_pos 469 CRC32 0xaf505856 	GTID	last_committed=1	sequence_number=2	rbr_only=no	original_committed_timestamp=1793808189330702	immediate_commit_timestamp=1793808189330702	transaction_length=199
+# original_commit_timestamp=1793808189330702 (2026-11-04 16:03:09.330702 UTC)
+# immediate_commit_timestamp=1793808189330702 (2026-11-04 16:03:09.330702 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189330702*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:19'/*!*/;
+# at 469
+#261104 16:03:09 server id 1  end_log_pos 591 CRC32 0xc3ee5224 	Query	thread_id=9	exec_time=0	error_code=0
+SET TIMESTAMP=1793808189/*!*/;
+/*!80016 SET @@session.default_table_encryption=0*//*!*/;
+CREATE DATABASE IF NOT EXISTS example
+/*!*/;
+# at 591
+#261104 16:03:09 server id 1  end_log_pos 668 CRC32 0x1d5dc6ff 	GTID	last_committed=2	sequence_number=3	rbr_only=no	original_committed_timestamp=1793808189337617	immediate_commit_timestamp=1793808189337617	transaction_length=211
+# original_commit_timestamp=1793808189337617 (2026-11-04 16:03:09.337617 UTC)
+# immediate_commit_timestamp=1793808189337617 (2026-11-04 16:03:09.337617 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189337617*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:20'/*!*/;
+# at 668
+#261104 16:03:09 server id 1  end_log_pos 802 CRC32 0x2ba5c245 	Query	thread_id=9	exec_time=0	error_code=0	Xid = 45
+SET TIMESTAMP=1793808189/*!*/;
+/*!80013 SET @@session.sql_require_primary_key=0*//*!*/;
+CREATE TABLE example.items (id INT PRIMARY KEY)
+/*!*/;
+# at 802
+#261104 16:03:09 server id 1  end_log_pos 879 CRC32 0xa25f1232 	GTID	last_committed=3	sequence_number=4	rbr_only=no	original_committed_timestamp=1793808189338593	immediate_commit_timestamp=1793808189338593	transaction_length=216
+# original_commit_timestamp=1793808189338593 (2026-11-04 16:03:09.338593 UTC)
+# immediate_commit_timestamp=1793808189338593 (2026-11-04 16:03:09.338593 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189338593*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:21'/*!*/;
+# at 879
+#261104 16:03:09 server id 1  end_log_pos 1018 CRC32 0xae8c734c 	Query	thread_id=9	exec_time=0	error_code=0
+SET TIMESTAMP=1793808189/*!*/;
+/*!80013 SET @@session.sql_require_primary_key=0*//*!*/;
+CREATE TABLE IF NOT EXISTS example.items (id INT PRIMARY KEY)
+/*!*/;
+# at 1018
+#261104 16:03:09 server id 1  end_log_pos 1095 CRC32 0xb13782d1 	GTID	last_committed=4	sequence_number=5	rbr_only=no	original_committed_timestamp=1793808189340949	immediate_commit_timestamp=1793808189340949	transaction_length=238
+# original_commit_timestamp=1793808189340949 (2026-11-04 16:03:09.340949 UTC)
+# immediate_commit_timestamp=1793808189340949 (2026-11-04 16:03:09.340949 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189340949*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:22'/*!*/;
+# at 1095
+#261104 16:03:09 server id 1  end_log_pos 1256 CRC32 0x0f54e1ed 	Query	thread_id=9	exec_time=0	error_code=0	Xid = 47
+SET TIMESTAMP=1793808189/*!*/;
+CREATE USER 'fixture_user'@'localhost' IDENTIFIED WITH 'caching_sha2_password'
+/*!*/;
+# at 1256
+#261104 16:03:09 server id 1  end_log_pos 1335 CRC32 0x29f8d5c7 	GTID	last_committed=5	sequence_number=6	rbr_only=no	original_committed_timestamp=1793808189342116	immediate_commit_timestamp=1793808189342116	transaction_length=254
+# original_commit_timestamp=1793808189342116 (2026-11-04 16:03:09.342116 UTC)
+# immediate_commit_timestamp=1793808189342116 (2026-11-04 16:03:09.342116 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189342116*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:23'/*!*/;
+# at 1335
+#261104 16:03:09 server id 1  end_log_pos 1510 CRC32 0xbaaac5c4 	Query	thread_id=9	exec_time=0	error_code=0	Xid = 48
+SET TIMESTAMP=1793808189/*!*/;
+CREATE USER IF NOT EXISTS 'fixture_user'@'localhost' IDENTIFIED WITH 'caching_sha2_password'
+/*!*/;
+# at 1510
+#261104 16:03:09 server id 1  end_log_pos 1589 CRC32 0x0f4f2f1f 	GTID	last_committed=6	sequence_number=7	rbr_only=no	original_committed_timestamp=1793808189342916	immediate_commit_timestamp=1793808189342916	transaction_length=415
+# original_commit_timestamp=1793808189342916 (2026-11-04 16:03:09.342916 UTC)
+# immediate_commit_timestamp=1793808189342916 (2026-11-04 16:03:09.342916 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189342916*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:24'/*!*/;
+# at 1589
+#261104 16:03:09 server id 1  end_log_pos 1670 CRC32 0xa702400c 	Query	thread_id=9	exec_time=0	error_code=0
+SET TIMESTAMP=1793808189/*!*/;
+BEGIN
+/*!*/;
+# at 1670
+#261104 16:03:09 server id 1  end_log_pos 1782 CRC32 0xc6a74c74 	Query	thread_id=9	exec_time=0	error_code=0
+SET TIMESTAMP=1793808189/*!*/;
+INSERT INTO example.items VALUES (1)
+/*!*/;
+# at 1782
+#261104 16:03:09 server id 1  end_log_pos 1894 CRC32 0x6b384f85 	Query	thread_id=9	exec_time=0	error_code=0
+SET TIMESTAMP=1793808189/*!*/;
+INSERT INTO example.items VALUES (2)
+/*!*/;
+# at 1894
+#261104 16:03:09 server id 1  end_log_pos 1925 CRC32 0x5077b206 	Xid = 51
+COMMIT/*!*/;
+# at 1925
+#261104 16:03:09 server id 1  end_log_pos 2004 CRC32 0x4218ddc3 	GTID	last_committed=7	sequence_number=8	rbr_only=yes	original_committed_timestamp=1793808189343945	immediate_commit_timestamp=1793808189343945	transaction_length=455
+/*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
+# original_commit_timestamp=1793808189343945 (2026-11-04 16:03:09.343945 UTC)
+# immediate_commit_timestamp=1793808189343945 (2026-11-04 16:03:09.343945 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189343945*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:25'/*!*/;
+# at 2004
+#261104 16:03:09 server id 1  end_log_pos 2120 CRC32 0xab5c92c5 	Query	thread_id=9	exec_time=0	error_code=0
+SET TIMESTAMP=1793808189/*!*/;
+XA START X'666978747572655f6f6e657068617365',X'',1
+/*!*/;
+# at 2120
+#261104 16:03:09 server id 1  end_log_pos 2174 CRC32 0x193c788f 	Table_map: `example`.`items` mapped to number 117
+# has_generated_invisible_primary_key=0
+# at 2174
+#261104 16:03:09 server id 1  end_log_pos 2214 CRC32 0x5304c577 	Write_rows: table id 117 flags: STMT_END_F
+### INSERT INTO `example`.`items`
+### SET
+###   @1=3
+# at 2214
+#261104 16:03:09 server id 1  end_log_pos 2328 CRC32 0x3ed37cf6 	Query	thread_id=9	exec_time=0	error_code=0
+SET TIMESTAMP=1793808189/*!*/;
+XA END X'666978747572655f6f6e657068617365',X'',1
+/*!*/;
+# at 2328
+#261104 16:03:09 server id 1  end_log_pos 2380 CRC32 0x2e6b36b1 	XA PREPARE X'666978747572655f6f6e657068617365',X'',1
+XA COMMIT X'666978747572655f6f6e657068617365',X'',1 ONE PHASE
+/*!*/;
+# at 2380
+#261104 16:03:09 server id 1  end_log_pos 2457 CRC32 0xb71e5494 	GTID	last_committed=8	sequence_number=9	rbr_only=no	original_committed_timestamp=1793808189345078	immediate_commit_timestamp=1793808189345078	transaction_length=196
+# original_commit_timestamp=1793808189345078 (2026-11-04 16:03:09.345078 UTC)
+# immediate_commit_timestamp=1793808189345078 (2026-11-04 16:03:09.345078 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189345078*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:26'/*!*/;
+# at 2457
+#261104 16:03:09 server id 1  end_log_pos 2576 CRC32 0x88dc9c8a 	Query	thread_id=9	exec_time=0	error_code=0	Xid = 59
+SET TIMESTAMP=1793808189/*!*/;
+DROP USER 'fixture_user'@'localhost'
+/*!*/;
+# at 2576
+#261104 16:03:09 server id 1  end_log_pos 2653 CRC32 0xeadb9cc9 	GTID	last_committed=9	sequence_number=10	rbr_only=no	original_committed_timestamp=1793808189347571	immediate_commit_timestamp=1793808189347571	transaction_length=216
+# original_commit_timestamp=1793808189347571 (2026-11-04 16:03:09.347571 UTC)
+# immediate_commit_timestamp=1793808189347571 (2026-11-04 16:03:09.347571 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189347571*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:27'/*!*/;
+# at 2653
+#261104 16:03:09 server id 1  end_log_pos 2792 CRC32 0x85d81205 	Query	thread_id=9	exec_time=0	error_code=0	Xid = 60
+SET TIMESTAMP=1793808189/*!*/;
+DROP TABLE `example`.`items` /* generated by server */
+/*!*/;
+# at 2792
+#261104 16:03:09 server id 1  end_log_pos 2869 CRC32 0x46358a27 	GTID	last_committed=10	sequence_number=11	rbr_only=no	original_committed_timestamp=1793808189350675	immediate_commit_timestamp=1793808189350675	transaction_length=217
+# original_commit_timestamp=1793808189350675 (2026-11-04 16:03:09.350675 UTC)
+# immediate_commit_timestamp=1793808189350675 (2026-11-04 16:03:09.350675 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189350675*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:28'/*!*/;
+# at 2869
+#261104 16:03:09 server id 1  end_log_pos 3009 CRC32 0x7d7724ef 	Query	thread_id=9	exec_time=0	error_code=0
+SET TIMESTAMP=1793808189/*!*/;
+DROP TABLE IF EXISTS `example`.`items` /* generated by server */
+/*!*/;
+# at 3009
+#261104 16:03:09 server id 1  end_log_pos 3086 CRC32 0x1970e357 	GTID	last_committed=11	sequence_number=12	rbr_only=no	original_committed_timestamp=1793808189351795	immediate_commit_timestamp=1793808189351795	transaction_length=190
+# original_commit_timestamp=1793808189351795 (2026-11-04 16:03:09.351795 UTC)
+# immediate_commit_timestamp=1793808189351795 (2026-11-04 16:03:09.351795 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189351795*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:29'/*!*/;
+# at 3086
+#261104 16:03:09 server id 1  end_log_pos 3199 CRC32 0x106f7a20 	Query	thread_id=9	exec_time=0	error_code=0	Xid = 62
+SET TIMESTAMP=1793808189/*!*/;
+DROP DATABASE example
+/*!*/;
+# at 3199
+#261104 16:03:09 server id 1  end_log_pos 3276 CRC32 0x8d6e4177 	GTID	last_committed=12	sequence_number=13	rbr_only=no	original_committed_timestamp=1793808189352601	immediate_commit_timestamp=1793808189352601	transaction_length=191
+# original_commit_timestamp=1793808189352601 (2026-11-04 16:03:09.352601 UTC)
+# immediate_commit_timestamp=1793808189352601 (2026-11-04 16:03:09.352601 UTC)
+/*!80001 SET @@session.original_commit_timestamp=1793808189352601*//*!*/;
+/*!80014 SET @@session.original_server_version=80411*//*!*/;
+/*!80014 SET @@session.immediate_server_version=80411*//*!*/;
+SET @@SESSION.GTID_NEXT= '11111111-2222-3333-4444-555555555555:30'/*!*/;
+# at 3276
+#261104 16:03:09 server id 1  end_log_pos 3390 CRC32 0xfe9db084 	Query	thread_id=9	exec_time=0	error_code=0
+SET TIMESTAMP=1793808189/*!*/;
+DROP DATABASE IF EXISTS example
+/*!*/;
+# at 3390
+#261104 16:03:09 server id 1  end_log_pos 3434 CRC32 0xdad7d717 	Rotate to binlog.000003  pos: 4
+ROLLBACK /* added by mysqlbinlog */ /*!*/;
+SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;

@@ -140,7 +140,7 @@ func (p *Provider) Describe() domain.ProviderInfo {
 		Name: tspec.Engine, DisplayName: "Temporal",
 		Capabilities: []string{"tls", "backups", "restores", "temporalAccess"},
 		BackupTypes:  []string{"full", "diff", "incr"},
-		Operations:   []string{"restart", "rotate-tls", "backup", "delete-backup", "restore"},
+		Operations:   []string{"restart", "rotate-tls", "backup", "delete-backup", "restore", domain.OperationUpgradeAgents},
 		Processes:    []string{"temporal-server", "ui-server"},
 		EngineOptions: map[string]any{
 			"persistence": map[string]any{
@@ -262,8 +262,8 @@ func (p *Provider) Validate(_ context.Context, old, next *domain.Cluster) error 
 
 // ValidateBackend checks the private networking required by Temporal membership.
 func (*Provider) ValidateBackend(backend infra.Backend) error {
-	if backend == nil || backend.Layout().PrivateAddressFamily != infra.AddressFamilyIPv4 {
-		return engine.Invalid("Temporal requires a backend with private IPv4 networking; Zerops is not supported yet")
+	if backend == nil || (backend.Layout().PrivateAddressFamily != infra.AddressFamilyIPv4 && backend.Layout().PrivateAddressFamily != infra.AddressFamilyIPv6) {
+		return engine.Invalid("Temporal requires a backend with a known private address family")
 	}
 	return nil
 }

@@ -62,6 +62,9 @@ func TestNativeStatusBeforeAndAfterGroupMembership(t *testing.T) {
 			}
 			s := myspec.Spec{Role: myspec.RoleData, Topology: myspec.TopologyGroup}
 			c := &nativeStatusConnector{groupTestConnector: groupTestConnector{t: t, queries: []groupQuery{{contains: "SELECT @@server_uuid", values: []driver.Value{uuid, "", true, true, "8.4.10-10"}}}}}
+			if strings.HasPrefix(mode, "group ") {
+				c.queries = append(c.queries, groupQuery{contains: "SELECT @@group_replication_group_name", values: []driver.Value{uuid}})
+			}
 			state, role := "OFFLINE", ""
 			switch mode {
 			case "group absent":
@@ -86,10 +89,10 @@ func TestNativeStatusBeforeAndAfterGroupMembership(t *testing.T) {
 				s.Galera = &myspec.Galera{}
 				state, role = "Synced", "PRIMARY"
 				c.galeraRows = [][]driver.Value{{"wsrep_cluster_status", "Primary"}, {"wsrep_local_state_comment", "Synced"}, {"wsrep_ready", "ON"}, {"wsrep_connected", "ON"}, {"wsrep_cluster_size", "3"}, {"wsrep_cluster_state_uuid", uuid}, {"wsrep_last_committed", "10"}}
-				c.queries = append(c.queries, groupQuery{contains: "SELECT @@GLOBAL.gtid_executed", values: []driver.Value{uuid + ":1-10"}})
+				c.queries = append(c.queries, groupQuery{contains: "SELECT @@GLOBAL.gtid_executed", values: []driver.Value{uuid + ":1-10", uuid, false}})
 			}
 			count := int64(0)
-			if mode == "group online" {
+			if mode == "group online" || mode == "pxc" {
 				count = 3
 			}
 			if s.Galera == nil && s.Topology == myspec.TopologyGroup && c.memberErr == nil && c.countErr == nil {
@@ -110,6 +113,9 @@ func TestNativeStatusBeforeAndAfterGroupMembership(t *testing.T) {
 			}
 			if out.MemberState != state || out.MemberRole != role || out.GroupMembers != int(count) {
 				t.Fatalf("membership status=%+v", out)
+			}
+			if strings.HasPrefix(mode, "group ") && out.GroupName != uuid {
+				t.Fatalf("group identity missing: %+v", out)
 			}
 			if out.ServerUUID != uuid || out.Version != "8.4.10-10" || out.PhysicalIdentity == "" {
 				t.Fatalf("native identity/version was lost: %+v", out)

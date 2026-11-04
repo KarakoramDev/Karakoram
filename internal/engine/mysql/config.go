@@ -88,8 +88,23 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 	}
 	runtime := engine.AgentRuntime{Cluster: rc.Cluster.Name, Member: m.Name, Engine: "mysql", Volume: m.Volume, AgentURL: agentURL, InternalCAPEM: p.options.InternalCAPEM, Ports: ports, Prepare: prepare}
 	// Agent transport readiness is independent of GR quorum and clone completion.
-	return runtime.Spec(rc.Backend.Layout()), nil
+	spec := runtime.Spec(rc.Backend.Layout())
+	if m.Role == "proxy" {
+		spec.Env["KARAKORAM_PROXY_SERVING_PROBE"] = "1"
+	}
+	return spec, nil
 }
+
+func mysqlListenHost(rc *engine.Context) string {
+	if !slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityMySQLListenHost) {
+		return ""
+	}
+	if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
+		return "0.0.0.0"
+	}
+	return "::"
+}
+
 func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string) (agentapi.MemberConfig, error) {
 	s, err := load(rc.Cluster)
 	if err != nil {
@@ -142,18 +157,17 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	if ram <= 0 {
 		ram = rc.Cluster.Spec.Components.Engine.Resources.MinRAM
 	}
-	buffer := int64(ram * float64(1<<30) / 2)
-	if buffer < 128<<20 {
-		buffer = 128 << 20
+	// Leave a fixed floor for mysqld's non-pool allocations, the agent and
+	// concurrent physical-backup processes, including on 1 GiB singletons.
+	memory := int64(ram * float64(1<<30))
+	buffer := max(int64(128<<20), min(memory/2, memory-(768<<20)))
+	// Small clustered data members also share their budget with replication.
+	if m.Role == "data" && (s.Topology == "group" || s.Topology == "cluster") && memory <= 2<<30 {
+		buffer = min(buffer, int64(768<<20))
 	}
 	o.Parameters = memberParameters(m, o.Parameters)
 	sp := myspec.Spec{Member: name, Role: m.Role, Topology: s.Topology, Ordinal: m.Index, Version: version, ServerDir: serverDir, XtraBackupDir: backupDir, BufferPoolBytes: buffer, MaxConnections: 200, Parameters: o.Parameters, CAPEM: get("tls/ca.crt"), ServerCert: cert("servers"), Superuser: credential("root"), Agent: credential("kk_agent"), Replication: credential("kk_repl"), Monitor: credential("kk_monitor"), BackupUser: credential("kk_backup"), AllowInitialize: m.Role == "data" && !m.Initialized && !m.CloneReplacesData && !s.Formation.reforming()}
-	if slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityMySQLListenHost) {
-		sp.ListenHost = "::"
-		if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
-			sp.ListenHost = "0.0.0.0"
-		}
-	}
+	sp.ListenHost = mysqlListenHost(rc)
 	sp.SlowShutdown = m.SlowShutdown
 	sp.Admin = credential("admin")
 	for _, peer := range s.data() {
@@ -181,6 +195,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	}
 	if m.Role == "data" && s.Topology == "cluster" {
 		g := &myspec.Galera{ClusterName: s.Formation.GroupName, FormationEpoch: s.Formation.FormationEpoch, GaleraPort: myspec.PortGalera, ISTPort: myspec.PortGaleraIST, SSTPort: myspec.PortGaleraSST, GCacheSize: "128M"}
+		g.RestoreFence, g.SSTDonor = s.RestoreGTIDFence != "" || m.GaleraJoinFence, m.GaleraSSTDonor
 		if slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityGaleraListenHost) {
 			g.ListenHost = "::"
 			if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
@@ -189,8 +204,10 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 		}
 		g.TrafficCert = &myspec.Certificate{CertPEM: get(galeraTrafficBase + ".crt"), KeyPEM: get(galeraTrafficBase + ".key")}
 		g.TrafficCAPEM = get(galeraTrafficCA + ".crt")
+		// Retirement still reloads the stopped member's local identity. Keep
+		// that entry in its own config, but not in other members' join peers.
 		for _, peer := range s.data() {
-			if !peer.Removing {
+			if !peer.Removing || peer.Name == name {
 				g.Peers = append(g.Peers, myspec.Peer{Name: peer.Name, Host: peer.Name, Port: myspec.PortGalera})
 			}
 		}
@@ -199,10 +216,10 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			g.StartPosition = s.Formation.StartPosition
 		}
 		sp.Galera = g
-		// Deployment starts the agent, not Galera. Wait for the durable
-		// bootstrap epoch before starting the seed, then admit SST joiners
-		// only after that seed has formed a Primary component.
-		if s.Formation.State == "unformed" || s.Formation.State == "bootstrapping" && !g.Bootstrap {
+		// A joined receipt is current-formation Synced evidence, not a GTID
+		// mapping certificate. Release only the next unjoined identity while
+		// leaving already joined members running through ordinary restarts.
+		if !pxcJoinAllowed(s, m) {
 			desired = []string{}
 		}
 	}
@@ -213,8 +230,26 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			sp.Proxy.Mode = "galera"
 		}
 		for _, peer := range s.data() {
-			if peer.Stage == "joined" && !peer.Removing {
+			if peer.Stage == "joined" && !peer.Removing && !peer.ConfirmedVolumeLost && !peer.ProxyDraining && !pxcJoinRoutingFenced(s, peer) {
 				sp.Proxy.Backends = append(sp.Proxy.Backends, myspec.Peer{Name: peer.Name, Host: peer.Name, Port: 3306})
+			}
+		}
+		if len(sp.Proxy.Backends) == 0 && s.Topology == "cluster" {
+			bs, e := loadBackupState(rc.Cluster)
+			if e != nil {
+				return agentapi.MemberConfig{}, e
+			}
+			seed := s.find(s.Formation.Seed)
+			// Restore and formation certification can temporarily have no joined
+			// backend. Keep a stopped proxy's image valid using only its admitted
+			// initialized seed; monitoring, not this candidate, proves readiness.
+			restoreOwned := bs.RestoreOperation != nil && restoreOperation(bs.RestoreOperation)
+			certification := s.Formation.GTIDCertification
+			formationOwned := certification != nil && certification.Owner != "" && certification.Owner == s.RestoreGTIDFence
+			if seed != nil && seed.Role == "data" && seed.ServiceID != "" &&
+				seed.Initialized && seed.Stage == "deployed" && !seed.Removing && !pxcJoinRoutingFenced(s, seed) &&
+				(restoreOwned || formationOwned && !seed.Offline) {
+				sp.Proxy.Backends = append(sp.Proxy.Backends, myspec.Peer{Name: seed.Name, Host: seed.Name, Port: 3306})
 			}
 		}
 		users, e := p.proxyUsers(ctx, rc)
@@ -244,10 +279,13 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			}
 			activeRepository = cp.Step == "activate" && cp.Generation == bs.Generation
 		}
-		enabled := rc.Cluster.Spec.Backup.PITR.Enabled && activeRepository && (rc.Cluster.Spec.DataSource == nil || bs.CloneComplete)
+		enabled := rc.Cluster.Spec.Backup.PITR.Enabled && activeRepository && s.RestoreGTIDFence == "" && !m.GaleraJoinFence && (rc.Cluster.Spec.DataSource == nil || bs.CloneComplete)
 		sp.Backup = &myspec.Backup{Repository: repo, Binlog: myspec.Binlog{Enabled: enabled, RotateIntervalSeconds: o.Binlog.ArchiveInterval, ExpireSeconds: o.Binlog.ExpireSeconds}}
 	}
 	if m.Offline {
+		desired = []string{}
+	}
+	if m.Role == "proxy" && s.RestoreGTIDFence != "" {
 		desired = []string{}
 	}
 	agentCert := cert("agents")

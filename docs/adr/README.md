@@ -57,6 +57,13 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0055](0055-neo4j-community-engine.md) | Neo4j Community singleton, TLS-only access, administrative native users and offline system/graph dumps |
 | [0057](0057-fleet-operations.md) | Build-aware rolling member upgrades, maintenance windows and capability-aware relocation |
 | [0058](0058-control-plane-resilience-and-signals.md) | Control-plane snapshots and rebuild, durable notifications, backup drills and operational signals |
+| [0063](0063-mysql-pitr-automatic-reanchor.md) | MySQL/PXC automatic PITR full-backup re-anchoring |
+| [0064](0064-pitr-restorable-intervals.md) | Restorable PITR interval lists |
+| [0065](0065-agent-upgrade-all-member-engines.md) | Agent upgrades for every member-agent engine |
+| [0066](0066-postgres-administrator-rotation.md) | PostgreSQL administrator rotation with a sealed transition journal |
+| [0067](0067-mysql-lost-volume-replacement.md) | MySQL and PXC lost-volume replacement |
+| [0068](0068-temporal-zerops.md) | Temporal on Zerops private IPv6 |
+| [0069](0069-proxysql-serving-scale-and-resource-changes.md) | ProxySQL serving-preserving replica and resource changes |
 
 ## References and verification
 

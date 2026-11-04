@@ -6,8 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"hash"
 	"io"
-	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -18,72 +18,86 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
-func readReplaySidecars(ctx context.Context, c *minio.Client, source myspec.Repository) ([]archivedBinlog, error) {
-	var logs []archivedBinlog
-	for obj := range c.ListObjects(ctx, source.S3.Bucket, minio.ListObjectsOptions{Prefix: path.Join(source.Path, "binlogs") + "/", Recursive: true}) {
+// walkReplayObjects hashes a streaming inventory rather than retaining its keys.
+// Use the synchronous iterator: the SDK channel adapter can block forever while
+// sending its cancellation error after a consumer has already returned.
+func walkReplayObjects(ctx context.Context, c *minio.Client, source myspec.Repository, digest hash.Hash, visit func(minio.ObjectInfo) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var encoder *json.Encoder
+	if digest != nil {
+		encoder = json.NewEncoder(digest)
+	}
+	for obj := range c.ListObjectsIter(ctx, source.S3.Bucket, minio.ListObjectsOptions{Prefix: path.Join(source.Path, "binlogs") + "/", Recursive: true}) {
 		if obj.Err != nil {
-			return nil, obj.Err
+			return obj.Err
 		}
 		if !strings.HasSuffix(obj.Key, ".json") {
 			continue
 		}
-		o, err := c.GetObject(ctx, source.S3.Bucket, obj.Key, minio.GetObjectOptions{})
+		if encoder != nil {
+			// Include every remotely observable identity field. A replacement,
+			// deletion, append or repository/baseline change must invalidate.
+			if err := encodeReplayObject(encoder, obj); err != nil {
+				return err
+			}
+		}
+		if visit != nil {
+			if err := visit(obj); err != nil {
+				return err
+			}
+		}
+	}
+	return ctx.Err()
+}
+
+func encodeReplayObject(encoder *json.Encoder, obj minio.ObjectInfo) error {
+	return encoder.Encode(struct {
+		Key, ETag, VersionID string
+		Size                 int64
+		Modified             time.Time
+	}{obj.Key, obj.ETag, obj.VersionID, obj.Size, obj.LastModified})
+}
+
+func readReplaySidecar(ctx context.Context, c *minio.Client, source myspec.Repository, objectKey string) (archivedBinlog, error) {
+	o, err := c.GetObject(ctx, source.S3.Bucket, objectKey, minio.GetObjectOptions{})
+	if err != nil {
+		return archivedBinlog{}, err
+	}
+	var metadata binlogSidecar
+	err = json.NewDecoder(io.LimitReader(o, 32<<20)).Decode(&metadata)
+	o.Close()
+	if err != nil {
+		return archivedBinlog{}, err
+	}
+	key := strings.TrimSuffix(objectKey, ".json")
+	if key != path.Join(source.Path, "binlogs", metadata.ServerUUID, metadata.File) {
+		return archivedBinlog{}, errors.New("invalid_sidecar")
+	}
+	return archivedBinlog{key, metadata}, nil
+}
+
+func readReplaySidecars(ctx context.Context, c *minio.Client, source myspec.Repository) ([]archivedBinlog, error) {
+	var logs []archivedBinlog
+	err := walkReplayObjects(ctx, c, source, nil, func(obj minio.ObjectInfo) error {
+		log, err := readReplaySidecar(ctx, c, source, obj.Key)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		var metadata binlogSidecar
-		err = json.NewDecoder(io.LimitReader(o, 32<<20)).Decode(&metadata)
-		o.Close()
-		if err != nil {
-			return nil, err
-		}
-		key := strings.TrimSuffix(obj.Key, ".json")
-		if key != path.Join(source.Path, "binlogs", metadata.ServerUUID, metadata.File) {
-			return nil, errors.New("invalid_sidecar")
-		}
-		logs = append(logs, archivedBinlog{key, metadata})
+		logs = append(logs, log)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return logs, nil
 }
 
-func replayCoverageWindows(logs []archivedBinlog, backup myspec.BackupResult) ([]myspec.PITRWindow, error) {
-	trusted, last, err := trustedReplayHistory(logs, backup)
-	if err != nil {
-		return nil, err
-	}
-	var timestamps []int64
-	for _, l := range trusted {
-		for _, tx := range l.meta.Transactions {
-			timestamps = append(timestamps, tx.OriginalCommitTimestamp)
-		}
-	}
-	// A time cut is valid iff every included predecessor is <= the cut and
-	// every omitted successor is > it. Original commit times may regress.
-	suffixMin := make([]int64, len(timestamps)+1)
-	suffixMin[len(timestamps)] = math.MaxInt64
-	for i := len(timestamps) - 1; i >= 0; i-- {
-		suffixMin[i] = min(timestamps[i], suffixMin[i+1])
-	}
-	lower := backup.EndTime.UnixMicro()
-	var windows []myspec.PITRWindow
-	for i := 0; i <= len(timestamps); i++ {
-		upper := last
-		if suffixMin[i] != math.MaxInt64 {
-			upper = min(upper, suffixMin[i]-1)
-		}
-		if lower <= upper {
-			w := myspec.PITRWindow{Start: time.UnixMicro(lower).UTC(), End: time.UnixMicro(upper).UTC()}
-			if len(windows) > 0 && !w.Start.After(windows[len(windows)-1].End.Add(time.Microsecond)) {
-				windows[len(windows)-1].End = w.End
-			} else {
-				windows = append(windows, w)
-			}
-		}
-		if i < len(timestamps) {
-			lower = max(lower, timestamps[i])
-		}
-	}
-	return windows, nil
+type replayCoverageCache struct {
+	key, inventory, lastKey string
+	state                   *replayCoverageState
+	lastSequence            uint64
+	lastOrderedKey          string
 }
 
 func loadPITRBaseline(ctx context.Context, s myspec.Spec, p paths, request myspec.PITRCoverageRequest) (myspec.BackupResult, error) {
@@ -117,19 +131,13 @@ func loadPITRBaseline(ctx context.Context, s myspec.Spec, p paths, request myspe
 }
 
 func (e *Runner) pitrCoverage(ctx context.Context, request myspec.PITRCoverageRequest) (myspec.PITRCoverageResponse, error) {
-	s, p := e.state()
-	baseline, err := loadPITRBaseline(ctx, s, p, request)
+	intent := myspec.Restore{Source: request.Source, BackupID: "coverage", Label: "coverage", ObjectPaths: request.ObjectPaths, ObjectManifests: request.ObjectManifests}
+	if err := intent.Validate(); err != nil {
+		return myspec.PITRCoverageResponse{}, err
+	}
+	service, err := e.coverageService()
 	if err != nil {
 		return myspec.PITRCoverageResponse{}, err
 	}
-	client, err := s3Client(request.Source)
-	if err != nil {
-		return myspec.PITRCoverageResponse{}, err
-	}
-	logs, err := readReplaySidecars(ctx, client, request.Source)
-	if err != nil {
-		return myspec.PITRCoverageResponse{}, err
-	}
-	windows, err := replayCoverageWindows(logs, baseline)
-	return myspec.PITRCoverageResponse{Windows: windows}, err
+	return service.poll(ctx, request)
 }

@@ -4,6 +4,962 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading to v0.4.5
+
+v0.4.5 includes the [v0.4.4 PITR hotfix](#upgrading-to-v044). When upgrading
+directly from v0.4.3, use the v0.4.5 agent rollout below instead of an intermediate
+resource-change rollout; then re-enable PITR if needed, take a successful full
+and verify the advancing window as described in the hotfix recovery steps.
+
+1. Back up control-plane state using the
+   [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
+   the original `KARAKORAM_MASTER_KEY` separately, and retain the previous
+   executable with its pre-upgrade state. Review backup capacity and maintenance
+   windows before proceeding.
+2. Upgrade the control plane to v0.4.5. Engine versions and deployed member
+   agents are separate from this upgrade; rollback does not undo engine or
+   infrastructure changes.
+3. Run `karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m` for each
+   cluster, observing its native safety gates and maintenance window. New agents
+   are required for Temporal on Zerops private IPv6, PostgreSQL `postgres`
+   rotation, GR lost-volume admission and the proxy serving probe. Follow the
+   [rollout guidance](#agent-rollout-now-covers-every-member-agent-engine) below;
+   native process restart does not install an agent.
+4. Verify every member's build, native readiness/replication and client
+   reconnection. Update PITR API consumers and PXC condition-reason alert filters.
+   Resolve any legacy Neo4j expired-credential marker using the explicit
+   [maintenance procedure](#neo4j-legacy-credential-recovery), not repeated restarts.
+
+### Behaviour changes
+
+- `upgrade-agents` now covers every member-agent engine; availability still
+  depends on engine topology and backend rollout semantics.
+- PostgreSQL, Citus and Supabase support restart-free `postgres` rotation after
+  agent upgrades. Peer-auth activation may need one configuration restart first.
+- MySQL GR and PXC automatically replace confirmed lost volumes only after
+  native survivor/donor proof; MySQL single still requires storage recovery or restore.
+- MySQL/PXC automatic PITR re-anchoring is **ON by default**. Opt out with
+  `spec.backup.pitr.autoReanchor: false`; additional fulls consume storage and IO.
+- PITR responses add `intervals`; legacy summaries remain unchanged.
+- PXC adds `GTIDHistoryPersistenceUnavailable`; update reason-based alerts.
+- Eligible ProxySQL count/resource changes preserve serving on Zerops and
+  Dokploy under [ADR 0069](adr/0069-proxysql-serving-scale-and-resource-changes.md).
+  PostgreSQL/Supabase proxy count increases now wait for maintenance when
+  serving cannot be preserved; legacy runtimes keep their maintenance-gated path.
+- Temporal supports Zerops private IPv6 with upgraded agents. MySQL/PXC mutation
+  isolation is per cluster, and Neo4j verifies credential recovery before marking
+  bootstrap complete; existing false-completion markers need explicit repair.
+
+### Agent rollout now covers every member-agent engine
+
+After upgrading the control plane to v0.4.5, run the existing rollout command for
+MySQL (single or Group Replication), PXC, OpenBao (Raft or PostgreSQL storage),
+Keycloak, Temporal, Neo4j Community and Weaviate:
+
+```sh
+karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m
+```
+
+PostgreSQL (including Citus), Supabase, MongoDB, RabbitMQ and Elasticsearch retain
+their existing support. Existing v0.4.3 agents become upgradable once the control
+plane is v0.4.5; unknown legacy identities are also eligible. This installs the
+frozen control-plane agent build without changing applied engine versions,
+configuration, resources, bindings or persistent runtime/volume identities.
+It replaces earlier resource-change/re-creation workarounds for installing agent
+fixes; a native process restart still does not replace its agent.
+
+- **MySQL/PXC:** ProxySQL first, with every live instance acknowledging build,
+  configuration/credentials and writer health; non-writer data members next and
+  the initially observed writer last. GR checks ONLINE membership, surviving
+  majority and GTID-safe election with proxy reader/writer admission. PXC checks
+  Primary/Synced/ready/connected membership, full component size and history
+  continuity, then excludes the routed writer only after a safe successor is
+  available and waits for proxy handoff before deployment. ProxySQL uses serial,
+  native-serving-gated start-first replacement on Dokploy only when the running,
+  deployed, volume-less incumbent and incoming build both carry the serving-probe
+  marker; spare capacity is required. A legacy/unmarked first upgrade uses
+  ordinary whole-service deployment and installs the marker for subsequent
+  rollouts. Cold/stopped proxies also use ordinary deployment. Zerops uses
+  ordinary whole-service deployment; its count/resource preservation contract
+  does not cover new builds. Nomad uses a canary followed by potentially
+  destructive replacements with TCP-only admission. Those ordinary paths can
+  interrupt the whole proxy endpoint even with replicas. MySQL/PXC persist the
+  chosen policy before submission and retain it on receipt-missing replay,
+  including `--include-current`. MySQL single has database downtime.
+  If runtime recovery or confirmed loss appears mid-rollout, the serialized
+  operation settles its current member/routing drain without a new deployment,
+  then retires with a recovery diagnostic so lost-volume replacement can proceed.
+  Confirmed-lost members remain excluded from routing, never readmitted as healthy.
+- **OpenBao:** standbys/inactive members before the initial active; native
+  step-down must establish another active before its deployment. Raft requires
+  healthy unsealed voters and surviving quorum/autopilot gates. PostgreSQL
+  storage uses native HA semantics without Raft APIs. Native recovery and
+  Shamir/auto-unseal finish before the next member. A singleton is unavailable
+  during deployment and until unseal completes.
+- **Keycloak:** the single runtime is redeployed and must acknowledge native
+  readiness, configuration and the exact build. Authentication has downtime
+  even when its source PostgreSQL is HA; unexpected multi-instance services
+  are refused.
+- **Temporal:** history → matching → frontend → worker → server → UI, skipping
+  disabled components. Every expected instance must acknowledge native
+  readiness, applied version/configuration and the exact build; history/server
+  settle for one minute. Deployment addresses logical component services, not
+  individual instances. Singleton components have downtime, and platform
+  replacement policy controls availability with replicas.
+- **Neo4j Community:** its singleton redeployment interrupts all database access
+  until native readiness and exact-build acknowledgement.
+- **Weaviate:** non-voters, then non-leader voters, then the observed Raft
+  leader. Healthy synchronized peers, surviving voting majority, applied minimum
+  and collection replication factors of at least two, and native proof of no
+  sole physical shard replica gate clustered rollout. Unknown shard evidence
+  refuses disruption. Singletons bypass impossible redundancy checks but have
+  database downtime.
+
+Use an appropriate [maintenance window](operations.md#maintenance-windows) and
+verify native replication/readiness, every member's build and client reconnects.
+Each new member/component disruption and deferred submission rechecks the window
+and native safety; already-started handoff/deployment recovery finishes after
+window closure. Current agents are skipped unless `--include-current` is set,
+and completed checkpoint entries are not repeated. Cancellation stops new work,
+not completed deployments: known receipts require native readiness and exact
+target-build acknowledgement. An intent with a missing receipt may have reached
+the backend; cancellation settles native readiness on the old or target build
+without resubmitting.
+
+Receipt-missing replay adopts a ready target deployment where persisted build
+transition and instance evidence prove completion. An explicit same-build
+`--include-current` refresh cannot prove acceptance from unchanged build identity:
+there is no backend deployment lookup by member/request identity, so replay can
+cause another window/native-gated deployment and interruption. A changed
+control-plane executable never silently retargets an existing rollout; follow
+its diagnostic and re-run for the new target after recovery. See
+[member-agent rollout](#rolling-out-member-agents) and
+[ADR 0065](adr/0065-agent-upgrade-all-member-engines.md).
+
+### PostgreSQL administrator password rotation
+
+PostgreSQL single/Patroni HA, Citus and Supabase now support in-place rotation of
+the revealed `postgres` password. Upgrade the control plane, then complete
+`upgrade-agents` on every data member first. The new agents use exact-owner
+Unix-socket peer authentication for local management, with an agent-managed
+identity map outside PGDATA so rebuilds/restores cannot remove it. Warm activation
+stages and observes a reload of the currently active map before publishing peer
+HBA rules. Adopting the external `ident_file` startup path may require the ordinary
+pending configuration restart during the preceding agent rollout; rotation itself
+is restart-free. Admission remains closed until every data member proves
+successful password-independent local socket access. Older or unobservable data
+agents receive HTTP 409 with `upgrade-agents` guidance; remote SCRAM/TLS
+authentication is unchanged.
+
+```sh
+karactl -n NS system-users rotate NAME postgres --yes
+```
+
+Finish structural/rolling work first and follow the returned operation through
+all member, proxy and component acknowledgements before revealing/distributing
+the replacement credential. A sealed transition journal and native receipts
+recover partially committed rotations forward; do not repair one with manual
+`ALTER ROLE`, secret edits or another rotation. Rotation itself does not restart
+PostgreSQL, including a singleton. Supabase credential consumers restart and may
+be briefly unavailable; Citus can have transient cross-group authentication
+failures while local role changes and outbound authentication converge.
+
+This is not a dual-password grace period. Administrator clients must use the
+replacement on reconnect; existing sessions are not terminated. Rotation is not
+session revocation or remediation of arbitrary superuser compromise. Bindings
+and Data MCP use separate identities and are unchanged; other engine-owned
+PostgreSQL identities remain unsupported on this route. See
+[administrator rotation and containment](postgres/access-and-tls.md#administrator-credential-containment).
+
+### Automatic MySQL/PXC lost-volume replacement
+
+Confirmed loss of initialized storage can now queue managed add-before-remove
+replacement for MySQL Group Replication and PXC. `VOLUME_LOST` keeps the cluster
+Degraded while recovery or evidence is pending; `VolumeReplacementSafe=False`
+explains native admission refusal. An unreachable agent, identity conflict,
+unknown mount, stale observation or storage API error is not proof of loss and
+never authorizes initialization of empty old storage.
+
+GR requires fresh ONLINE survivors in the configured group, a writable primary,
+a configured-member majority and a donor containing the lost member's last
+persisted GTIDs when known. **Upgrade GR agents before relying on automatic
+recovery:** the new native `GroupName` observation is required for same-group
+proof. Old agents continue ordinary lifecycle behavior but this new admission
+fails closed without that evidence. Upgrade deployed agents for the pre-start
+sentinel gate as well.
+
+PXC requires fresh Primary/Synced/ready/connected survivors in one state UUID,
+a configured-member majority, compatible GTID histories, no active
+history-continuity latch and a qualified SST donor. A lost formation seed or
+pinned donor moves to a qualified survivor; existing join certification still
+owns SST and final routing fences.
+Outstanding rollout drains must settle before replacement admission; a withdrawn
+survivor is not an eligible donor or writer. An active rollout yields through its
+recovery cleanup rather than being preempted by automatic replacement.
+
+The new member and volume join before the old identity retires. Proxy exclusion
+must be acknowledged, the exact old runtime stopped, and native membership
+removal proved before resource cleanup; retirement does not contact lost mysqld
+or initialize an empty old volume. One deterministic operation is used per lost
+incarnation. Terminal replacements are not automatically retried: inspect and
+resolve blockers, then request managed replacement if needed.
+
+MySQL single cannot automatically recover lost data. Without a safe surviving
+copy, recover original storage or restore a verified backup into a new cluster.
+There is no forced quorum/bootstrap, row-equivalence proof, zero-loss or RTO
+guarantee. See [MySQL operations](mysql/operations.md).
+
+### MySQL and PXC automatic PITR re-anchoring
+
+With PITR and backup storage configured, the control plane now automatically
+takes a full backup after a physical archive-writer change (including failover,
+rolling maintenance and resource relaunch). This is **ON by default** when
+`spec.backup.pitr.autoReanchor` is omitted. Extra full backups consume storage
+and IO and can increase the writer's peak memory; review capacity before upgrade.
+Set `spec.backup.pitr.autoReanchor: false` to retain manual baseline management.
+
+The writer must remain stable for five minutes after non-backup cluster
+operations finish. A pending/running backup blocks the automatic full, and a
+one-hour cooldown limits re-anchor fulls. Returning to the newest full's source
+does not queue another full. Coverage stays frozen until a new full succeeds
+and verifies; the gap between the old safe endpoint and new baseline cannot be
+restored. Foreign-writer binary logs remain ineligible for replay.
+
+Successful re-anchor fulls count toward the full schedule with the largest
+positive `retainCount` (schedule name breaks ties), or retain the newest two
+when no full schedule supplies a count. Normal deletion preserves backup
+chains, the newest full anchoring the live/extending interval, and active restore/
+clone references, so protected backups can temporarily exceed retention. Older
+recovery ranges expire with the fulls removed by retention. Post-restore full
+behavior does not change. `PITRReanchorTriggered` and reason-specific
+`PITRReanchorSkipped…` cluster events explain enqueue and deferral; skips are
+emitted on reason change rather than every reconcile.
+See [MySQL backups](mysql/backups.md#automatic-writer-re-anchoring).
+
+### All restorable PITR intervals
+
+`GET /clusters/{cluster}/pitr` adds optional `intervals`, with required `start`
+and `end` and optional `backup` (the anchoring full backup name). Legacy
+`available`, `start`, `end`, and `message` retain their previous values.
+Clients that reject unknown response properties must accept the additive field.
+The CLI and restore UI show all ranges and allow earlier covered points;
+uncovered gaps remain rejected. MySQL/PXC lists preserve each full's provenance;
+remembered PXC coverage and other engines omit provenance when unavailable.
+No node-agent protocol or backup artifact migration is required.
+
+### PXC GTID history safety observation
+
+PXC `GTIDHistorySafe=Unknown` now separates comparison unavailability
+(`QuorumComparisonUnavailable`) from journal/state/audit persistence failures
+(`GTIDHistoryPersistenceUnavailable`). Update condition-reason alert filters.
+Comparison messages include secret-safe member outcome classes and distinguish
+majority shortage, observation budget and observation-lock contention; do not
+parse the message as a stable wire schema. No agent protocol change is required.
+PXC Status starts quorum checking concurrently with required readiness reads,
+inside the existing five-second status sweep. Sampling has a separate four-second
+pass reservation matching the agent read timeout, after a bounded lock wait.
+Subsequent same-pass Sync checks reuse completed samples. Parent cancellation
+during journal work is classified as observation-budget exhaustion, not a
+persistence outage. Synchronous backup/PITR requests can spend up to six seconds
+on comparison lock waits and sampling, plus journal/audit I/O and other endpoint
+work, subject to parent deadlines; this is not an HTTP latency guarantee.
+Configured-majority, complete-observation safe-watermark requirements and durable
+divergence latches are unchanged.
+Cancellation before journal loading/allowance evaluation completes does not
+reclassify an acknowledged frozen-history difference as new divergence.
+Full backups remain admitted on typed comparison unavailability, but persistence
+failures still fail closed; incrementals/PITR cannot gain unproven continuity.
+
+### Proxy count and resource changes
+
+Serving preservation is an explicit backend, request and deployed-runtime
+contract, not a general zero-downtime guarantee. Every requested live proxy must
+acknowledge configuration and native writer readiness before count/resources
+commit. All resource changes and count reductions still wait for maintenance;
+only serving-preserving count increases bypass the window. PostgreSQL and the
+Supabase core now also defer increases when capability or runtime approval is absent.
+
+- **Zerops:** count-only changes retain incumbent Linux containers. Resource-only
+  CPU/RAM changes qualify only with unchanged CPU mode and disk bounds.
+  Unexpected incumbent replacement fails with `INCUMBENTS_REPLACED`; inspect
+  platform processes and readiness before retrying. Unresolved autoscaling
+  submissions block superseding changes and Stop.
+- **Dokploy:** marked, successfully deployed runtimes use serial start-first
+  replacement with native serving admission and spare capacity. The new probe
+  requires configuration application, a running proxy and a writable database
+  before initial task admission; PostgreSQL additionally verifies frontend
+  availability and active managed users. Old agents fail the probe closed.
+  Legacy unmarked runtimes retain the disruptive/maintenance-gated path until
+  an intended deployment installs the supporting agent and marker.
+- **Nomad:** count-only scaling retains incumbents; resource rollouts do not
+  provide the serving-preservation contract. MySQL/PXC resource changes retain
+  window-gated stop/redeploy; PostgreSQL/Supabase use maintenance-gated provider
+  resource rollouts.
+
+For MySQL/PXC, combined count/resource, version and startup/runtime changes keep
+the disruptive path. Upgrading the control plane alone does not redeploy a proxy;
+the new marker is excluded from its acknowledged runtime hash, preserving
+existing Nomad count-only eligibility. Replacing or removing an instance can
+disconnect existing sessions even on an eligible serving-preserving path.
+Applications must reconnect and handle uncertain transaction outcomes.
+Live-provider acceptance of these paths remains pending. See
+[ADR 0069](adr/0069-proxysql-serving-scale-and-resource-changes.md),
+[Zerops](zerops.md#resources-and-autoscaling) and
+[Dokploy](dokploy.md#proxysql-count-and-resource-updates).
+
+### Temporal on Zerops private IPv6
+
+Temporal now uses private IPv6 on Zerops; Dokploy and Nomad retain private IPv4.
+Upgrade deployed agents with `upgrade-agents` before expecting IPv6 operation.
+Older agents receive HTTP 409 `AgentUpgradeRequired` with `temporal-ipv6` guidance,
+not a partially compatible configuration. Every replica must reach its peers and
+the bound PostgreSQL writer over private IPv6; application workers must reach
+the private frontend. Public IPv4 is not a substitute. No database, artifact or
+backup migration is required. Live workflow, failover/recovery and optional UI
+OIDC acceptance remain pending. See [Temporal](temporal/README.md#limits) and
+[ADR 0068](adr/0068-temporal-zerops.md).
+
+### MySQL/PXC per-cluster mutation isolation
+
+Slow recovery now holds only the normalized namespace/cluster mutation gate, so
+unrelated cluster access and maintenance can proceed. Backup-object deletion
+and sealed-snapshot cleanup still coordinate separately with active control-plane
+backup/restore steps, including across clusters. This does not lock asynchronous
+agent uploads or external object-storage clients. No agent upgrade is required
+for the control-plane lock change. See
+[recovery coordination](mysql/operations.md#full-outage-recovery).
+
+### Neo4j legacy credential recovery
+
+New agents independently clear and verify `passwordChangeRequired=false` before
+publishing the bootstrap marker, including after an unchanged-password rejection.
+Upgrade both the control plane and member agent. A v0.4.3 false-completion marker
+can survive an upgrade: the server may run while managed queries report
+`Neo.ClientError.Security.CredentialsExpired`. Ordinary reload, restart or
+system-user rotation does not repair that marker.
+
+Arrange a maintenance outage and support-assisted private agent API/volume access.
+Preserve the volume, sealed password, marker copy and redacted diagnostics;
+finish all active/recovery-pending jobs and prevent new scheduled backups and
+lifecycle submissions. Explicitly stop through the agent process API and prove
+the server and recovery JVM are absent. Only for this confirmed legacy condition,
+remove `karakoram/neo4j/credentials-initialized.json`, leaving stores, applied
+state, controls and receipts intact. Explicitly start through the same API,
+releasing only the operator hold just taken; allow the recovery request budget.
+Verify authenticated readiness, matching configuration/restart token and application
+queries. Stop retrying starts on failure and repair the underlying diagnostic.
+Follow the full [stopped-member procedure](neo4j/operations.md#legacy-bootstrap-marker-with-expired-credentials);
+marker deletion is not a general readiness or lost-password workaround.
+
+
+## Upgrading to v0.4.4
+
+v0.4.4 is a hotfix of v0.4.3 with only two MySQL/PXC point-in-time recovery
+corrections. It does not include the features planned for v0.4.5.
+
+### Fixed in v0.4.4
+
+**MySQL PITR archiving after schema/account statements:** the parser now accepts
+native `mysqlbinlog` space/tab Query headers, including standalone queries
+without Xid. In v0.4.3, such events could silently stop archiving while the
+`BinlogArchive` condition still appeared healthy. MySQL single-instance, Group
+Replication and PXC clusters with PITR enabled are affected; full backups are
+not affected. Successful schema/account changes alone do not prove archive
+health: some statements carry Xid and could already continue archiving.
+
+Failed decode, rotation or upload attempts now report
+`BinlogArchive=False/ArchiveFailed`, a Warning event with reason `ArchiveFailed`,
+and an agent log diagnostic.
+The condition has a safe error category; the writer agent log adds sanitized
+native or client causes (for example, a MySQL error number or an S3 status).
+Only a completed successful pass clears the attempt failure; skipped passes
+keep it. Only uploaded, contiguous metadata can extend the recovery window.
+
+**MySQL point-in-time restore and clone admission across clock skew:** in
+v0.4.3, a point-in-time restore or clone could be rejected with "agent returned
+PITR verification predating restore admission" whenever the writer node's clock
+was even milliseconds behind the control plane's. The control plane now trusts
+the agent's per-request freshness attestation instead of comparing timestamps
+from different clocks. This part is control-plane-only: it works with v0.4.3
+agents and needs no agent relaunch. Earlier releases lack the check.
+
+### Required rollout and recovery
+
+1. **Back up state, then upgrade the control plane first.** Use the
+   [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
+   the original `KARAKORAM_MASTER_KEY` separately, and retain the old executable
+   with its pre-upgrade state. Deploy v0.4.4 through your provider's documented
+   singleton control-plane deployment path. Control-plane rollback does not
+   undo database or infrastructure changes.
+2. **Relaunch every affected MySQL/PXC data-member agent.** In a maintenance
+   window, apply a genuinely changed CPU or memory resource target; rolling
+   maintenance stops and redeploys members with the current executable. An
+   unchanged patch, control-plane restart or `karactl clusters restart` does
+   not replace agents. MySQL/PXC have no `upgrade-agents` command in v0.4.4.
+   Check provider capacity, keep a validated backup and independent recovery
+   path, and expect writer-handoff interruptions (downtime for a singleton).
+   Do not attempt the roll without a healthy majority. Verify each member's
+   build, replication and client writes. See the
+   [resource-change relaunch guidance](#existing-clusters-and-member-artifacts).
+   This fix is in data-member agents; it does not require a PXC proxy rollout.
+   Earlier proxy certification/TLS rollout requirements remain separate.
+3. **Re-enable PITR if disabled**, setting `spec.backup.pitr.enabled: true`
+   only after all affected data agents run the corrected code. Retain native
+   binlogs while catch-up finishes: the next scheduled archive pass retries
+   still-present unarchived closed binlogs in native order, preserving existing
+   receipts. No manual skip or index edit is needed to repair a parser stall.
+4. **Take a successful full backup from the current writer** before relying on
+   PITR. On single-member clusters (and any cluster whose writer did not change
+   during the relaunch), retained binlogs from the stuck period are archived and
+   point-in-time recovery covers that period again, starting from the original
+   full backup — verified by automated tests, not live. On Group Replication
+   and PXC clusters the relaunch moves the writer (one writer handoff), so
+   coverage restarts from the next full backup and the stuck period cannot be
+   restored to a point in time; restore from a full backup instead. Keep
+   earlier backups and proven windows.
+5. **Verify the window advances** with `karactl backups pitr-window CLUSTER`
+   after post-backup writes and completed archive uploads/coverage checks.
+   Inspect `BinlogArchive` and any Warning event or writer-agent diagnostic.
+   A zero-width full-backup snapshot is not continuous PITR coverage.
+
+**Purged binlogs cannot be recovered by upgrading.** Retained backlog can be
+archived automatically, but purged unarchived logs leave a permanent PITR gap.
+A missing pending file reports `unarchived_binlog_purged`; do not force coverage
+across the gap. Preserve earlier coverage and establish a fresh full baseline.
+
+**Do not downgrade the control plane after rolling agents.** In particular,
+a control plane below v0.4.3 cannot negotiate the agents' pending/freshness
+coverage contract. Keep the upgraded control plane with the corrected agents.
+
+### Known issues in v0.4.4
+
+- **MySQL point-in-time recovery can silently stop extending after the writer
+  changes in Group Replication and PXC clusters** (also present in
+  v0.4.0–v0.4.3). When the writer moves — automatic failover, switchover, or
+  rolling maintenance — to a member whose data was copied in rather than
+  replayed from its own binlogs, binlogs keep uploading and `BinlogArchive`
+  stays healthy, but the end of the point-in-time window stops advancing.
+  This applies to most Group Replication and PXC clusters, because members that
+  join when the cluster forms are copied by Group Replication clone or PXC state
+  transfer, and to any cluster created from a backup, cloned or restored in
+  place. Restores to points before the freeze still work, and full backups
+  are not affected. A new full backup does not restart coverage. To check,
+  compare the window end from `karactl backups pitr-window CLUSTER` with the
+  current time. Until the fix, rely on full backups and schedule them as often
+  as your recovery point requires. A fix is planned for the next release.
+- **On Zerops, raising the resources of a member that failed its first deployment
+  doesn't take effect** (also present in v0.4.3). If a newly added member, extra
+  component or proxy exhausts its deployment retries — for example because it
+  was given too little memory to start — a later resource increase is recorded
+  but never deployed, and retrying deployments redeploys it at the old size.
+  These members never started, so they hold no data. Recovery: for optional
+  extras and proxies, disable the component and enable it again with the larger
+  resources; for a data member added by scaling out, scale back in to remove it,
+  then scale out again with the new resources; for a brand-new cluster that
+  never became Ready, delete it and create it again. If a replacement member
+  is stuck in a cluster that already holds data, never delete the cluster;
+  instead: for PostgreSQL and Supabase, cancel the replace operation
+  (`karactl operations cancel OPERATION`), which removes only the new member
+  and keeps the original; for MySQL Group Replication and PXC, cancel the
+  replace operation before the old member starts retiring; for MongoDB, wait
+  for the operation to time out (about 2 hours), which removes the new member;
+  for RabbitMQ, Elasticsearch, Weaviate and OpenBao, leave the cluster as it
+  is and upgrade once the fix is released. After cancelling or a timeout,
+  check that the new member is actually gone before making further changes.
+  Neo4j and the Data MCP companion are not
+  affected. A fix is planned for the next release.
+
+## Upgrading to v0.4.3
+
+Back up control-plane state using the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup),
+preserve the original `KARAKORAM_MASTER_KEY` separately, and retain the previous
+executable with its pre-upgrade state before deploying v0.4.3.
+
+```sh
+git fetch origin --tags && git checkout v0.4.3
+zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
+  --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
+```
+
+Control-plane rollback does not undo engine or infrastructure changes.
+
+There are **no new SQLite migrations since v0.4.2**; the inventory still ends
+at `017_backup_drills.sql`. Native artifact locks do change: Supavisor has a
+rebuilt IPv6-capable SQL listener artifact.
+
+### Fixed in v0.4.3
+
+- **MySQL member roles — FIXED:** the API and UI now report primary/secondary
+  roles for single-instance MySQL, Group Replication and PXC members, instead
+  of showing `unknown` as in v0.4.0–v0.4.2.
+- **Group Replication whole-group recovery — FIXED:** a previously formed
+  group can re-form automatically after all members go down together, or after
+  retained-volume suspend/resume, when all members' GTID histories are equal
+  and complete stopped-member identity evidence is available. The correction is
+  control-plane-side and affects v0.4.0–v0.4.2. It was live-verified on Nomad
+  with three GR members; the PXC/Galera path is verified by tests only.
+  See [whole-group recovery](#group-replication-whole-group-recovery).
+- **MySQL PITR recovery without a writer — FIXED:** single-instance and Group
+  Replication restore/clone admission now validates the archived recovery
+  evidence without requiring a live `ONLINE` source writer. v0.4.0–v0.4.2
+  could return HTTP 503 precisely when the cluster had no available writer.
+  This does not remove live-source-spec requirements for cloning into a new
+  cluster or bypass archived coverage and recovery safety checks. An in-place
+  point-in-time restore of a Group Replication cluster left without a writer by
+  a whole-group outage was verified live on Nomad; single-instance and clone
+  paths are verified by tests only.
+  A separate in-place PITR restore after writer changes was also live-verified
+  on Nomad with exact recovered data and post-target absence checks. This does
+  not relax the physical-source replay-lineage requirements.
+- **MySQL rolling handoffs — FIXED:** maintenance now waits for the rejoined
+  member and selected writer to be admitted by every serving ProxySQL instance,
+  rather than relying only on native membership. Updated proxy agents also
+  shorten the monitor DNS-cache lifetime and refresh interval. These issues
+  affected v0.4.0–v0.4.2; the DNS-cache correction requires new proxy agents.
+- **Nomad ProxySQL replica-count changes — FIXED:** count-only scaling no
+  longer stops the existing proxy. Configuration acknowledgement and healthy
+  writer admission gate new replicas; scale-in respects maintenance windows.
+  Zerops and Dokploy still stop and redeploy the whole proxy for count changes.
+  Proxy resource, version and runtime changes remain disruptive. Verified by
+  tests only.
+- **PITR archiver memory — FIXED:** binlog decoding now streams into a compact
+  index instead of retaining the decoded log in memory. v0.4.2 was affected
+  with PITR enabled at the default interval. v0.4.0/v0.4.1 share the affected
+  archiver: their normal configuration refreshes usually starved the default
+  timer, but archiving could run with intervals below 60 seconds or when
+  refreshes were delayed. The corrected archiver requires updated data-member
+  agents.
+- **Idle PITR observation memory — FIXED:** object-store listing producers
+  could be left behind when a consumer stopped early: a blocking channel send
+  in the minio-go S3 library could outlive cancellation, retaining one listing page
+  per abandoned producer. The control plane polls PITR coverage every five
+  seconds and cancels slow polls, so this accumulated even on idle members;
+  an observed 2 GiB GR member grew by approximately 1 GB per hour.
+  Per-pass S3 transports were also left open, and every coverage poll reread
+  all sidecars. The correction stops listing producers, closes repository
+  transports and caches unchanged coverage with streaming rebuilds and
+  verified append handling. The same listing-lifecycle pattern is corrected
+  in Elasticsearch, PostgreSQL/Supabase and Weaviate control-plane checks.
+  Deploy the corrected control plane and MySQL/PXC data-member agents.
+  Existing MySQL/PXC clusters retain the leak until their member agents
+  relaunch with the corrected executable; upgrading only the control plane
+  does not replace an already running agent.
+- **Small clustered-member memory headroom:** GR/PXC members at or below
+  2 GiB now default to a 768 MiB InnoDB buffer pool; the GR message cache is
+  128 MiB. Existing clusters receive dynamic default buffer-pool shrink after
+  a control-plane upgrade; the bounded GR cache requires updated data-member
+  agents. Until agents are replaced, the older GR rendering retains pool/4:
+  192 MiB with a 768 MiB pool, not the new 128 MiB cap; a normal config reload
+  does not install that cache change. Explicit operator pool overrides retain
+  precedence. 2 GiB remains
+  the clustered minimum; at least 3 GiB per member is recommended, plus
+  workload headroom. See [memory sizing](mysql/configuration.md#memory-sizing).
+
+**Measured live member-agent memory with PITR enabled:** on Nomad with three
+2 GiB GR members, archive intervals of 1 and 300 seconds, at least 1,000 archived
+files, idle periods and about 1 MiB/s writes, agent RSS stayed **at or below
+48 MiB in steady state**, peaking at **54.9 MiB during a 3.8 GB full backup**.
+The idle cell used 30 ms injected storage latency; 30-minute memory ranges
+were **at most 5.2 MiB**, with **no out-of-memory kills**. This is a scoped
+acceptance measurement, not a workload capacity guarantee. Released v0.4.2
+code reproduced listing-page leakage in tests; earlier live runs of affected
+code reached about 1 GB per idle agent and an agent was OOM-killed.
+
+- **PITR coverage convergence — FIXED:** after an agent relaunch, failover or
+  a large archive batch, long histories could keep recovery coverage pending
+  indefinitely in v0.4.0–v0.4.2. One agent-owned background refresh now persists
+  progress across short polls and restarts. Polls read compact state rather than
+  rescanning history. The updated control plane negotiates explicit pending
+  responses with progress and no unverified recovery window. A pending baseline
+  does not hide completed windows from other full backups. A restore target
+  already covered by a completed baseline can be admitted; an uncovered target
+  remains pending while an eligible baseline is verifying or queued, rather than
+  being prematurely declared out of range. Restore admission with a reachable
+  source agent requires verification started after that admission request,
+  not just a cached status result.
+  Memory retains at most 32 baseline entries; compact proofs and resumable
+  checkpoints remain on disk. Cleanup expires baselines unrequested for 24 hours
+  and retains up to 256 inactive baselines in addition to the protected current
+  working set; these are metadata limits, not backup-retention settings.
+  This requires updated agents **and control-plane pending/freshness handling**.
+  Coverage convergence and agent relaunch on long history were live-verified
+  on Nomad without injected latency; convergence under storage latency is
+  verified by tests. See [coverage behavior](mysql/backups.md).
+
+- **PITR GTID coverage — FIXED:** binlog `Previous-GTIDs` entries spanning
+  multiple server UUIDs are preserved during streaming decoding, so coverage
+  decisions retain the complete history rather than a truncated namespace.
+- **PXC GTID history after restore:** restored inverse-SID histories no longer
+  cause a false divergence latch. Acknowledged differences are bounded and
+  retired when consumed, with member-incarnation fencing. Restore certification
+  verifies replicated GTID mapping before releasing access, with bounded,
+  seed-pinned follower SST remedies when safe. Explicit new restores remain
+  available after terminal certification failure; each stop boundary is
+  checkpointed before changing runtime state.
+- **PXC availability observations:** the complete reconcile observation pass
+  has a shared read budget. Concurrent quorum sampling preserves historical
+  health and the oldest supporting proof on retries; missing or timed-out
+  evidence is not proof of safe history. Backup completion checks current GTID
+  evidence.
+- **Condition transition timestamps:** unchanged observed conditions keep their
+  original transition time across provider synchronization. Status or reason
+  changes record a new transition; message-only refreshes preserve
+  `lastTransitionTime`.
+- **PXC create-from-backup — FIXED:** fresh, stopped, empty restore followers
+  receive durable SST authorization before seed startup. Existing-data identity
+  checks and serialized joins remain enforced. This is agent-side: new clusters
+  created on v0.4.3 receive it; delete and re-create failed v0.4.1/v0.4.2 clones.
+  Three-member PXC creation from a full backup has been verified on Zerops
+  with v0.4.3 code. Point-in-time cloning into a new three-member PXC cluster
+  has also been verified on v0.4.3 on Dokploy: data matched exactly on every
+  member, and rows after the target time were absent. PITR into a new cluster
+  still requires the source cluster specification, including on Zerops; this
+  is distinct from requiring an online source writer.
+  See [backup recovery requirements](backups.md).
+- **ProxySQL monitor TLS — FIXED:** GR discovery/revival retains encrypted
+  monitor connections; managed GR and Galera hostgroups carry explicit TLS
+  defaults. Existing GR clusters need the proxy-agent redeployment described below.
+  PXC and single-instance clusters are not affected by this discovery defect:
+  PXC retains explicit server rows with `use_ssl=1`, and singleton proxies
+  have no discovery path. Fresh GR clusters created with v0.4.3 code on Zerops
+  were verified with zero monitor denials and zero SSL errors on every member.
+- **Frozen PITR windows after archive-writer changes — FIXED reporting:**
+  treat any GR primary change with PITR enabled as a fresh-full-backup boundary,
+  including automatic failover and rolling maintenance such as a resource
+  change. A different physical archive source cannot extend the previous
+  baseline's window; it freezes at the last provable endpoint until a full
+  backup anchors the current writer's history. PXC has the same restriction
+  when its archive writer/source changes. Restores within the proven old
+  window, up to the frozen end, remain available.
+  v0.4.0–v0.4.2 reported PITR available and `lag N s` without exposing the freeze.
+  v0.4.3 reports `WindowFrozenWriterChanged` when newer foreign-writer uploads
+  are excluded and separates upload lag from the recoverable endpoint.
+  **Take a new full backup** before relying on newer targets. Schedule regular
+  full backups so re-anchoring normally happens within one schedule period;
+  failed backups or further writer changes can delay it. A new full does not
+  fill the intervening recovery gap. Existing valid current-writer baselines
+  or a returning original writer with contiguous history are exceptions;
+  verify the window rather than assuming coverage survives a primary change.
+- **PXC certification agent rollout:** restore certification requires corrected
+  agents on **every data member and every deployed proxy**, as well as the
+  control plane. Updating data agents alone leaves an outdated proxy unable to
+  participate. See [existing-member rollout](#existing-clusters-and-member-artifacts).
+- **Weaviate on Zerops — FIXED:** memberlist and Raft advertise the member's
+  private address, including IPv6-only backends. DNS-dependent starts retry
+  without blocking explicit stop intent, and held processes are prepared before
+  start admission. This resolves the startup issue published for v0.4.0–v0.4.2.
+- **Native listener address families:** Neo4j, Keycloak, Elasticsearch, RabbitMQ
+  and Supabase use listeners compatible with the backend's native IP family,
+  preserving IPv4 backends. **Supavisor IPv6 SQL listeners — FIXED:** the native
+  artifact has been rebuilt and its digest and size updated in the release
+  lock. The rebuilt artifact is published with the v0.4.3 release;
+  control-plane deployment alone does not supply it to existing members.
+- **MySQL singleton streaming-backup memory — FIXED:** default InnoDB buffer
+  pool size is `min(RAM / 2, RAM - 768 MiB)`, with a floor of `128 MiB`.
+  XtraBackup streaming uses `--parallel=1 --read-buffer-size=1M`.
+  Single-member admission remains at 1 GiB; these changes are not a workload
+  capacity guarantee. Custom sizing and workload concurrency still require
+  headroom. Backup failures retain reason codes and native exit statuses/signals
+  with secret-free summaries; SIGKILL indicates possible OOM, not proof of it.
+
+Measured **single-member** full backups with PITR off and a 1 GiB memory limit peaked at
+**84.4% (906.7 MB)** on fresh v0.4.3 agents: mysqld 739 MiB RSS,
+XtraBackup 129 MiB and xbcloud 40 MiB, with no OOM. With pre-v0.4.3 agents
+and only the v0.4.3 control plane, the peak was **96% (984.9 MB)** with no OOM:
+a thin margin; re-create the agents. These observations are not workload
+capacity guarantees. In a measured PXC full backup with PITR off and three 2 GiB data
+members, the backup member's sampled peak was **85.0% (1.826 GB)**,
+with XtraBackup RSS **132 MB**, no OOM kills and no restarts. This is the
+sampled backup-window high-water mark, not a new lifetime memory peak or a
+workload capacity guarantee.
+
+MySQL Group Replication full backup measured with PITR off on v0.4.3 on Dokploy with three
+2 GiB members: the member taking the backup peaked at **90.7%** of its 2 GiB
+limit (mysqld approximately 1.71 GiB, XtraBackup approximately 130 MiB and
+xbcloud approximately 35 MiB); the other members were at 85–86%, with no OOM.
+The thin measured margin supports retaining the 3 GiB recommendation for GR
+members taking backups, plus workload headroom; it is not a capacity guarantee.
+
+### Group Replication whole-group recovery
+
+**FIXED in v0.4.3:** after a whole-group outage, such as power loss or all nodes
+rebooting, MySQL Group Replication could stay Degraded without a writer
+(`GroupReformationBlocked` / `UnsafeOfflineGTID`) even with equal GTID histories.
+The same issue affected suspending and resuming a GR cluster that keeps its
+volumes (`karactl clusters delete --keep-volumes` + `karactl clusters resume`).
+The offline comparison was limited by a four-second observation timeout.
+
+Offline recovery now uses dedicated per-member probe budgets: 60 seconds total
+for GR and the existing 180 seconds for Galera/PXC re-formation. Up to three
+members are probed concurrently after every member passes deployed/stopped
+prechecks. Blocked sweeps retry with backoff from 15 seconds to five minutes.
+These are probe budgets, not guaranteed recovery times. Missing identities,
+unavailable members or incompatible GTID histories still fail closed; do not
+force bootstrap or reset GTIDs. See [full-outage recovery](mysql/operations.md#full-outage-recovery).
+
+This affects **v0.4.0–v0.4.2** and is **control-plane-side**, with no agent
+change required. **Live-verified on Nomad with three GR members:** after all
+three `mysqld` processes were killed together, the group re-formed automatically
+without manual recovery; a writer was observed about 252 seconds after the
+kill, all acknowledged rows matched, and there were no OOM kills. Offline
+probes took 4.2–4.5 seconds each, exceeding the old four-second limit.
+Retained-volume suspend/resume also passed: a writer was available after about
+115 seconds and the cluster was Ready after about 181 seconds, with exact data.
+These are scoped observations, not recovery-time guarantees. PXC/Galera
+re-formation remains **verified by tests only**.
+
+### PXC member retirement
+
+**FIXED in v0.4.3:** replace-member and scale-in could stall when the retiring
+member's agent rejected reload with HTTP 400, `Galera local peer and port required`.
+The control-plane-only fix resumes an already-stuck retirement with existing
+agents. The retiring member retains its own Galera identity only in its own
+configuration; survivor configurations exclude it. SST donor and seed selection
+move to a healthy admitted survivor. Once retirement is irreversible it completes
+even if a joiner certification owner is blocked or expired. Preserve a validated
+backup and leave surviving members alone while the upgraded control plane
+finishes the retirement.
+
+### PXC formation and restore certification
+
+PXC joins are serialized: a preceding admitted joiner must become `Synced`
+before another empty follower starts. Replicated probe certification checks
+GTID mapping at formation and restore, not just matching rows or Galera health.
+Inspect `GTIDMappingCertified` and `RestoreGTIDCertified` in cluster conditions.
+Missing or inconsistent evidence fails closed with a `Blocked` certification
+state rather than declaring the formation safe. Only lifecycle-proven empty
+joiners without unique frozen history qualify for automatic SST remedies.
+
+Follow the condition's operator guidance: for failed birth certification,
+delete and re-create the never-formed cluster; for scale or replacement,
+scale back or cancel the affected admission; for restore, submit a new restore
+from a verified recovery source. Preserve valuable data and recovery evidence.
+Do not clear safety state, force bootstrap, or overwrite an unproven member.
+Existing clusters with a latched GTID incident receive a diagnostic; certification
+does not silently clear the incident or rewrite historical mappings.
+
+A history-incident latch on an already-serving cluster never stops ProxySQL or
+refuses writes. Its documented exits are replace-member, a fresh full backup,
+restore, or delete. A full-backup acknowledgement requires a current mixed-SID
+mapping check; mixed mapping is never silently acknowledged.
+
+**Limit:** `GTIDHistorySafe` describes GTID-history compatibility, not row
+equivalence. Privileged unlogged writes (`SESSION wsrep_on=OFF`,
+`sql_log_bin=0`, or `gtid_next` manipulation) can create row drift invisible to
+this condition. Restrict those privileges and verify data independently.
+
+**Limit:** while a history latch is active, the advertised PITR window remains
+at the last remembered window. Point-in-time restore targets outside provable
+coverage are refused with `outside conservative contiguous binlog coverage`. Use a
+full-backup restore or clear the latch through a documented exit first.
+
+### ProxySQL monitor TLS
+
+After upgrading the control plane with the corrected proxy agent artifact,
+redeploy the proxy of an existing Group Replication cluster. PXC and
+single-instance clusters are not affected by this discovery defect; Galera
+hostgroup defaults are defensive policy, not evidence of the same defect.
+A native process restart, an unchanged spec, or a control-plane-only upgrade
+does not replace its agent. v0.4.3 MySQL/PXC do not support `upgrade-agents`.
+
+**v0.4.5 supersedes this workaround:** after upgrading the control plane, use
+[agent rollout](#agent-rollout-now-covers-every-member-agent-engine) to replace
+data and proxy agents without a resource change. The procedure below describes
+v0.4.3 only.
+
+Use a genuinely changed, valid `spec.components.extra.proxy.resources` target.
+For example, if the proxy is currently fixed at 1 GiB, save this as
+`proxy-maintenance.yaml` after checking capacity, cost and the maintenance window:
+
+```yaml
+spec:
+  components:
+    extra:
+      proxy:
+        resources:
+          minRam: 2
+          maxRam: 2
+```
+
+```sh
+karactl -n NS clusters patch NAME -f proxy-maintenance.yaml --wait
+```
+
+**This is not online:** the whole proxy is stopped and redeployed, even with
+multiple proxy replicas. Client connections through it fail during the operation;
+plan an interruption and reconnect handling. On Zerops, this exact fixed-release
+procedure with proxy minRam/maxRam changed from 1 to 2 GiB bumped the generation
+and completed in 211.6 seconds (about 3.5 minutes). The concurrent writer saw
+`OperationalError`; the precise outage duration was not measured. Afterward,
+monitor samples showed no `kk_monitor` denials; follow-up primary-switch testing
+reported zero SSL errors and successful proxy reads and writes to the formerly
+offline member. This is a measured Zerops result, not a timing guarantee for
+other deployments.
+
+Unchanged data members are skipped and their identities are retained. Returning
+to the original resource size is another disruptive deployment. Verify the new
+proxy build, native TLS/monitor state and application reads and writes afterward.
+Do not disable TLS or rotate monitor credentials as a substitute for installing
+the correction.
+
+### Existing clusters and member artifacts
+
+**MySQL/PXC agents are not automatically upgraded.** A control-plane upgrade
+does not replace running data-member or proxy-agent executables. On v0.4.3,
+MySQL/PXC do not support `upgrade-agents`, and `karactl clusters restart`
+restarts native database/proxy processes, **not their agents**.
+
+For v0.4.5, use [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+instead of the resource-change/new-target procedures below; their v0.4.3
+compatibility and live-verification statements remain historical.
+
+**Upgrade order is required: upgrade the control plane first, then relaunch
+MySQL/PXC agents. Do not downgrade the control plane below v0.4.3 while
+v0.4.3 agents run.** A v0.4.2 control plane with v0.4.3 agents is unsupported:
+it cannot negotiate pending coverage or enforce the new fresh-verification
+contract. The new agent returns an observation error to an old control plane
+while coverage is pending or expired; the old control plane retains its
+released PXC fallback to remembered windows on observation errors rather than
+the new pending/freshness handling. Completed windows remain wire-compatible,
+but that does not make the old-control-plane/new-agent combination supported.
+Upgrading the control plane first supports legacy agents temporarily; it does
+not give those agents the memory or background-convergence corrections.
+
+The code-supported in-place data-agent relaunch path is a **genuinely changed
+CPU or memory resource target**: rolling maintenance stops and redeploys each
+member with the current executable. An unchanged patch does not do this.
+The rolling resource change relaunching v0.4.3 agents was **verified live on
+Nomad (Group Replication)**; upgrading in place from v0.4.2 agents is
+**verified by tests only**.
+Use a maintenance window, check provider capacity, preserve a validated backup
+and independent recovery path, and expect write interruptions during writer
+handoff (downtime for single-member clusters). Do not attempt a rolling change
+on a cluster that has already lost its majority. Verify every member's build,
+native replication, recovery coverage and client writes after relaunch.
+
+Alternatively, restore or clone a verified backup into a new v0.4.3 cluster,
+verify member builds and recovered data, then switch clients before retiring
+the original cluster. New-target recovery has live evidence for MySQL and PXC;
+PITR cloning still requires the source cluster specification. Do not copy
+executables into running members.
+
+Data-agent fixes include PITR streaming, listing cancellation, bounded coverage
+and background convergence, XtraBackup streaming flags, and GTID certification.
+The proxy TLS fix needs the disruptive proxy PATCH described above; the
+rolling-handoff DNS policy also requires corrected proxy agents.
+
+**PXC certified restores require every data member and every deployed proxy
+to advertise certification support.** A data-member CPU/memory change does not
+replace proxy agents. After relaunching data agents, redeploy outdated PXC
+proxies using a genuinely changed
+`spec.components.extra.proxy.resources` target. The whole proxy stops and
+redeploys, so plan a client interruption even with multiple replicas. Verify
+certification support on all participants before restoring.
+**This existing-cluster certification rollout is not verified live for
+v0.4.3.** It is distinct from the GR-only monitor-TLS defect and its tested
+proxy redeployment above; PXC's proxy update here installs certification
+support, not a fix for that GR discovery defect.
+
+**After relaunching MySQL/PXC data-member agents with a resource change,
+re-enable PITR if it was disabled, then take a successful full backup before
+relying on point-in-time recovery.** Re-enable with
+`spec.backup.pitr.enabled: true` only after all affected data agents run
+v0.4.3 code. The relaunch roll can move the GR primary, or PXC archive source,
+freezing the previous baseline's window. A fresh full from the current writer
+establishes the post-roll replay anchor; verify coverage convergence and the
+reported window after subsequent archives complete. Keep the previous backup
+chain and proven window: the new full does not fill an intervening gap.
+A control-plane-only upgrade is not sufficient.
+
+The **control-plane-only** portions include member-role reporting, retirement
+completion, whole-group recovery, rolling-handoff admission, provider-aware
+proxy scaling, condition timestamps, frozen-window reporting and no-writer
+restore admission. Default buffer-pool sizing applies through `SET GLOBAL`;
+observation budgets and backup-completion checks also use the new logic. Legacy
+agents report
+certification unavailability rather than gaining the agent-side certificate.
+
+**Weaviate clusters that never formed on Zerops must be re-created.** Preserve
+the create request, confirm there is no valuable imported or external state,
+then deploy with current agents. v0.4.3 Weaviate does not support `upgrade-agents`;
+v0.4.5 rollout requires a formed cluster. Preserve data-bearing clusters and use
+the v0.4.5 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+only when its native safety gates can be satisfied.
+
+**Supabase poolers on IPv6-only backends require the rebuilt Supavisor native
+artifact**, not just a control-plane upgrade. The rebuilt artifact is published
+with the v0.4.3 release; mirrors must serve bytes matching the updated release
+lock. Use the supported [member-agent rollout](#rolling-out-member-agents)
+and verify native SQL pooler connectivity over the private address family.
+For v0.4.3, other affected engines use supported agent rollout where available;
+Neo4j and Keycloak need reviewed, data-preserving re-creation for agent-side
+listener fixes. On v0.4.5, use the
+[agent rollout](#agent-rollout-now-covers-every-member-agent-engine) instead.
+
+### Continuing limitations
+
+The following limitations describe v0.4.3. v0.4.5 adds PostgreSQL administrator
+rotation, Temporal on Zerops and full PITR interval lists as described
+[above](#upgrading-to-v045). Incomplete Nomad live coverage still does not change
+EXPERIMENTAL engine status. See current [limitations](limitations.md).
+
+**MySQL/PXC PITR window display:** `karactl ... pitr-window` and cluster status
+show only the restorable interval with the latest end, not every valid interval.
+Immediately after a new full backup, an earlier restorable range can therefore
+be hidden while the newest interval is only a single snapshot point. It is not
+shown together with that newer interval unless they merge. Restore admission
+still checks all proven intervals and accepts a target in the hidden earlier
+range if its backup chain and archived coverage remain valid; the display does
+not prove those earlier recovery points are gone. A display fix is planned for
+a later release.
+
+### Known issues in v0.4.3
+
+The archiving issue is fixed in v0.4.4; the PXC false-history issue is fixed
+in v0.4.5, not by the hotfix.
+
+- **MySQL PITR archiving can silently stop after a schema or account change
+  — fixed in v0.4.4** (v0.4.3 only; single, Group Replication and PXC).
+  Native `mysqlbinlog` Query headers use a tab; the old parser expected a
+  space. A standalone Query event without Xid, including a no-op schema or
+  account statement, can stop uploads while `BinlogArchive` still looks healthy.
+  Statements such as `CREATE DATABASE`, `CREATE TABLE`, `ALTER`, `CREATE USER`
+  and `GRANT`, including Karakoram-managed changes, can encounter this path;
+  successful changes alone do not prove archive health. Full backups are
+  unaffected. Compare the endpoint from `karactl backups pitr-window CLUSTER`
+  with current time and check that it advances after writes. A new full,
+  toggling PITR or restarting native processes does not repair the old parser.
+  Install the corrected data-member agents using the
+  [v0.4.4 upgrade procedure](#upgrading-to-v044). Retained unarchived binlogs
+  are retried automatically; purged unarchived logs leave a permanent gap.
+  On Group Replication and PXC the relaunch moves the writer, so point-in-time
+  recovery into the stalled period itself is not available.
+
+- **PXC clusters can be wrongly flagged as having diverged GTID history after a
+  member restart** (also present in earlier v0.4 releases). After any member
+  restarts and rejoins while writes continue — a rolling CPU, memory or
+  parameter change, an engine upgrade, a `mysqld` crash or agent restart, TLS
+  rotation, suspend/resume or a restore — the cluster can report Degraded with
+  a GTID history incident even though all members have the same data.
+  Incremental backups are blocked and point-in-time recovery coverage stops
+  advancing until a full backup succeeds. Workaround: take a full backup; the
+  flag clears about 20 seconds after it completes. If a cluster change (for
+  example a resource change or proxy count change) was still running when the
+  flag appeared, the cluster can get stuck: the manual full backup and
+  cancelling the change are both refused. To recover, add an enabled
+  full-backup schedule a few minutes ahead next to your existing schedules
+  (`spec.backup.schedules`: name, cron, `type: full`, `retainCount`,
+  `enabled: true`) with `karactl clusters patch CLUSTER -f change.yaml`; change
+  nothing else in that patch; this works when the change itself had already
+  been applied and the cluster was only waiting to report healthy (for example
+  a finished proxy count change): the scheduled full clears the flag and the
+  pending change completes. Afterwards restore your original schedules.
+  If the change was still rolling through members when the flag appeared, the
+  scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
+  serving reads and writes, so leave it as it is and upgrade once the fix is
+  released. This needs configured backup storage and healthy members.
+  **Fixed in v0.4.5**; not fixed by v0.4.4.
+
 ## Upgrading to v0.4.2
 
 Back up control-plane state using the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup),
@@ -91,6 +1047,9 @@ Unless noted otherwise, the following issues affected both v0.4.0 and v0.4.1:
 
 ### Existing MySQL and PXC agents
 
+**For v0.4.5:** [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+replaces the re-creation requirement described here for v0.4.2.
+
 The MySQL Group Replication clustered-restart/primary-handoff, in-place restore
 follower re-clone, MySQL/PXC PITR binlog archiving and ProxySQL reload fixes are
 **agent-side**, as are the new clone diagnostics. Existing MySQL and PXC
@@ -126,6 +1085,10 @@ v0.4.0, also follow the separate v0.4.1 agent guidance below. MySQL/PXC formatio
 durability and sanitized startup/clone diagnostics include agent-side changes;
 use new v0.4.2 members, not merely a database-process restart.
 
+For v0.4.5, all of these engines support the
+[agent rollout command](#agent-rollout-now-covers-every-member-agent-engine);
+the unsupported statement above describes v0.4.2 only.
+
 ### Known issues in v0.4.2
 
 - **PostgreSQL administrator password rotation remains unavailable.** The
@@ -138,8 +1101,8 @@ use new v0.4.2 members, not merely a database-process restart.
   and sends it no traffic, although the member is ONLINE in the group.
   If Group Replication elects that member primary, writes through the proxy
   can fail. Seen on Zerops; other providers may be affected. Don't disable TLS
-  or change the monitor account to work around it. A fix is planned for
-  v0.4.3; existing clusters will need their proxy redeployed to pick it up.
+  or change the monitor account to work around it. **Fixed in v0.4.3**;
+  existing clusters need the disruptive [proxy redeployment](#proxysql-monitor-tls).
 - **MySQL point-in-time recovery makes member agents use more and more memory**
   (v0.4.2; in v0.4.0 and v0.4.1 the normal trigger is blocked because MySQL full
   backups fail there). The binlog archiver decodes each interval's binlogs in
@@ -162,6 +1125,12 @@ use new v0.4.2 members, not merely a database-process restart.
   single-member clusters, and don't do it on a cluster that has already lost
   its majority. Don't lower binlog retention to work around it. A fix is planned
   for v0.4.3.
+  **Fixed in v0.4.3:** streaming binlog decoding and a compact index bound
+  archiver memory; updated data-member agents are required. The workarounds
+  above remain guidance for users still on v0.4.0–v0.4.2.
+  v0.4.3 also fixes cancelled listing producers, unclosed repository transports
+  and repeated sidecar scans that could grow idle PITR-agent memory; deploy
+  the corrected control plane as well as data-member agents.
 - **MySQL Group Replication doesn't recover by itself after all members go down
   at once** (also present in v0.4.0 and v0.4.1). After a whole-group outage —
   for example a power loss or all nodes rebooting — or after suspending and
@@ -175,21 +1144,22 @@ use new v0.4.2 members, not merely a database-process restart.
   Data written after that backup is lost, because point-in-time restore isn't
   available on a cluster without a writer in this release. Until the fix, take
   full backups frequently and avoid suspending Group Replication clusters.
-  PXC is not affected. A fix is planned for v0.4.3.
+  PXC is not affected by this GR timeout defect. **Fixed in v0.4.3**; see
+  [whole-group recovery](#group-replication-whole-group-recovery).
 - **PXC after an in-place restore on Zerops:** after either a full or PITR
   restore, one member can be flagged `GTIDHistoryDiverged` and the cluster
   reports Degraded even though the checked data and writes are correct.
-  Investigation is ongoing; verify recovered data and replication with native
-  SQL rather than treating the operation's success as complete acceptance.
-  The flag can block incremental backups and PITR continuity, and taking a new
-  full backup has not reliably cleared it. This was not reproduced on Dokploy.
+  This issue is **fixed in v0.4.3** through bounded history handling and
+  [formation and restore certification](#pxc-formation-and-restore-certification).
+  Verify recovered data and replication natively. Existing latched incidents
+  are diagnosed, not silently cleared; use a documented operator exit.
 - **Despite the clone fix above, creating a multi-member Percona XtraDB Cluster
   from a backup never completes** (also present in v0.4.1). This applies to
   clones from full, incremental and point-in-time backups on every provider.
   The create operation fails after about 20 minutes; the new cluster stays not
   Ready with all members unreachable and no proxy. Your source cluster and its
-  backups are not affected. Delete the failed cluster. A fix is planned for
-  v0.4.3.
+  backups are not affected. **Fixed in v0.4.3**; delete the failed target and
+  re-create it with corrected agents as described [above](#fixed-in-v043).
 - **Replacing a Percona XtraDB Cluster member or scaling PXC in never completes**
   (also present in v0.4.0 and v0.4.1). Automatic healing of PXC members
   (restart or rejoin of the same member) is not affected. The new member joins, but the old
@@ -203,13 +1173,15 @@ use new v0.4.2 members, not merely a database-process restart.
   keep a validated backup, and upgrade the control plane once the fix is
   released — it is control-plane-only and completes the stuck retirement
   without new member agents. Group Replication and other engines are not
-  affected. A fix is planned for v0.4.3.
+  affected. **Fixed in v0.4.3**; the control-plane upgrade resumes an
+  already-stuck retirement with existing agents. See [resolution](#pxc-member-retirement).
 - **Full backups can run out of memory on single-member MySQL clusters with
   1 GiB of memory** (also present in v0.4.0 and v0.4.1). The kernel can kill
   `mysqld`, causing the member to restart and the backup to fail.
   Workaround: give MySQL members at least 2 GiB of memory before taking full
   backups (3 GiB recommended for Group Replication members), plus headroom for
-  your workload. A fix is planned for v0.4.3.
+  your workload. **Fixed in v0.4.3** as described
+  [above](#fixed-in-v043); this workaround remains guidance for v0.4.2 agents.
 - **Nomad live coverage of the new engines is incomplete.** Implemented
   capabilities do not establish full lifecycle/recovery acceptance. OpenBao,
   Temporal, MySQL/PXC, Neo4j, Weaviate, Keycloak and Citus remain EXPERIMENTAL,
@@ -220,7 +1192,8 @@ use new v0.4.2 members, not merely a database-process restart.
 - **Weaviate cannot start on Zerops** (also present in v0.4.0 and v0.4.1):
   members never become Ready because Zerops private networking is IPv6-only
   and Weaviate's cluster address is not advertised for IPv6. Nomad and Dokploy
-  are not affected. Use Weaviate on Dokploy or Nomad until the next release.
+  are not affected. This v0.4.2 issue is **fixed in v0.4.3**; see
+  [current agent and re-creation guidance](#existing-clusters-and-member-artifacts).
 
 Other continuing limitations include [empty Docker volume objects after
 Dokploy deletion](dokploy.md) and PostgreSQL's configuration acknowledgement
@@ -263,6 +1236,10 @@ where supported. Preserve and verify valuable data first. There is no generic
 data-preserving agent-only upgrade for these engines; consumer deletion is
 especially destructive, as explained below. Do not use volume retention or
 copying binaries as a substitute.
+
+**For v0.4.5:** all of these engines support
+[agent-only rollout](#agent-rollout-now-covers-every-member-agent-engine).
+The re-creation requirement above applies to v0.4.1, not the current rollout path.
 
 Agent-side changes include Keycloak JDBC and Temporal SQL driver settings;
 MySQL Group Replication pre-bootstrap observation and message-cache budgeting;
@@ -463,7 +1440,7 @@ credential returned by the connection endpoint.** `system-users rotate` returns
 HTTP 409 with an explanation; the other internal PostgreSQL system roles are
 also not rotatable through this command. Native application-role password
 rotation and managed binding rotation do not rotate the administrator.
-In-place administrator rotation is planned for the next release.
+For v0.4.5, see [PostgreSQL administrator password rotation](#postgresql-administrator-password-rotation).
 
 If this credential is exposed, restrict access at both private and public
 network boundaries and terminate existing privileged sessions; removing public
@@ -844,12 +1821,12 @@ Upgrading or restarting the control plane does **not** replace existing member a
 
 Inspect `karactl clusters get NAME` or `clusters status NAME`: `status.agents` reports `targetBuild`, `targetVersion`, and the `outdated` and `unknown` member names. Member output includes `agent.version`, `agent.commit` and `agent.build`. The `AgentsCurrent` condition is informational: `True/Current`, `False/Outdated`, or `Unknown/Unreported`; it never makes a cluster unready or Degraded. An `AgentsOutdated` event signals outdated member agents.
 
-Build inventory is independent of support for `upgrade-agents`: all registered
-providers publish identities returned by their existing generic agent status
-probes, including MySQL/PXC, Keycloak, OpenBao, Temporal, Neo4j and Weaviate
-whose agent-only rollout is unsupported. A healthy native engine is not evidence
-of a current agent executable. Legacy agents without build metadata remain
-unknown. PostgreSQL proxy, Supabase, Temporal and Keycloak instance observations
+Build inventory is independent of rollout execution: v0.4.5 supports
+`upgrade-agents` for PostgreSQL (including Citus), Supabase, MongoDB/PSMDB,
+RabbitMQ, Elasticsearch, MySQL/PXC (including ProxySQL), OpenBao, Keycloak,
+Temporal, Neo4j and Weaviate. A healthy native engine is not evidence of a current
+agent executable. Legacy agents without build metadata remain unknown.
+PostgreSQL proxy, Supabase, Temporal and Keycloak instance observations
 conservatively report a non-current or unknown identity when replicas disagree,
 rather than letting a current replica hide an incomplete rollout.
 
@@ -948,6 +1925,7 @@ Retain the archive, master key and previous revision until the upgrade and agent
 - Control-plane backup policy, durable notification deliveries and backup-drill reports add forward-only [SQLite](https://sqlite.org/) migrations. Preserve a consistent pre-upgrade snapshot and the original master key; an older binary must not open newer state.
 - State snapshots do not contain the operator master key or external provider credentials. Rebuild with the original key, endpoint identity and valid credentials; review external changes since the snapshot before resuming reconciliation.
 - Import the [Grafana dashboards and Prometheus rules](monitoring.md) and configure [notification channels](notifications.md) deliberately. Existing installations retain their RBAC policy; installation-wide settings still require explicit settings access.
+- Native configuration qualification now gates every registered engine/component on IPv6-only member rendering, with explicit local-only socket exceptions. Temporal still rejects IPv6-only backends. Supavisor artifact smoke checks both SQL listeners over IPv6 as well as the existing IPv4 transaction path; the SQL family patch still requires a rebuilt and published artifact.
 
 ### v0.1.2
 

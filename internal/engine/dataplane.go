@@ -85,6 +85,12 @@ type DataPlane interface {
 	MemberLogs(ctx context.Context, rc *Context, member, process string, lines int) ([]domain.MemberLogLine, error)
 }
 
+// PITRIntervalsProvider preserves the legacy merged windows while additionally
+// exposing per-full intervals from the same coverage observation.
+type PITRIntervalsProvider interface {
+	PITRWindowIntervals(ctx context.Context, rc *Context) (windows, intervals []domain.TimeWindow, err error)
+}
+
 // AgentConfigSource is implemented by providers to render the configuration a
 // node agent pulls from the control plane. member is the member hostname the
 // authenticated agent token belongs to.

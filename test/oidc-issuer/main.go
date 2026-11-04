@@ -93,7 +93,7 @@ func (s *issuer) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(s.codes) >= 1024 {
 		s.mu.Unlock()
-		http.Error(w, "too many pending test logins", 503)
+		http.Error(w, "too many pending test logins", http.StatusServiceUnavailable)
 		return
 	}
 	s.codes[code] = authorization{q.Get("nonce"), q.Get("code_challenge"), now.Add(time.Minute)}

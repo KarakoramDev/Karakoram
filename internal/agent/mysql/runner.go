@@ -24,25 +24,30 @@ import (
 )
 
 type Runner struct {
-	mu                     sync.RWMutex
-	current                myspec.Spec
-	dir                    string
-	node                   *agent.Node
-	db                     *sql.DB
-	dbKey                  [32]byte
-	metricMu               sync.Mutex
-	questions              float64
-	questionTime           time.Time
-	rejoinCancel           context.CancelFunc
-	archiveCancel          context.CancelFunc
-	archiveBackup          myspec.Backup
-	proxyTLSReloadFallback bool
-	dataTLSReloadPending   bool
+	mu                        sync.RWMutex
+	current                   myspec.Spec
+	dir                       string
+	node                      *agent.Node
+	db                        *sql.DB
+	dbKey                     [32]byte
+	metricMu                  sync.Mutex
+	questions                 float64
+	questionTime              time.Time
+	rejoinCancel              context.CancelFunc
+	archiveCancel             context.CancelFunc
+	archiveBackup             myspec.Backup
+	archiveResultWriteFailure string
+	coverageServiceMu         sync.Mutex
+	coverageRefresh           *coverageRefresh
+	coverageStopped           bool
+	proxyTLSReloadFallback    bool
+	dataTLSReloadPending      bool
 }
 
-func New() *Runner                  { return &Runner{} }
-func (*Runner) Name() string        { return myspec.Engine }
-func (*Runner) Processes() []string { return []string{"mysqld", "proxysql"} }
+func New() *Runner                                      { return &Runner{} }
+func (*Runner) Name() string                            { return myspec.Engine }
+func (*Runner) Processes() []string                     { return []string{"mysqld", "proxysql"} }
+func (*Runner) SupportsMySQLRestoreCertification() bool { return true }
 func (e *Runner) state() (myspec.Spec, paths) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -79,6 +84,9 @@ func credentialHash(s myspec.Spec) [32]byte {
 	b, _ := json.Marshal([]myspec.Credentials{s.Superuser, s.Agent, s.Replication, s.Monitor, s.BackupUser, s.Admin})
 	return sha256.Sum256(b)
 }
+
+// LocalAccessDB lends the Runner-owned administration pool. Callers may close
+// dedicated sql.Conn sessions, but must not close this shared pool.
 func (e *Runner) LocalAccessDB(ctx context.Context) (*sql.DB, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -90,23 +98,56 @@ func (e *Runner) LocalAccessDB(ctx context.Context) (*sql.DB, error) {
 		return nil, errors.New("MySQL server stopped")
 	}
 	key := credentialHash(e.current)
-	if e.db == nil || e.dbKey != key {
-		if e.db != nil {
-			_ = e.db.Close()
-		}
-		db, err := localDB(e.current, dataPaths(e.dir))
-		if err != nil {
-			return nil, err
-		}
-		e.db = db
-		e.dbKey = key
+	if e.db != nil && e.dbKey != key {
+		_ = e.db.Close()
+		e.db = nil
 	}
-	if err := e.db.PingContext(ctx); err != nil {
+	var err error
+	e.db, err = availableLocalPool(ctx, e.db, func() (*sql.DB, error) {
+		db, openErr := localDB(e.current, dataPaths(e.dir))
+		if openErr == nil {
+			e.dbKey = key
+		}
+		return db, openErr
+	})
+	if err != nil {
 		return nil, err
 	}
 	return e.db, nil
 }
+
+// A borrower must not close the agent-owned pool. Repair that known lifecycle
+// error defensively, but never turn authentication/network/query failures into
+// hidden retries. The returned replacement remains owned by the Runner even
+// when its first Ping fails, so a later poll can use its ordinary reconnect path.
+func availableLocalPool(ctx context.Context, pool *sql.DB, open func() (*sql.DB, error)) (*sql.DB, error) {
+	if pool == nil {
+		var err error
+		pool, err = open()
+		if err != nil {
+			return nil, err
+		}
+	}
+	err := pool.PingContext(ctx)
+	if err == nil {
+		return pool, nil
+	}
+	// database/sql does not export the DB-closed sentinel. Match its exact
+	// message only; broader text matching could mask unrelated SQL failures.
+	if !errors.Is(err, sql.ErrConnDone) && err.Error() != "sql: database is closed" {
+		return pool, err
+	}
+	_ = pool.Close()
+	replacement, openErr := open()
+	if openErr != nil {
+		return nil, openErr
+	}
+	return replacement, replacement.PingContext(ctx)
+}
 func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConfig) ([]string, error) {
+	if !filepath.IsAbs(n.DataDir()) {
+		return nil, errArchiveStateDir
+	}
 	s, err := decodeSpec(c)
 	if err != nil {
 		return nil, err
@@ -130,7 +171,7 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		}
 	}
 	previous := e.setApplyState(s, n.DataDir())
-	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Role != myspec.RoleData || archiveConfigChanged(previous.Backup, s.Backup) {
+	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Role != myspec.RoleData || s.Galera != nil && s.Galera.RestoreFence || archiveConfigChanged(previous.Backup, s.Backup) {
 		e.resetArchiveLoop(false)
 	}
 	for name, text := range map[string]string{"ca.pem": s.CAPEM, "server-cert.pem": s.ServerCert.CertPEM, "server-key.pem": s.ServerCert.KeyPEM} {

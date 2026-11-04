@@ -53,7 +53,7 @@ func TestAccessGrants(t *testing.T) {
 	if err := ValidateGrant(grant); err != nil {
 		t.Fatal(err)
 	}
-	for _, privileges := range [][]string{nil, {"ALL", "DROP"}, {"SELECT", "SELECT"}, {"SUPER"}} {
+	for _, privileges := range [][]string{nil, {"ALL", "DROP"}, {"SELECT", "SELECT"}, {"SUPER"}, {"CONNECTION_ADMIN"}} {
 		grant.Privileges = privileges
 		if ValidateGrant(grant) == nil {
 			t.Fatal("accepted unsafe grant")

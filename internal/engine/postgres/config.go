@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -139,7 +140,14 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 	if m.Role == "proxy" {
 		runtime.ReadinessArgs = engine.StatelessReadiness(rc, m.Name, &m.NativeReadiness, "--engine=postgres", "--data-dir="+rc.Backend.Layout().DataDir(m.Volume))
 	}
-	return runtime.Spec(rc.Backend.Layout()), nil
+	spec := runtime.Spec(rc.Backend.Layout())
+	if m.Role == "proxy" {
+		if spec.Env == nil {
+			spec.Env = make(map[string]string)
+		}
+		spec.Env["KARAKORAM_PROXY_SERVING_PROBE"] = "1"
+	}
+	return spec, nil
 }
 
 // MemberConfig renders secret-bearing configuration only for an allocated member.
@@ -234,6 +242,18 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	desired := []string{"postgres"}
 	if m.Role == "data" {
 		sp.Superuser = credential("postgres")
+		sp.LocalPeerAuth = slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityPostgresLocalPeer)
+		rotation, rotationErr := readAdminRotation(ctx, rc)
+		if rotationErr != nil {
+			return agentapi.MemberConfig{}, rotationErr
+		}
+		if rotation != nil && (rotation.Stage == "transition" || rotation.Stage == "native" || rotation.Stage == "publish") {
+			alternate := rotation.Password
+			if sp.Superuser.Password == rotation.Password {
+				alternate = rotation.Previous
+			}
+			sp.AlternateSuperuser = &pgspec.Credentials{Username: "postgres", Password: alternate}
+		}
 		sp.Replication = credential("kk_replicator")
 		sp.Rewind = credential("kk_rewind")
 		sp.Monitor = credential("kk_monitor")

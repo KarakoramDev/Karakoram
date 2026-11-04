@@ -50,7 +50,7 @@ func verifyMember(ctx context.Context, rc *engine.Context, m *member) error {
 		if entry.name == "" {
 			continue
 		}
-		service, err := rc.Backend.GetService(ctx, entry.name)
+		service, err := engine.ObserveRetiringService(ctx, rc.Backend, entry.name, *entry.id, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 		if err != nil {
 			return err
 		}
@@ -135,8 +135,14 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	return true, nil
 }
 func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
-	p.accessMu.Lock()
-	defer p.accessMu.Unlock()
+	if engine.ObservationPassCache(ctx) == nil {
+		ctx = engine.WithObservationPass(ctx)
+	}
+	lock, err := p.mutations.acquire(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return result, err
+	}
+	defer p.mutations.release(lock)
 	if intent, e := loadAccessIntent(ctx, rc); e != nil || intent != nil {
 		if e != nil {
 			return result, e
@@ -156,6 +162,26 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			err = e
 		}
 	}()
+	if busy, e := p.recoverRuntimes(ctx, rc, s); busy || e != nil {
+		s.PITRReanchor.FirstSeen = time.Time{}
+		return result, e
+	}
+	if busy, e := p.reconcileOrphanedAgentDrain(ctx, rc, s); busy || e != nil {
+		s.PITRReanchor.FirstSeen = time.Time{}
+		return result, e
+	}
+	if e := p.reconcilePITRReanchor(ctx, rc, s); e != nil {
+		return result, e
+	}
+	if busy, e := p.reconcilePendingRestoreGTIDCleanup(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	if busy, e := reconcilePXCFormationCertification(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	// Collect independent native/agent/platform reads together before optional
+	// history checks. Subsequent formation/readiness scans reuse this pass.
+	observeStatusMembers(ctx, rc, s.Members)
 	// Observation records discontinuities without fencing normal service.
 	if e := checkPXCQuorumGTIDs(ctx, rc, s); e != nil {
 		if _, observation := e.(*myspec.GTIDQuorumError); !observation {
@@ -169,7 +195,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		return result, e
 	}
 	for _, m := range s.Members {
-		if m.VolumeID != "" && m.ImportBatch == nil && !m.Removing {
+		if m.VolumeID != "" && m.ImportBatch == nil && !m.Removing && !m.ConfirmedVolumeLost {
 			disk, e := engine.PreflightVolumeGrowth(ctx, rc.Backend, m.Volume, m.VolumeID, m.Resources, desiredComponent(rc, m).Resources)
 			if e != nil {
 				return result, e
@@ -214,6 +240,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		return result, e
 	}
 	s.allocate(rc.Cluster)
+	if rc.Cluster.Spec.Provider == "pxc" {
+		preparePXCFormationCertification(s)
+	}
 	if err = p.ensureSecrets(ctx, rc, s); err != nil {
 		return result, err
 	}
@@ -284,6 +313,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	}
 	// Import every data identity before waiting for engine-level readiness.
 	for _, m := range s.Members {
+		if m.ConfirmedVolumeLost {
+			continue
+		}
 		if m.Role == "proxy" && !writer {
 			continue
 		}
@@ -312,6 +344,10 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 					}
 					specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, desired.Resources))
 				} else {
+					if mapping := s.Formation.GTIDCertification; mapping != nil {
+						// Existing storage is not proof of empty data.
+						delete(mapping.EmptyMembers, m.Name)
+					}
 					if v.Importing {
 						return result, engine.Invalid("incomplete import has no frozen batch for %s", m.Name)
 					}
@@ -362,6 +398,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		return result, nil
 	}
 	for _, m := range s.Members {
+		if m.ConfirmedVolumeLost {
+			continue
+		}
 		if m.Role == "proxy" && !writer {
 			continue
 		}
@@ -375,9 +414,19 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if engine.DeploymentBlocked(rc, m.Name, spec) {
 			continue
 		}
+		runtimeHash := ""
+		if m.Role == "proxy" {
+			runtimeHash, e = proxyRuntimeHash(rc, spec)
+			if e != nil {
+				return result, e
+			}
+		}
 		op, e := engine.Deploy(ctx, rc, m.Name, spec)
 		if e != nil {
 			return result, e
+		}
+		if m.Role == "proxy" {
+			m.ProxyRuntimeHash = runtimeHash
 		}
 		m.DeployOp = &op
 		m.Stage = "deploying"
@@ -385,6 +434,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	}
 	deploymentsBusy := false
 	for _, m := range s.Members {
+		if m.ConfirmedVolumeLost {
+			continue
+		}
 		// A proxy started by an earlier reconciliation may still be waiting
 		// for its first backend. Do not let its rollout block the data join
 		// checkpoint that supplies that backend.
@@ -436,6 +488,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if busy, e := p.syncInitialRestore(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	if e := beginPXCFormationCertification(ctx, rc, s); e != nil {
+		return result, e
+	}
 	if changed, e := p.reconcileFormation(ctx, rc, s); changed || e != nil {
 		return result, e
 	}
@@ -446,6 +501,10 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	parameters := restartParameters(options.Parameters)
 	converged := s.Rolling == nil && len(s.data()) == rc.Cluster.Spec.Components.Engine.Replicas
 	for _, m := range s.Members {
+		if m.ConfirmedVolumeLost {
+			converged = false
+			continue
+		}
 		desired := desiredComponent(rc, m)
 		if rollingNeedsWindow(m, rc.Cluster.Spec.Version, desired, parameters) || m.Replicas != desired.Replicas {
 			converged = false
@@ -475,6 +534,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			}
 			return result, nil
 		}
+	}
+	if busy, e := reconcilePXCFormationCertification(ctx, rc, s); busy || e != nil {
+		return result, e
 	}
 	if converged && len(s.Members) > 0 {
 		if deferred, e := p.reconcileExposure(ctx, rc, s, true); e != nil {

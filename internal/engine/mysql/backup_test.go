@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,7 +19,14 @@ import (
 
 func backupFixture(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend) {
 	t.Helper()
-	p, rc, b := setup(t, topology)
+	var p *Core
+	var rc *engine.Context
+	var b *fakeBackend
+	if topology == "pxc" {
+		p, rc, b = setupPXC(t)
+	} else {
+		p, rc, b = setup(t, topology)
+	}
 	converge(t, p, rc, b)
 	for name, status := range b.native {
 		status.PhysicalIdentity = "physical-" + name
@@ -206,10 +215,14 @@ func TestBinlogArchiveConditionRequiresArchivedTransaction(t *testing.T) {
 		{name: "disabled", fail: true, want: "Unknown", reason: "ObservationUnavailable"},
 		{name: "healthy", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0)}, want: "True", reason: "ArchiveObservation"},
 		{name: "gap", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Gap: true}, want: "False", reason: "ArchiveObservation"},
+		{name: "failed-before-upload", archive: myspec.BinlogArchiveStatus{Error: "binlog_decode_failed"}, want: "False", reason: "ArchiveFailed"},
+		{name: "failed-after-upload", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Error: "binlog_decode_failed"}, want: "False", reason: "ArchiveFailed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, rc, b := backupFixture(t, "single")
 			rc.Cluster.Spec.Backup.PITR.Enabled = true
+			events := &gtidEvents{}
+			rc.Events = events
 			b.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
 				if r.URL.Path != "/v1/mysql/archive-status" {
 					return false
@@ -229,6 +242,19 @@ func TestBinlogArchiveConditionRequiresArchivedTransaction(t *testing.T) {
 				if condition.Type == "BinlogArchive" {
 					if condition.Status != tc.want || condition.Reason != tc.reason {
 						t.Fatal(condition)
+					}
+					if tc.reason == "ArchiveFailed" {
+						if !strings.Contains(condition.Message, tc.archive.Error) || len(events.events) != 1 || events.events[0].Type != "Warning" || events.events[0].Reason != "ArchiveFailed" {
+							t.Fatalf("missing failure diagnostic/event: %+v %+v", condition, events.events)
+						}
+						rc.Cluster.Status = status
+						var repeated domain.ClusterStatus
+						if err := p.backupStatus(t.Context(), rc, &repeated); err != nil {
+							t.Fatal(err)
+						}
+						if len(events.events) != 1 {
+							t.Fatal("repeated observation duplicated warning")
+						}
 					}
 					return
 				}
@@ -262,5 +288,323 @@ func TestBackupStatusSelectsNewestPITRWindow(t *testing.T) {
 	}
 	if status.Backup.PITRWindow == nil || !status.Backup.PITRWindow.End.Equal(time.Unix(30, 0)) {
 		t.Fatal("status selected an older snapshot-only window", status.Backup.PITRWindow)
+	}
+}
+
+func TestPITRIntervalsPreserveFullBackupProvenance(t *testing.T) {
+	p, rc, backend := backupFixture(t, "single")
+	rc.Cluster.Spec.Backup.PITR.Enabled = true
+	base := inventoryBackup(t, rc, "earlier", "full", "", 10, time.Unix(10, 0))
+	inventoryBackup(t, rc, "latest", "full", "", 30, time.Unix(30, 0))
+	backend.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
+		if r.URL.Path != "/v1/mysql/pitr-coverage" {
+			return false
+		}
+		var request myspec.PITRCoverageRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		start, end := time.Unix(30, 0), time.Unix(30, 0)
+		if request.ObjectPaths[0] == base.MySQL.ObjectPaths[0] {
+			start, end = time.Unix(10, 0), time.Unix(20, 0)
+		}
+		json.NewEncoder(w).Encode(myspec.PITRCoverageResponse{Windows: []myspec.PITRWindow{{Start: start, End: end}}})
+		return true
+	}
+	windows, intervals, err := p.PITRWindowIntervals(t.Context(), rc)
+	if err != nil || len(windows) != 2 || len(intervals) != 2 {
+		t.Fatal(windows, intervals, err)
+	}
+	byBackup := map[string]domain.TimeWindow{}
+	for _, interval := range intervals {
+		byBackup[interval.Backup] = interval
+	}
+	if !byBackup["earlier"].Start.Equal(time.Unix(10, 0)) || !byBackup["earlier"].End.Equal(time.Unix(20, 0)) || !byBackup["latest"].Start.Equal(time.Unix(30, 0)) || !byBackup["latest"].End.Equal(time.Unix(30, 0)) {
+		t.Fatal("lost full provenance", intervals)
+	}
+	for _, window := range windows {
+		if window.Backup != "" {
+			t.Fatal("legacy merged coverage gained attribution", windows)
+		}
+	}
+	if _, _, err := p.validatePITRRestore(t.Context(), rc, time.Unix(15, 0)); err != nil {
+		t.Fatal("earlier range rejected", err)
+	}
+}
+
+func TestFullPITRIntervalsMergeOnlyWithinFullAndRetainRememberedCoverage(t *testing.T) {
+	window := func(start, end int64) domain.TimeWindow {
+		return domain.TimeWindow{Start: time.Unix(start, 0), End: time.Unix(end, 0)}
+	}
+	safe := []domain.TimeWindow{window(1, 5), window(10, 40)}
+	intervals := fullPITRIntervals(safe, map[string][]domain.TimeWindow{
+		"earlier": {window(10, 20), window(15, 30)},
+		"latest":  {window(25, 50)},
+	})
+	if len(intervals) != 3 {
+		t.Fatal(intervals)
+	}
+	byBackup := map[string]domain.TimeWindow{}
+	for _, interval := range intervals {
+		byBackup[interval.Backup] = interval
+	}
+	for backup, expected := range map[string]domain.TimeWindow{"": window(1, 5), "earlier": window(10, 30), "latest": window(25, 40)} {
+		got := byBackup[backup]
+		if !got.Start.Equal(expected.Start) || !got.End.Equal(expected.End) {
+			t.Fatal(backup, intervals)
+		}
+	}
+	remembered := fullPITRIntervals([]domain.TimeWindow{window(1, 5)}, nil)
+	if len(remembered) != 1 || remembered[0].Backup != "" || !remembered[0].Start.Equal(time.Unix(1, 0)) {
+		t.Fatal("invented remembered provenance", remembered)
+	}
+}
+
+func TestBackupStatusWriterChangeAndFreshFull(t *testing.T) {
+	for _, topology := range []string{"single", "group", "pxc"} {
+		t.Run(topology, func(t *testing.T) {
+			p, rc, b := backupFixture(t, topology)
+			rc.Cluster.Spec.Backup.PITR.Enabled = true
+			base := inventoryBackup(t, rc, "base", "full", "", 10, time.Unix(10, 0))
+			oldEnd := time.Unix(20, 0).UTC()
+			const originalUUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+			const promotedUUID = "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee"
+			currentUUID := originalUUID
+			foreignEnd := time.Time{}
+			coverageUnavailable := false
+			fallback := b.action
+			b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
+				switch r.URL.Path {
+				case "/v1/mysql/status":
+					native := b.native[name]
+					native.ServerUUID = currentUUID
+					json.NewEncoder(w).Encode(native)
+				case "/v1/mysql/archive-status":
+					json.NewEncoder(w).Encode(myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000008", LastEventTime: time.Unix(50, 0), LagSeconds: 5})
+				case "/v1/mysql/pitr-coverage":
+					if coverageUnavailable {
+						http.Error(w, "coverage unavailable", http.StatusServiceUnavailable)
+						return true
+					}
+					var request myspec.PITRCoverageRequest
+					if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+						t.Fatal(err)
+					}
+					coverage := myspec.PITRCoverageResponse{
+						Windows:                []myspec.PITRWindow{{Start: time.Unix(10, 0), End: oldEnd}},
+						SourceUUID:             originalUUID,
+						LatestForeignEventTime: foreignEnd,
+					}
+					if request.ObjectPaths[0] != base.MySQL.ObjectPaths[0] {
+						coverage = myspec.PITRCoverageResponse{SourceUUID: promotedUUID, Windows: []myspec.PITRWindow{{Start: time.Unix(70, 0), End: time.Unix(90, 0)}}}
+					}
+					json.NewEncoder(w).Encode(coverage)
+				default:
+					return fallback != nil && fallback(w, r, name)
+				}
+				return true
+			}
+			check := func(reason string, end time.Time) {
+				t.Helper()
+				var status domain.ClusterStatus
+				if err := p.backupStatus(t.Context(), rc, &status); err != nil {
+					t.Fatal(err)
+				}
+				if status.Backup.PITRWindow == nil || !status.Backup.PITRWindow.End.Equal(end) {
+					t.Fatalf("wrong recovery window: %+v", status.Backup.PITRWindow)
+				}
+				foundPITR, foundArchive := false, false
+				for _, condition := range status.Conditions {
+					switch condition.Type {
+					case "PITR":
+						foundPITR = true
+						if condition.Status != "True" || condition.Reason != reason {
+							t.Fatalf("unexpected PITR condition: %+v", condition)
+						}
+						if reason == "WindowFrozenWriterChanged" && (!strings.Contains(condition.Message, oldEnd.Format(time.RFC3339Nano)) || !strings.Contains(condition.Message, "take a full backup to extend point-in-time recovery")) {
+							t.Fatalf("missing frozen endpoint or remedy: %+v", condition)
+						}
+						if reason == "WindowAvailable" && condition.Message != "" {
+							t.Fatalf("normal coverage retained frozen message: %+v", condition)
+						}
+					case "BinlogArchive":
+						foundArchive = true
+						if condition.Status != "True" {
+							t.Fatalf("healthy uploads changed status: %+v", condition)
+						}
+						if reason == "WindowFrozenWriterChanged" {
+							if !strings.Contains(condition.Message, "Writer archive lag 5 seconds") || !strings.Contains(condition.Message, "recoverable window ends at "+oldEnd.Format(time.RFC3339Nano)) {
+								t.Fatalf("archive lag obscures frozen recovery: %+v", condition)
+							}
+						} else if condition.Message != "Archive lag 5 seconds; " {
+							t.Fatalf("same-writer archive behavior changed: %+v", condition)
+						}
+					}
+				}
+				if !foundPITR || !foundArchive {
+					t.Fatal("missing backup conditions", status.Conditions)
+				}
+			}
+			check("WindowAvailable", oldEnd) // Age alone does not prove a source change.
+			foreignEnd = oldEnd
+			check("WindowAvailable", oldEnd) // Historical foreign uploads do not cap this window.
+			foreignEnd = time.Unix(50, 0)
+			currentUUID = promotedUUID
+			check("WindowFrozenWriterChanged", oldEnd)
+			if _, err := p.ValidatePITRRestore(t.Context(), rc, time.Unix(30, 0)); err == nil {
+				t.Fatal("writer-change status admitted an unsafe restore")
+			}
+			// A -> B -> A: A's original lineage is compatible even while its
+			// next archive is pending and B's newer archives remain retained.
+			currentUUID = originalUUID
+			check("WindowAvailable", oldEnd)
+			oldEnd = time.Unix(55, 0).UTC()
+			check("WindowAvailable", oldEnd)
+			if _, err := p.ValidatePITRRestore(t.Context(), rc, time.Unix(50, 0)); err != nil {
+				t.Fatal("contiguous original-writer upload did not extend coverage", err)
+			}
+			// Return to the incompatible writer to exercise a fresh full.
+			currentUUID = promotedUUID
+			foreignEnd = time.Unix(65, 0)
+			check("WindowFrozenWriterChanged", oldEnd)
+			// Automatic enqueue is not recovery evidence. Coverage stays frozen
+			// while the new writer's full is merely pending.
+			start := time.Now().UTC()
+			rc.Clock = trafficRenewalClock{at: start}
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			rc.Clock = trafficRenewalClock{at: start.Add(5 * time.Minute)}
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			items, err := rc.Store.ListBackups(t.Context(), rc.Cluster.Ref())
+			if err != nil {
+				t.Fatal(err)
+			}
+			queued := false
+			for _, item := range items {
+				queued = queued || item.Trigger == "pitr-reanchor" && item.Phase == domain.PhasePending
+			}
+			if !queued {
+				t.Fatal("writer change did not queue automatic full")
+			}
+			check("WindowFrozenWriterChanged", oldEnd)
+			inventoryBackup(t, rc, "new-writer", "full", "", 20, time.Unix(70, 0))
+			check("WindowAvailable", time.Unix(90, 0))
+			for _, target := range []int64{15, 80} {
+				if _, err := p.ValidatePITRRestore(t.Context(), rc, time.Unix(target, 0)); err != nil {
+					t.Fatalf("safe target %d lost: %v", target, err)
+				}
+			}
+			if _, err := p.ValidatePITRRestore(t.Context(), rc, time.Unix(60, 0)); err == nil {
+				t.Fatal("new full filled the uncovered interval")
+			}
+			coverageUnavailable = true
+			var status domain.ClusterStatus
+			if err := p.backupStatus(t.Context(), rc, &status); err != nil {
+				t.Fatal(err)
+			}
+			for _, condition := range status.Conditions {
+				if condition.Type == "PITR" && condition.Reason == "WindowFrozenWriterChanged" {
+					t.Fatal("unavailable observation diagnosed a writer change", condition)
+				}
+			}
+		})
+	}
+}
+
+type archiveStatusAttempts struct {
+	engine.Provider
+	calls int
+}
+
+func (p *archiveStatusAttempts) Status(ctx context.Context, rc *engine.Context) (domain.ClusterStatus, error) {
+	p.calls++
+	return p.Provider.Status(ctx, rc)
+}
+
+func TestArchiveWarningObservationRetry(t *testing.T) {
+	for _, scenario := range []string{"duplicate", "first-observed-on-retry", "recorder-retry"} {
+		t.Run(scenario, func(t *testing.T) {
+			p, rc, b := backupFixture(t, "single")
+			rc.Cluster.Spec.Backup.PITR.Enabled = true
+			inventoryBackup(t, rc, "base", "full", "", 10, time.Unix(10, 0))
+			var archiveReads atomic.Int32
+			failing := true
+			b.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
+				switch r.URL.Path {
+				case "/v1/mysql/pitr-coverage":
+					// PITR=Unknown forces ObserveStatus to retry even when
+					// the database itself remains Ready, as during an S3 fault.
+					http.Error(w, "coverage unavailable", http.StatusServiceUnavailable)
+				case "/v1/mysql/archive-status":
+					if archiveReads.Add(1) == 1 && scenario == "first-observed-on-retry" {
+						http.Error(w, "observation unavailable", http.StatusServiceUnavailable)
+						return true
+					}
+					archive := myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0)}
+					if failing {
+						archive.Error = "archive_upload_failed"
+					}
+					json.NewEncoder(w).Encode(archive)
+				default:
+					return false
+				}
+				return true
+			}
+			var warnings []domain.Event
+			recordCalls := 0
+			rc.Events = gtidEventFunc(func(_ context.Context, event domain.Event) error {
+				if event.Reason == "ArchiveFailed" {
+					recordCalls++
+					if recordCalls == 1 && scenario == "recorder-retry" {
+						return context.Canceled
+					}
+					warnings = append(warnings, event)
+				}
+				return nil
+			})
+			observer := &archiveStatusAttempts{Provider: p}
+			observe := func() domain.ClusterStatus {
+				t.Helper()
+				observer.calls = 0
+				status, err := engine.ObserveStatus(engine.WithObservationPass(t.Context()), observer, rc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if observer.calls != 2 {
+					t.Fatalf("expected two provider Status attempts, got %d", observer.calls)
+				}
+				return status
+			}
+			// Neither retry has published its output to rc.Cluster.Status.
+			status := observe()
+			if len(warnings) != 1 {
+				t.Fatalf("two observation attempts emitted %d successful warnings, want one", len(warnings))
+			}
+			if scenario == "recorder-retry" && recordCalls != 2 {
+				t.Fatal("failed recording was not retried")
+			}
+			found := false
+			for _, condition := range status.Conditions {
+				found = found || condition.Type == "BinlogArchive" && condition.Reason == "ArchiveFailed"
+			}
+			if !found {
+				t.Fatal("missing failed archive condition")
+			}
+			rc.Cluster.Status = status
+			observe()
+			if len(warnings) != 1 {
+				t.Fatal("published condition failed to deduplicate a later pass")
+			}
+			failing = false
+			rc.Cluster.Status = observe()
+			failing = true
+			rc.Cluster.Status = observe()
+			if len(warnings) != 2 {
+				t.Fatal("a new failure after recovery did not emit a new warning")
+			}
+		})
 	}
 }

@@ -9,24 +9,29 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	"sort"
+	"time"
 )
 
 func galeraStatus(ctx context.Context, rc *engine.Context, name string) (myspec.GaleraStatusResponse, error) {
+	st, _, err := galeraStatusAt(ctx, rc, name)
+	return st, err
+}
+
+func galeraStatusAt(ctx context.Context, rc *engine.Context, name string) (myspec.GaleraStatusResponse, time.Time, error) {
 	ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
 	defer cancel()
 	var st myspec.GaleraStatusResponse
-	err := mysqlAction(ctx, rc, name, myspec.ActionGaleraStatus, struct{}{}, &st)
-	return st, err
+	at, err := mysqlReadActionAt(ctx, rc, name, myspec.ActionGaleraStatus, struct{}{}, &st)
+	return st, at, err
 }
 
 // ProxySQL, not wsrep's multi-primary role, owns the client writer designation.
 func observeGalera(ctx context.Context, rc *engine.Context, name string, out *myspec.StatusResponse) error {
-	st, err := galeraStatus(ctx, rc, name)
-	if err != nil {
-		return err
-	}
-	out.MemberState, out.MemberRole, out.GroupMembers = "OFFLINE", "SECONDARY", st.ClusterSize
-	if !st.Eligible() {
+	// The agent's mysql/status already verifies Primary/Synced/ready/connected
+	// before assigning PRIMARY. Do not repeat a Galera SQL sweep for readiness.
+	online := out.Online(true)
+	out.MemberState, out.MemberRole = "OFFLINE", "SECONDARY"
+	if !online {
 		return nil
 	}
 	out.MemberState = "ONLINE"
@@ -96,31 +101,36 @@ func selectGaleraPosition(observations map[string]myspec.WSRepRecoverResponse) (
 func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	f := &s.Formation
 	if r := f.Reformation; r != nil && r.State == "observing" {
-		observations := map[string]myspec.WSRepRecoverResponse{}
+		// Preserve configuration/reload failures as reconcile errors, before
+		// starting native recovery on any member.
 		for _, m := range s.data() {
 			applied, err := configApplied(ctx, rc, m)
 			if err != nil || !applied {
 				r.Blocked = "Cannot fence every stopped member"
 				return true, err
 			}
-			a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
-			if err != nil {
-				r.Blocked = "Cannot observe every stopped member"
-				return true, nil
-			}
-			status, err := a.Status(ctx)
-			if err != nil || status.Processes["mysqld"].PID != 0 {
-				r.Blocked = "Every member must be intentionally stopped before recovery"
-				return true, nil
-			}
-			var out myspec.WSRepRecoverResponse
-			if err = a.Engine(ctx, "mysql", myspec.ActionWSRepRecover, struct{}{}, &out); err != nil {
-				r.Blocked = "Missing recovered Galera position"
-				return true, nil
-			}
-			observations[m.Name] = out
 		}
+		observations, blocked := collectOfflineRecovery(ctx, rc, s.data(), func(probe context.Context, m *member) (myspec.WSRepRecoverResponse, error) {
+			var out myspec.WSRepRecoverResponse
+			a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)
+			if err != nil {
+				return out, err
+			}
+			status, err := a.Status(probe)
+			if err != nil {
+				return out, err
+			}
+			if status.Processes["mysqld"].PID != 0 {
+				return out, errOfflineNotStopped
+			}
+			err = a.Engine(probe, "mysql", myspec.ActionWSRepRecover, struct{}{}, &out)
+			return out, err
+		})
 		r.GaleraObservations = observations
+		if blocked != "" {
+			r.Blocked = blocked
+			return true, nil
+		}
 		seed, position, err := selectGaleraPosition(observations)
 		if err != nil {
 			r.Blocked = err.Error()
@@ -131,6 +141,11 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 		r.State, r.Blocked = "bootstrapping", ""
 		for _, m := range s.data() {
 			m.Offline = m.Name != seed
+			// Recovered followers are confirmed stopped above; historical joined
+			// receipts cannot admit several new-epoch joiners simultaneously.
+			if m.Name != seed {
+				m.Stage = "deployed"
+			}
 		}
 		publishRevision(s)
 		return true, nil
@@ -175,6 +190,9 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 		if err != nil || !applied {
 			return true, err
 		}
+		if !pxcJoinAllowed(s, seed) {
+			return true, nil
+		}
 		// The native route durably claims each epoch before starting mysqld. Replay
 		// observes that receipt; it must never generate another bootstrap epoch.
 		err = mysqlAction(ctx, rc, seed.Name, myspec.ActionGaleraBootstrap, myspec.GaleraBootstrapRequest{ClusterName: f.GroupName, FormationEpoch: f.FormationEpoch, StartPosition: f.StartPosition}, nil)
@@ -183,16 +201,24 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 	// Joined members restart/rejoin through Galera IST/SST, never GR clone/start.
 	if f.State == "formed" {
 		for _, m := range s.data() {
-			if m.Offline || m.Removing || m.Stage != "deployed" && m.Stage != "joined" {
+			if m.Offline || m.Removing || m.ConfirmedVolumeLost || m.Stage != "deployed" && m.Stage != "joined" {
 				continue
 			}
 			st, err := live(ctx, rc, m.Name)
 			if err == nil && st.MemberState == "ONLINE" {
+				if m.Stage != "joined" {
+					m.Stage, m.Initialized, m.ServerUUID = "joined", true, st.ServerUUID
+					publishRevision(s)
+					return true, nil
+				}
 				continue
 			}
 			applied, err := configApplied(ctx, rc, m)
 			if err != nil || !applied {
 				return true, err
+			}
+			if !pxcJoinAllowed(s, m) {
+				continue
 			}
 			a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 			if err != nil {
@@ -207,14 +233,7 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 }
 
 func galeraStopped(ctx context.Context, rc *engine.Context, name string) bool {
-	if rc.Agents == nil {
-		return false
-	}
-	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), name)
-	if err != nil {
-		return false
-	}
-	status, err := a.Status(ctx)
+	status, _, err := mysqlAgentStatus(ctx, rc, name)
 	if err != nil {
 		return false
 	}

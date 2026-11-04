@@ -15,7 +15,7 @@ import (
 
 // switchAway chooses an ONLINE secondary covering the writer's observed GTIDs.
 // Incomparable or unknown observations never become a zero-lag candidate.
-func switchAway(ctx context.Context, rc *engine.Context, s *state, old string) error {
+func switchAway(ctx context.Context, rc *engine.Context, s *state, old string, chosen *string) error {
 	if s.Topology == "cluster" {
 		return engine.ErrNotSupported
 	}
@@ -31,9 +31,10 @@ func switchAway(ctx context.Context, rc *engine.Context, s *state, old string) e
 		return err
 	}
 	target := ""
+	targetName := ""
 	var best gtidSet
 	for _, peer := range s.data() {
-		if peer.Name == old || peer.Removing || peer.Retirement != "" {
+		if peer.Name == old || peer.Removing || peer.Retirement != "" || *chosen != "" && peer.Name != *chosen {
 			continue
 		}
 		status, e := live(ctx, rc, peer.Name)
@@ -44,12 +45,23 @@ func switchAway(ctx context.Context, rc *engine.Context, s *state, old string) e
 		if e != nil || !set.contains(writer) {
 			continue
 		}
+		if err := proxyAdmission(ctx, rc, s, peer.Name, myspec.ProxyReaderGroup); err != nil {
+			continue
+		}
 		if target == "" || set.contains(best) {
-			target, best = status.ServerUUID, set
+			target, targetName, best = status.ServerUUID, peer.Name, set
 		}
 	}
 	if target == "" {
 		return engine.ErrUnavailable
+	}
+	s.ProxyAdmissionWait = ""
+	if *chosen == "" {
+		*chosen = targetName
+		if hasServingProxy(s) {
+			// Persist selection before issuing the native action on the next pass.
+			return nil
+		}
 	}
 	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), old)
 	if err != nil {
@@ -61,7 +73,7 @@ func switchAway(ctx context.Context, rc *engine.Context, s *state, old string) e
 func survivorsOnline(ctx context.Context, rc *engine.Context, s *state, old string) error {
 	writer := false
 	for _, m := range s.data() {
-		if m.Name == old {
+		if m.Name == old || !pxcRetirementSurvivor(ctx, s, old, m.Name) {
 			continue
 		}
 		st, err := live(ctx, rc, m.Name)
@@ -77,6 +89,9 @@ func survivorsOnline(ctx context.Context, rc *engine.Context, s *state, old stri
 }
 
 func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m *member) (bool, error) {
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	if busy, err := p.observePending(ctx, rc, s); busy || err != nil {
 		return false, err
 	}
@@ -85,20 +100,35 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, err
 		}
 	}
+	if s.Topology == "cluster" && m.Removing {
+		if err := moveRetiringPXCSeed(ctx, rc, s, m.Name); err != nil {
+			return false, err
+		}
+	}
 	switch m.Retirement {
 	case "handoff":
 		if s.Replacement == nil && rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
 		}
-		st, err := live(ctx, rc, m.Name)
-		if err != nil {
-			return false, err
-		}
-		if s.Topology == "group" && onlinePrimary(st) {
-			return false, switchAway(ctx, rc, s, m.Name)
+		if !m.ConfirmedVolumeLost {
+			st, err := live(ctx, rc, m.Name)
+			if err != nil {
+				return false, err
+			}
+			if s.Topology == "group" && onlinePrimary(st) {
+				return false, switchAway(ctx, rc, s, m.Name, &m.HandoffTarget)
+			}
 		}
 		if err := survivorsOnline(ctx, rc, s, m.Name); err != nil {
 			return false, err
+		}
+		if err := proxyHandoffReady(ctx, rc, s, m.Name, &m.HandoffTarget); err != nil {
+			return false, err
+		}
+		if s.Topology == "cluster" {
+			if err := moveRetiringPXCSeed(ctx, rc, s, m.Name); err != nil {
+				return false, err
+			}
 		}
 		m.Removing = true
 		m.Retirement = "drain"
@@ -112,12 +142,21 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 				}
 			}
 		}
+		if m.ConfirmedVolumeLost {
+			// Never start or contact the old data process. Fence its exact
+			// runtime, then require native membership removal before deletion.
+			m.Retirement = "runtime-stop"
+			return false, nil
+		}
 		st, err := live(ctx, rc, m.Name)
 		if err != nil {
 			return false, err
 		}
 		if s.Topology == "group" && onlinePrimary(st) {
-			return false, switchAway(ctx, rc, s, m.Name)
+			return false, switchAway(ctx, rc, s, m.Name, &m.HandoffTarget)
+		}
+		if err := proxyHandoffReady(ctx, rc, s, m.Name, &m.HandoffTarget); err != nil {
+			return false, err
 		}
 		a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 		if err != nil {
@@ -147,7 +186,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 				}
 			}
 		}
-		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, false)
+		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 		if err != nil {
 			return false, err
 		}
@@ -191,7 +230,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 		if !status.Done {
 			return false, nil
 		}
-		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, false)
+		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 		if err != nil {
 			return false, err
 		}
@@ -208,7 +247,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, err
 		}
 		if m.ServiceID != "" {
-			runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, false)
+			runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 			if err != nil {
 				return false, err
 			}
@@ -231,7 +270,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, nil
 		}
 		if m.VolumeID != "" {
-			volume, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Volume, m.VolumeID, m.Volume, m.VolumeID, false)
+			volume, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Volume, m.VolumeID, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 			if err != nil {
 				return false, err
 			}
@@ -294,14 +333,75 @@ func membershipRemoved(ctx context.Context, rc *engine.Context, s *state, old st
 	if err := survivorsOnline(ctx, rc, s, old); err != nil {
 		return err
 	}
+	expected := 0
+	for _, m := range s.Members {
+		if m.Role == "data" && m.Name != old && pxcRetirementSurvivor(ctx, s, old, m.Name) {
+			expected++
+		}
+	}
 	for _, m := range s.data() {
-		if m.Name == old {
+		if m.Name == old || !pxcRetirementSurvivor(ctx, s, old, m.Name) {
 			continue
 		}
 		st, err := live(ctx, rc, m.Name)
-		if err != nil || st.GroupMembers != len(s.data())-1 {
+		// Old PXC agents do not include wsrep_cluster_size in mysql/status.
+		// Retirement is a write-relevant transition, so its fallback is fresh
+		// and cannot consume a read-only quorum memo as removal proof.
+		if err == nil && rc.Cluster.Spec.Provider == "pxc" && st.GroupMembers == 0 {
+			native, observeErr := galeraStatus(freshMySQLReads(ctx), rc, m.Name)
+			if observeErr != nil || !native.Eligible() {
+				return engine.ErrUnavailable
+			}
+			st.GroupMembers = native.ClusterSize
+		}
+		if err != nil || st.GroupMembers != expected {
 			return engine.ErrUnavailable
 		}
 	}
 	return nil
+}
+
+// Move live donor references before excluding the retiree from other members'
+// peer lists. An unadmitted joiner is never promoted to authoritative donor.
+// The same repair applies when upgrading an already-stopped leave checkpoint.
+func moveRetiringPXCSeed(ctx context.Context, rc *engine.Context, s *state, old string) error {
+	needed := s.Formation.Seed == old
+	for _, m := range s.Members {
+		needed = needed || m.GaleraSSTDonor == old
+	}
+	if !needed {
+		return nil
+	}
+	seed := s.find(s.Formation.Seed)
+	if !pxcRetirementSeedOnline(ctx, rc, s, seed, old) {
+		seed = nil
+		for _, peer := range s.Members {
+			if peer.Name == s.Formation.Seed {
+				continue
+			}
+			if pxcRetirementSeedOnline(ctx, rc, s, peer, old) {
+				seed = peer
+				break
+			}
+		}
+	}
+	if seed == nil {
+		return engine.ErrUnavailable
+	}
+	s.Formation.Seed = seed.Name
+	for _, m := range s.Members {
+		if m.GaleraSSTDonor == old {
+			m.GaleraSSTDonor = seed.Name
+		}
+	}
+	publishRevision(s)
+	return nil
+}
+
+func pxcRetirementSeedOnline(ctx context.Context, rc *engine.Context, s *state, m *member, old string) bool {
+	if m == nil || m.Role != "data" || m.Name == old || m.Removing || m.Offline || m.Stage != "joined" || pxcJoinRoutingFenced(s, m) {
+		return false
+	}
+	status, err := live(ctx, rc, m.Name)
+	return err == nil && status.MemberState == "ONLINE"
 }

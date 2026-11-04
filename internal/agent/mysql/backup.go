@@ -277,7 +277,9 @@ func runBackup(ctx context.Context, s myspec.Spec, p paths, r myspec.BackupReque
 		return out, errors.New("repository_invalid")
 	}
 	defer removeCloudConfig(cloud)
-	args := []string{"--defaults-extra-file=" + defaults, "--backup", "--stream=xbstream", "--lock-ddl", "--extra-lsndir=" + dir, "--target-dir=" + filepath.Join(dir, "target"), "--datadir=" + p.data}
+	// Bound copy concurrency and stream chunks independently of native defaults.
+	// --use-memory only controls prepare; it cannot budget a running backup.
+	args := []string{"--defaults-extra-file=" + defaults, "--backup", "--stream=xbstream", "--parallel=1", "--read-buffer-size=1M", "--lock-ddl", "--extra-lsndir=" + dir, "--target-dir=" + filepath.Join(dir, "target"), "--datadir=" + p.data}
 	if r.Type == "incremental" {
 		args = append(args, "--incremental-lsn="+strconv.FormatUint(r.BaseLSN, 10))
 	}
@@ -323,10 +325,11 @@ func runBackup(ctx context.Context, s myspec.Spec, p paths, r myspec.BackupReque
 	if out.FromLSN != r.BaseLSN {
 		return out, errors.New("backup_lsn_mismatch")
 	}
-	client, err := s3Client(r.Repository)
+	client, closeClient, err := s3Client(r.Repository)
 	if err != nil {
 		return out, errors.New("repository_invalid")
 	}
+	defer closeClient()
 	out.ManifestDigest, out.ManifestSize, err = createBackupManifest(ctx, client, r.Repository, manifest)
 	if err != nil {
 		return out, errors.New("physical_manifest_failed")
@@ -373,7 +376,13 @@ func (e *Runner) backupRoutes(mux *http.ServeMux, n *agent.Node) {
 				var req myspec.PITRCoverageRequest
 				err = json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req)
 				if err == nil {
-					result, err = e.pitrCoverage(ctx, req)
+					if req.RequireFresh {
+						// Admission inherits its operation deadline, not the short
+						// observation cap. The agent-owned refresh survives a waiter.
+						result, err = e.pitrCoverage(r.Context(), req)
+					} else {
+						result, err = e.pitrCoverage(ctx, req)
+					}
 				}
 			}
 			if err != nil {

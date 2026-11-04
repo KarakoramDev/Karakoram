@@ -2,7 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Karakoram
 
-Karakoram is a multi-platform, self-hosted control plane for database and stateful-service orchestration inside your infrastructure, without [Kubernetes](https://kubernetes.io/) or a hosted coordinator. A [Go](https://go.dev/) control plane provides a REST API, `karactl` CLI and web UI; providers supply infrastructure, while you operate the installation, credentials, data and recovery procedures. [Zerops](https://zerops.io/) is the reference provider. [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) are also available; see [Providers](docs/providers.md) for their status.
+Karakoram is a multi-platform, self-hosted control plane for database and stateful-service orchestration inside your infrastructure, without [Kubernetes](https://kubernetes.io/) or a hosted coordinator. A [Go](https://go.dev/) control plane provides a REST API, `karactl` CLI and web UI; providers supply infrastructure, while you operate the installation, credentials, data and recovery procedures. [Zerops](https://zerops.io/) is the reference provider; Karakoram's maintainer works at Zerops (see [Acknowledgements](#acknowledgements)). [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) are also available; see [Providers](docs/providers.md) for their status.
+
+**Status:** pre-1.0. The current release is [v0.4.3](https://github.com/KarakoramDev/Karakoram/releases/tag/v0.4.3); read its [known issues](https://github.com/KarakoramDev/Karakoram/releases/tag/v0.4.3#known-issues-and-continuing-limits) and the [limitations](docs/limitations.md) before you rely on it. Dokploy and Nomad are experimental for every engine, and several engines are experimental on every provider ([engine availability](docs/providers.md#engine-availability)). The `main` branch, and the documentation on it, can describe changes that are not released yet.
 
 ## Engines
 
@@ -93,10 +95,10 @@ Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative s
 
 ## Acknowledgements
 
-Thank you to [Zerops](https://zerops.io) for providing free-of-charge infrastructure for developing and testing Karakoram.
+Thank you to [Zerops](https://zerops.io) for providing free-of-charge infrastructure for developing and testing Karakoram. Disclosure: Samyazz, who maintains Karakoram, is employed by Zerops as a system architect. Karakoram is not a Zerops product, and Zerops does not endorse it.
 
 Karakoram installs [Percona Server for MongoDB](https://www.percona.com/mongodb/software/percona-server-for-mongodb) and [Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/latest/) from [Percona's official repositories](https://repo.percona.com/). It independently implements orchestration; no [OpenEverest](https://openeverest.io/) code or UI is copied into this repository.
 
 ## License and trademarks
 
-Karakoram uses the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE). Dependencies retain their licenses and notices. Percona Server for MongoDB and Percona Backup for MongoDB are Percona products and trademarks. OpenEverest, MongoDB and Zerops names and marks belong to their respective owners; Karakoram is independent and not affiliated with or endorsed by them.
+Karakoram uses the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE). Dependencies retain their licenses and notices. Percona Server for MongoDB and Percona Backup for MongoDB are Percona products and trademarks. OpenEverest, MongoDB and Zerops names and marks belong to their respective owners. Karakoram is independent of OpenEverest and MongoDB and is not affiliated with or endorsed by them. Zerops does not endorse Karakoram either; its connection to Zerops is described under [Acknowledgements](#acknowledgements).

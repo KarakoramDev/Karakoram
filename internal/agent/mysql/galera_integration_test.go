@@ -475,10 +475,11 @@ func nativeGaleraRestoreProof(t *testing.T, ctx context.Context, nodes []*groupR
 		}
 	}()
 	repo := myspec.Repository{Path: "pxc/runner", S3: myspec.S3{Endpoint: "http://" + address, Bucket: "pxc-native-backups", Region: "us-east-1", PathStyle: true, AccessKey: access, SecretKey: secret}}
-	client, err := s3Client(repo)
+	client, closeClient, err := s3Client(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeClient()
 	nativeGroupPoll(t, 30*time.Second, "PXC MinIO readiness", func() bool {
 		return client.MakeBucket(ctx, repo.S3.Bucket, minio.MakeBucketOptions{Region: repo.S3.Region}) == nil
 	})

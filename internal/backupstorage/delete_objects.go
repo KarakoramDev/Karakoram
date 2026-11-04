@@ -40,6 +40,8 @@ func versionListingUnavailable(err error) bool {
 // The synchronous listing iterator stops immediately on invalid namespace data;
 // unlike a channel listing, it cannot leave an unread SDK producer behind.
 func deleteStoredObjectsMode(ctx context.Context, client *minio.Client, bucket, prefix string, exact, versions bool) (bool, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	objects := make(chan minio.ObjectInfo)
 	listing := make(chan error, 1)
 	go func() {

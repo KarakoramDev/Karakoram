@@ -42,12 +42,12 @@ func (p *Provider) CanCancelOperation(ctx context.Context, op *domain.Operation)
 			if err != nil {
 				// Fail closed: missing legacy inventory cannot prove this is
 				// not a mandatory post-restore base. Never expose store errors.
-				return fmt.Errorf("Operation %s cannot verify backup inventory for safe cancellation; retry after the backup record is available", op.ID)
+				return fmt.Errorf("operation %s cannot verify backup inventory for safe cancellation; retry after the backup record is available", op.ID)
 			}
 			trigger = backup.Trigger
 		}
 		if trigger == "restore" {
-			return fmt.Errorf("Operation %s cannot be cancelled: this post-restore base backup protects PITR continuity; PITR stays disabled until a fresh snapshot succeeds", op.ID)
+			return fmt.Errorf("operation %s cannot be cancelled: this post-restore base backup protects PITR continuity; PITR stays disabled until a fresh snapshot succeeds", op.ID)
 		}
 	}
 	var cp struct {
@@ -81,7 +81,7 @@ func (p *Provider) CanCancelOperation(ctx context.Context, op *domain.Operation)
 	if checkpoint == "" {
 		checkpoint = cp.Stage
 	}
-	return fmt.Errorf("Operation %s (%s) cannot be cancelled safely at checkpoint %q: data mutation or cleanup may already be in progress", op.ID, op.Kind, checkpoint)
+	return fmt.Errorf("operation %s (%s) cannot be cancelled safely at checkpoint %q: data mutation or cleanup may already be in progress", op.ID, op.Kind, checkpoint)
 }
 
 // SupportsFailureCleanup identifies operations whose expired work must restore
@@ -186,7 +186,7 @@ func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *
 	// in-flight safe step may have advanced once before persisting the request;
 	// the worker must honor it before executing the next (possibly unsafe) step.
 	if op.Kind != domain.OperationBackup && op.Kind != domain.OperationRestore && op.Kind != domain.OperationRaiseFCV {
-		return engine.OpResult{}, fmt.Errorf("Operation kind %s does not support safe cancellation", op.Kind)
+		return engine.OpResult{}, fmt.Errorf("operation kind %s does not support safe cancellation", op.Kind)
 	}
 	if op.Kind == domain.OperationRaiseFCV {
 		return engine.OpResult{Done: true, Step: "before-fcv"}, nil

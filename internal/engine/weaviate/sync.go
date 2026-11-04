@@ -96,8 +96,24 @@ func (p *Provider) advancePending(ctx context.Context, rc *engine.Context, s *st
 		return true, fmt.Errorf("pending member is missing")
 	}
 	if q.Op == nil {
+		if adopted, err := p.adoptAgentUpgradeIntent(ctx, rc, s); adopted || err != nil {
+			return true, err
+		}
 		if q.Waiting(now(rc), q.RetryAt) {
 			return true, nil
+		}
+		if s.Rolling != nil && s.Rolling.Reason == "upgrade-agents" {
+			if err := agentUpgradeBuildFence(s); err != nil {
+				return true, err
+			}
+			if s.Rolling.Step == "deploy" {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
+				if err := p.agentUpgradeSafe(ctx, rc, s, m); err != nil {
+					return true, err
+				}
+			}
 		}
 		// Queue-time evidence is not authority to mutate a hostname later.
 		// Recheck on every submission, including retries and coordinated rolls.
@@ -155,6 +171,9 @@ func (p *Provider) advancePending(ctx context.Context, rc *engine.Context, s *st
 			return true, e
 		}
 		q.Op = &op
+		if s.Rolling != nil && s.Rolling.Reason == "upgrade-agents" {
+			s.Rolling.Step = "ack"
+		}
 		return true, nil
 	}
 	if q.Action == "import" {
@@ -255,6 +274,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			err = e
 		}
 	}()
+	if s.Rolling != nil && s.Rolling.Reason == "upgrade-agents" {
+		return result, p.recoverAgentUpgrade(ctx, rc, s)
+	}
 	if e := s.seedExposure(ctx, rc); e != nil {
 		return result, e
 	}

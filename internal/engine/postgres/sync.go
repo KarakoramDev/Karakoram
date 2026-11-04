@@ -106,22 +106,6 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	if q == nil {
 		return false, nil
 	}
-	// A stateless scale operation must not make an obsolete larger count a
-	// prerequisite for a newer, smaller count. Nomad may be waiting for the
-	// very host-port/canary slot that the reduction releases. Keep the already
-	// published surge budget until the superseding operation completes; an
-	// increase still takes the normal all-instance configuration barrier below.
-	if m := s.find(q.Member); q.Action == "scale" && m != nil && m.Role == "proxy" {
-		replicas := desiredComponent(rc, m).Replicas
-		if replicas > 0 && replicas < q.Replicas {
-			op, err := rc.Backend.SetContainerCount(ctx, m.Name, replicas, replicas)
-			if err != nil {
-				return true, err
-			}
-			q.Op, q.Replicas = op, replicas
-			return true, nil
-		}
-	}
 	if q.Action == "import" {
 		m := s.find(q.Member)
 		if m == nil {
@@ -147,6 +131,33 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	}
 	if err != nil {
 		return true, err
+	}
+	// Poll before attempting supersession: some backends retain an exclusive
+	// autoscaling receipt until its terminal status is consumed by OpStatus.
+	// A stateless scale operation must not make an obsolete larger count a
+	// prerequisite for a newer, smaller count. Nomad may be waiting for the
+	// very host-port/canary slot that the reduction releases. Keep the already
+	// published surge budget until the superseding operation completes; an
+	// increase still takes the normal all-instance configuration barrier below.
+	if m := s.find(q.Member); q.Action == "scale" && m != nil && m.Role == "proxy" {
+		replicas := desiredComponent(rc, m).Replicas
+		if replicas > 0 && replicas < q.Replicas {
+			serving, err := proxyRuntimePreservesServing(ctx, rc, m.Name)
+			if err != nil {
+				return true, err
+			}
+			if !serving || !rc.Backend.Capabilities().ReplicaScalePreservesServing || replicas < m.Replicas {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
+			}
+			op, err := rc.Backend.SetContainerCount(ctx, m.Name, replicas, replicas)
+			if err != nil {
+				return true, err
+			}
+			q.Op, q.Replicas = op, replicas
+			return true, nil
+		}
 	}
 	if rc.Cluster.Deleting {
 		rc.Cluster.Status.Message = fmt.Sprintf("Waiting for PostgreSQL member %s %s process %s: %s", q.Member, q.Action, q.Op.ID, st.Status)
@@ -188,6 +199,15 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	m := s.find(q.Member)
 	if m == nil {
 		return true, engine.ErrNotFound
+	}
+	if m.Role == "proxy" && (q.Action == "scale" || q.Action == "resize") {
+		replicas := m.Replicas
+		if q.Action == "scale" {
+			replicas = q.Replicas
+		}
+		if admitted, err := proxyUpdateReady(ctx, rc, m, replicas); err != nil || !admitted {
+			return true, err
+		}
 	}
 	switch q.Action {
 	case "import":
@@ -357,6 +377,17 @@ func readyDesired(ctx context.Context, rc *engine.Context, m *member) (bool, err
 
 // Sync advances durable infrastructure work and rolls one ready member at a time.
 func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
+	if ctx.Value(adminRotationSyncKey{}) == nil {
+		journal, readErr := readAdminRotation(ctx, rc)
+		if readErr != nil {
+			return result, readErr
+		}
+		if journal != nil && journal.Stage != "rotated" && journal.Stage != "rejected" {
+			recovery, recoveryErr := p.rotateAdministrator(ctx, rc, &domain.Operation{ID: journal.Operation, Kind: domain.OperationRotateSystemUser, Payload: json.RawMessage(`{"user":"postgres"}`)})
+			rc.SyncWait = recovery.Message
+			return engine.Result{RequeueAfter: recovery.RequeueAfter}, recoveryErr
+		}
+	}
 	result.RequeueAfter = 2 * time.Second
 	rc.SyncWait = "loading PostgreSQL convergence state"
 	defer func() {
@@ -885,6 +916,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			}
 		}
 		desired := desiredComponent(rc, m)
+		proxyServing := true
 		if m.Role == "proxy" {
 			runtime, err := rc.Backend.GetService(ctx, m.Name)
 			if err != nil {
@@ -922,12 +954,18 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				if e != nil || !applied {
 					return result, e
 				}
+				if m.Replicas != desired.Replicas {
+					proxyServing, e = proxyRuntimePreservesServing(ctx, rc, m.Name)
+					if e != nil {
+						return result, e
+					}
+				}
 			}
 		}
 		changed := m.ConfigVersion != s.ConfigVersion || m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources)
 		if m.Role == "proxy" && m.Replicas != desired.Replicas && !changed {
 			rc.SyncWait = fmt.Sprintf("scaling proxy %s", m.Name)
-			if desired.Replicas < m.Replicas {
+			if desired.Replicas < m.Replicas || !rc.Backend.Capabilities().ReplicaScalePreservesServing || !proxyServing {
 				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
 					return wait, nil
 				}

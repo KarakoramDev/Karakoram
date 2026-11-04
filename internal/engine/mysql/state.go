@@ -15,47 +15,74 @@ import (
 
 // state contains only durable intent and receipts; credentials are sealed separately.
 type state struct {
-	UID                  string                   `json:"uid"`
-	NextIndex            int                      `json:"nextIndex"`
-	ConfigVersion        int64                    `json:"configVersion"`
-	ConfigHash           string                   `json:"configHash,omitempty"`
-	Topology             string                   `json:"topology"`
-	Members              []*member                `json:"members"`
-	Pending              *pending                 `json:"pending,omitempty"`
-	Suspended            bool                     `json:"suspended,omitempty"`
-	ExposureAdmission    engine.ExposureAdmission `json:"exposureAdmission,omitempty"`
-	Formation            formation                `json:"formation"`
-	Rolling              *rollingState            `json:"rolling,omitempty"`
-	Replacement          *replacementState        `json:"replacement,omitempty"`
-	TLSRotation          *tlsRotationState        `json:"tlsRotation,omitempty"`
-	GaleraTLS            *galeraTLSRotation       `json:"galeraTLS,omitempty"`
-	LastReplacement      string                   `json:"lastReplacement,omitempty"`
-	LastTLSRotation      string                   `json:"lastTLSRotation,omitempty"`
-	GTIDIncidents        []gtidIncident           `json:"gtidIncidents,omitempty"`
-	LastGTIDSafeAt       time.Time                `json:"lastGTIDSafeAt,omitempty"`
-	GTIDWindows          []domain.TimeWindow      `json:"gtidWindows,omitempty"`
-	GTIDWindowGeneration int                      `json:"gtidWindowGeneration,omitempty"`
+	UID                    string                   `json:"uid"`
+	NextIndex              int                      `json:"nextIndex"`
+	ConfigVersion          int64                    `json:"configVersion"`
+	ConfigHash             string                   `json:"configHash,omitempty"`
+	Topology               string                   `json:"topology"`
+	Members                []*member                `json:"members"`
+	Pending                *pending                 `json:"pending,omitempty"`
+	Suspended              bool                     `json:"suspended,omitempty"`
+	ExposureAdmission      engine.ExposureAdmission `json:"exposureAdmission,omitempty"`
+	Formation              formation                `json:"formation"`
+	Rolling                *rollingState            `json:"rolling,omitempty"`
+	Replacement            *replacementState        `json:"replacement,omitempty"`
+	TLSRotation            *tlsRotationState        `json:"tlsRotation,omitempty"`
+	GaleraTLS              *galeraTLSRotation       `json:"galeraTLS,omitempty"`
+	LastReplacement        string                   `json:"lastReplacement,omitempty"`
+	LastTLSRotation        string                   `json:"lastTLSRotation,omitempty"`
+	GTIDIncidents          []gtidIncident           `json:"gtidIncidents,omitempty"`
+	LastGTIDSafeAt         time.Time                `json:"lastGTIDSafeAt,omitempty"`
+	GTIDWindows            []domain.TimeWindow      `json:"gtidWindows,omitempty"`
+	GTIDWindowGeneration   int                      `json:"gtidWindowGeneration,omitempty"`
+	RestoreGTIDFence       string                   `json:"restoreGTIDFence,omitempty"`
+	RestoreGTIDBlocked     string                   `json:"restoreGTIDBlocked,omitempty"`
+	RestoreGTIDUnavailable string                   `json:"restoreGTIDUnavailable,omitempty"`
+	GTIDPrefixLag          *gtidPrefixLag           `json:"gtidPrefixLag,omitempty"`
+	ProxyAdmissionWait     string                   `json:"proxyAdmissionWait,omitempty"`
+	PITRReanchor           reanchorState            `json:"pitrReanchor,omitempty"`
 }
 
 // Incidents are retained after a fresh full baseline so old chains can never
 // silently cross a previously observed discontinuity.
 type gtidIncident struct {
-	DetectedAt  time.Time `json:"detectedAt"`
-	SafeThrough time.Time `json:"safeThrough,omitempty"`
-	Members     []string  `json:"members"`
-	BaselineAt  time.Time `json:"baselineAt,omitempty"`
-	Backup      string    `json:"backup,omitempty"`
-	Audited     bool      `json:"audited,omitempty"`
+	DetectedAt           time.Time                              `json:"detectedAt"`
+	SafeThrough          time.Time                              `json:"safeThrough,omitempty"`
+	Members              []string                               `json:"members"`
+	BaselineAt           time.Time                              `json:"baselineAt,omitempty"`
+	Backup               string                                 `json:"backup,omitempty"`
+	Audited              bool                                   `json:"audited,omitempty"`
+	Acknowledged         map[string]myspec.GaleraStatusResponse `json:"acknowledged,omitempty"`
+	Allowance            *gtidAllowance                         `json:"allowance,omitempty"`
+	BaselineAuditPending bool                                   `json:"baselineAuditPending,omitempty"`
+	BaselineOperation    string                                 `json:"baselineOperation,omitempty"`
+}
+
+// Acknowledged is immutable evidence; Allowance is the monotonically narrowing
+// exception, scoped to the formation and the managed data/server incarnations.
+type gtidAllowance struct {
+	Epoch     uint64                                 `json:"epoch"`
+	Group     string                                 `json:"group"`
+	Members   map[string]gtidMemberIdentity          `json:"members"`
+	Histories map[string]myspec.GaleraStatusResponse `json:"histories"`
+}
+
+type gtidMemberIdentity struct {
+	ServerUUID string `json:"serverUUID"`
+	ServiceID  string `json:"serviceID"`
+	VolumeID   string `json:"volumeID"`
+	NativeUUID string `json:"nativeUUID"`
 }
 type formation struct {
-	GroupName      string       `json:"groupName"`
-	FormationEpoch uint64       `json:"formationEpoch"`
-	Seed           string       `json:"seed"`
-	State          string       `json:"state"`
-	Blocked        string       `json:"blocked,omitempty"`
-	Reformation    *reformation `json:"reformation,omitempty"`
-	Adopting       bool         `json:"adopting,omitempty"`
-	StartPosition  string       `json:"startPosition,omitempty"`
+	GroupName         string                     `json:"groupName"`
+	FormationEpoch    uint64                     `json:"formationEpoch"`
+	Seed              string                     `json:"seed"`
+	State             string                     `json:"state"`
+	Blocked           string                     `json:"blocked,omitempty"`
+	Reformation       *reformation               `json:"reformation,omitempty"`
+	Adopting          bool                       `json:"adopting,omitempty"`
+	StartPosition     string                     `json:"startPosition,omitempty"`
+	GTIDCertification *pxcFormationCertification `json:"gtidCertification,omitempty"`
 }
 type reformation struct {
 	State              string                                 `json:"state"`
@@ -68,33 +95,53 @@ type mysqloffline struct {
 	UUID string `json:"uuid"`
 }
 type member struct {
-	Name              string               `json:"name"`
-	Role              string               `json:"role"`
-	Index             int                  `json:"index"`
-	Volume            string               `json:"volume,omitempty"`
-	VolumeID          string               `json:"volumeId,omitempty"`
-	ServiceID         string               `json:"serviceId,omitempty"`
-	Stage             string               `json:"stage"`
-	ImportBatch       *engine.ImportPlan   `json:"importBatch,omitempty"`
-	DeployOp          *infra.Op            `json:"deployOp,omitempty"`
-	NativeReadiness   *bool                `json:"nativeReadiness,omitempty"`
-	Version           string               `json:"version"`
-	Resources         domain.Resources     `json:"resources"`
-	Replicas          int                  `json:"replicas"`
-	ConfigVersion     int64                `json:"configVersion"`
-	Initialized       bool                 `json:"initialized,omitempty"`
-	ServerUUID        string               `json:"serverUUID,omitempty"`
-	Offline           bool                 `json:"offline,omitempty"`
-	Public            bool                 `json:"public,omitempty"`
-	ExposureHash      string               `json:"exposureHash,omitempty"`
-	Clone             *myspec.CloneRequest `json:"clone,omitempty"`
-	CloneDone         bool                 `json:"cloneDone,omitempty"`
-	CloneReplacesData bool                 `json:"cloneReplacesData,omitempty"`
-	Retirement        string               `json:"retirement,omitempty"`
-	Removing          bool                 `json:"removing,omitempty"`
-	SlowShutdown      bool                 `json:"slowShutdown,omitempty"`
-	RetirementOp      *infra.Op            `json:"retirementOp,omitempty"`
-	Parameters        map[string]string    `json:"restartParameters,omitempty"`
+	Name                  string                 `json:"name"`
+	Role                  string                 `json:"role"`
+	Index                 int                    `json:"index"`
+	Volume                string                 `json:"volume,omitempty"`
+	VolumeID              string                 `json:"volumeId,omitempty"`
+	ServiceID             string                 `json:"serviceId,omitempty"`
+	Stage                 string                 `json:"stage"`
+	ImportBatch           *engine.ImportPlan     `json:"importBatch,omitempty"`
+	DeployOp              *infra.Op              `json:"deployOp,omitempty"`
+	NativeReadiness       *bool                  `json:"nativeReadiness,omitempty"`
+	Version               string                 `json:"version"`
+	Resources             domain.Resources       `json:"resources"`
+	Replicas              int                    `json:"replicas"`
+	ConfigVersion         int64                  `json:"configVersion"`
+	Initialized           bool                   `json:"initialized,omitempty"`
+	ServerUUID            string                 `json:"serverUUID,omitempty"`
+	Offline               bool                   `json:"offline,omitempty"`
+	Public                bool                   `json:"public,omitempty"`
+	ExposureHash          string                 `json:"exposureHash,omitempty"`
+	Clone                 *myspec.CloneRequest   `json:"clone,omitempty"`
+	CloneDone             bool                   `json:"cloneDone,omitempty"`
+	CloneReplacesData     bool                   `json:"cloneReplacesData,omitempty"`
+	Retirement            string                 `json:"retirement,omitempty"`
+	HandoffTarget         string                 `json:"handoffTarget,omitempty"`
+	Removing              bool                   `json:"removing,omitempty"`
+	SlowShutdown          bool                   `json:"slowShutdown,omitempty"`
+	RetirementOp          *infra.Op              `json:"retirementOp,omitempty"`
+	Parameters            map[string]string      `json:"restartParameters,omitempty"`
+	GaleraJoinFence       bool                   `json:"galeraJoinFence,omitempty"`
+	GaleraSSTDonor        string                 `json:"galeraSSTDonor,omitempty"`
+	GaleraHistoryBlocked  bool                   `json:"galeraHistoryBlocked,omitempty"`
+	RuntimeRecovery       engine.RuntimeRecovery `json:"runtimeRecovery,omitempty"`
+	RuntimeRecoveryReason string                 `json:"runtimeRecoveryReason,omitempty"`
+	LastGTIDExecuted      string                 `json:"lastGTIDExecuted,omitempty"`
+	// ConfirmedVolumeLost is affirmative physical/agent loss evidence, not the
+	// shared journal's broader identity-conflict status flag.
+	ConfirmedVolumeLost bool `json:"confirmedVolumeLost,omitempty"`
+	// ProxyDraining temporarily withdraws a PXC writer for an agent rollout.
+	// Unlike Removing, it does not change Galera peers or retire its identity.
+	ProxyDraining       bool   `json:"proxyDraining,omitempty"`
+	ProxyDrainOperation string `json:"proxyDrainOperation,omitempty"`
+
+	// ProxyRuntimeHash acknowledges the submitted runtime/startup specification.
+	// Missing legacy receipts deliberately require redeployment before scaling.
+	ProxyRuntimeHash string `json:"proxyRuntimeHash,omitempty"`
+	// PendingReplicas is the admission/readiness expectation, not committed size.
+	PendingReplicas int `json:"pendingReplicas,omitempty"`
 }
 type pending struct {
 	Op     infra.Op `json:"op"`

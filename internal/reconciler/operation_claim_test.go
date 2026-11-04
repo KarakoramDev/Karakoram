@@ -3,6 +3,7 @@
 package reconciler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -284,5 +285,117 @@ func TestFailedSyncPendingPostgresRolloutRejectsPreviousControlPlaneBuild(t *tes
 	got, err := s.GetOperation(t.Context(), "old-target")
 	if err != nil || got.Phase != domain.PhaseFailed || got.Attempts != 1 || !strings.Contains(got.Message, "differs from running control-plane build") || !strings.Contains(got.Message, "re-run upgrade-agents") || string(got.Payload) != string(payload) {
 		t.Fatalf("previous frozen target was not explicitly retired: %+v %v", got, err)
+	}
+}
+
+type restoreRecoveryClaimProvider struct{ *maintenanceClaimProvider }
+
+func (*restoreRecoveryClaimProvider) RecoveryOperationKind(context.Context, *engine.Context) (string, error) {
+	return domain.OperationRestore, nil
+}
+
+func TestRecoveryClaimFiltersBlockedKindsAfterFailedSync(t *testing.T) {
+	for _, kind := range []string{domain.OperationBackup, domain.OperationRestart, domain.OperationReplaceMember, domain.OperationRestore} {
+		t.Run(kind, func(t *testing.T) {
+			p := &restoreRecoveryClaimProvider{&maintenanceClaimProvider{&operationProvider{fakeProvider: &fakeProvider{}}}}
+			p.syncFn = func(rc *engine.Context) (engine.Result, error) {
+				rc.Cluster.Internal = json.RawMessage(`{"maintenance":true}`)
+				return engine.Result{RequeueAfter: time.Second}, errors.New("restore certification blocked")
+			}
+			runs := 0
+			p.runFn = func(_ *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+				runs++
+				if op.Kind != domain.OperationRestore {
+					t.Fatalf("unsafe recovery operation claimed: %s", op.Kind)
+				}
+				return engine.OpResult{Done: true}, nil
+			}
+			m, st := newTestManager(t, p)
+			createOperationCluster(t, st)
+			if err := st.CreateRestore(t.Context(), &domain.Restore{Cluster: "demo", Name: "recovery-source", Phase: domain.PhasePending}); err != nil {
+				t.Fatal(err)
+			}
+			// An older blocked action must not hide the specifically admitted
+			// restore or consume attempts while waiting for certification.
+			for _, op := range []*domain.Operation{
+				{ID: "older-backup", Cluster: "demo", Kind: domain.OperationBackup, CreatedAt: time.Now().Add(-time.Hour)},
+				{ID: "candidate", Cluster: "demo", Kind: kind, Payload: json.RawMessage(`{"restore":"recovery-source"}`)},
+			} {
+				if err := st.EnqueueOperation(t.Context(), op); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, _ = m.reconcile(t.Context(), domain.ClusterRef{Name: "demo"})
+			got, err := st.GetOperation(t.Context(), "candidate")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := domain.PhasePending
+			if kind == domain.OperationRestore {
+				want = domain.PhaseSucceeded
+			}
+			if got.Phase != want || (kind == domain.OperationRestore) != (runs == 1) {
+				t.Fatalf("recovery admission mismatch: op=%+v runs=%d", got, runs)
+			}
+			older, err := st.GetOperation(t.Context(), "older-backup")
+			if err != nil || older.Phase != domain.PhasePending || older.Attempts != 0 {
+				t.Fatal("blocked backup consumed its execution budget", err)
+			}
+		})
+	}
+}
+
+func TestRunningOwnerPrecedesRecoveryClaim(t *testing.T) {
+	p := &restoreRecoveryClaimProvider{&maintenanceClaimProvider{&operationProvider{fakeProvider: &fakeProvider{}}}}
+	p.syncFn = func(*engine.Context) (engine.Result, error) {
+		t.Fatal("recovery preempted Running restore")
+		return engine.Result{}, nil
+	}
+	p.runFn = func(_ *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+		if op.ID != "running" {
+			t.Fatal("pending recovery preempted active owner")
+		}
+		return engine.OpResult{Done: true}, nil
+	}
+	m, st := newTestManager(t, p)
+	createOperationCluster(t, st)
+	if err := st.CreateRestore(t.Context(), &domain.Restore{Cluster: "demo", Name: "recovery-source", Phase: domain.PhasePending}); err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []*domain.Operation{
+		{ID: "running", Cluster: "demo", Kind: domain.OperationRestore, Phase: domain.PhaseRunning, Payload: json.RawMessage(`{"restore":"recovery-source"}`)},
+		{ID: "new-restore", Cluster: "demo", Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"recovery-source"}`)},
+	} {
+		if err := st.EnqueueOperation(t.Context(), op); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := m.reconcile(t.Context(), domain.ClusterRef{Name: "demo"}); err != nil {
+		t.Fatal(err)
+	}
+	queued, err := st.GetOperation(t.Context(), "new-restore")
+	if err != nil || queued.Phase != domain.PhasePending || queued.Attempts != 0 {
+		t.Fatal("active ownership was lost", err)
+	}
+}
+
+func TestRecoveryClaimDoesNotBlockClusterDeletion(t *testing.T) {
+	p := &restoreRecoveryClaimProvider{&maintenanceClaimProvider{&operationProvider{fakeProvider: &fakeProvider{}}}}
+	p.syncFn = func(*engine.Context) (engine.Result, error) {
+		t.Fatal("deletion entered restore recovery")
+		return engine.Result{}, nil
+	}
+	p.cleanupFn = func(rc *engine.Context) (bool, error) {
+		return p.fakeProvider.Cleanup(t.Context(), rc, domain.DeleteOptions{})
+	}
+	m, st := newTestManager(t, p)
+	if err := st.CreateCluster(t.Context(), &domain.Cluster{Name: "demo", Deleting: true, Internal: json.RawMessage(`{"maintenance":true}`), Spec: domain.ClusterSpec{Provider: "fake"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.reconcile(t.Context(), domain.ClusterRef{Name: "demo"}); err != nil {
+		t.Fatal(err)
+	}
+	if p.cleanup != 1 {
+		t.Fatal("terminal owner prevented teardown")
 	}
 }

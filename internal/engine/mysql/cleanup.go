@@ -9,8 +9,11 @@ import (
 )
 
 func (p *Core) Cleanup(ctx context.Context, rc *engine.Context, opts domain.DeleteOptions) (done bool, err error) {
-	p.accessMu.Lock()
-	defer p.accessMu.Unlock()
+	lock, err := p.mutations.acquire(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return false, err
+	}
+	defer p.mutations.release(lock)
 	if e := p.finishCleanupAccess(ctx, rc); e != nil {
 		return false, e
 	}

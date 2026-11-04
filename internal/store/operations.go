@@ -280,6 +280,18 @@ func (s *Store) ClaimAgentUpgrade(ctx context.Context, ref domain.ClusterRef) (*
 	return s.claimOperation(ctx, ref.Key(), true, domain.OperationUpgradeAgents)
 }
 
+// ClaimRecoveryOperation claims only the provider's explicit recovery kind.
+// Running ownership must already have been checked by the reconciler.
+func (s *Store) ClaimRecoveryOperation(ctx context.Context, ref domain.ClusterRef, kind string) (*domain.Operation, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
+	if kind == "" {
+		return nil, ErrNotFound
+	}
+	return s.claimOperation(ctx, ref.Key(), true, kind)
+}
+
 // ClaimBackupDeletion permits retained-object cleanup without starting unrelated
 // runtime work while a cluster is suspended.
 func (s *Store) ClaimBackupDeletion(ctx context.Context, ref domain.ClusterRef) (*domain.Operation, error) {
@@ -371,6 +383,46 @@ func (s *Store) enqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 	defer tx.Rollback()
 	if backup.Cluster != op.Cluster || domain.NormalizedNamespace(backup.Namespace) != op.Namespace {
 		return ErrConflict
+	}
+	if backup.Trigger == domain.BackupTriggerPITRReanchor {
+		// Recheck under the same writer transaction as insertion: an API or
+		// scheduler enqueue may have won after the engine's observation pass.
+		scope := domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}.Key()
+		rows, e := tx.QueryContext(ctx, `SELECT data FROM records WHERE kind='operation' AND scope=?`, scope)
+		if e != nil {
+			return e
+		}
+		blocked := false
+		for rows.Next() {
+			var raw []byte
+			var existing domain.Operation
+			if e = rows.Scan(&raw); e == nil {
+				e = json.Unmarshal(raw, &existing)
+			}
+			if e != nil {
+				rows.Close()
+				return e
+			}
+			if domain.OperationDefersPITRReanchor(existing, backup.CreatedAt) {
+				blocked = true
+				break
+			}
+		}
+		e = rows.Err()
+		rows.Close()
+		if e != nil {
+			return e
+		}
+		if blocked {
+			return &domain.BackupAdmissionBusyError{Operation: true}
+		}
+		var backups int
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM records WHERE scope=? AND phase IN ('Pending','Running') AND (kind='backup' OR (kind='operation' AND json_extract(data,'$.kind')=?))`, scope, domain.OperationBackup).Scan(&backups); err != nil {
+			return err
+		}
+		if backups != 0 {
+			return &domain.BackupAdmissionBusyError{}
+		}
 	}
 	if err = admitClusterOperation(ctx, tx, op); err != nil {
 		return err

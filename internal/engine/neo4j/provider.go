@@ -41,7 +41,7 @@ func (*Provider) Describe() domain.ProviderInfo {
 		Topologies:   []domain.TopologyInfo{{Type: "single", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 1, Resources: resources()}, MinReplicas: 1, MaxReplicas: 1, AllowedReplicas: []int{1}}}}},
 		BackupTypes:  []string{"dump"},
 		Capabilities: []string{"tls", "monitoring", "publicExposure", "systemUsers", "neo4jAccess", "backups", "restores", "clone"},
-		Operations:   []string{domain.OperationBackup, domain.OperationRestore, domain.OperationDeleteBackup, domain.OperationRestart, domain.OperationRotateSystemUser, domain.OperationRotateTLS}, Processes: []string{"neo4j"},
+		Operations:   []string{domain.OperationUpgradeAgents, domain.OperationBackup, domain.OperationRestore, domain.OperationDeleteBackup, domain.OperationRestart, domain.OperationRotateSystemUser, domain.OperationRotateTLS}, Processes: []string{"neo4j"},
 		EngineOptions: map[string]any{
 			"heapMB":               map[string]any{"type": "integer", "minimum": 256, "maximum": 31744, "description": "40% of minimum RAM by default; heap plus page cache must not exceed 80%"},
 			"pageCacheMB":          map[string]any{"type": "integer", "minimum": 64, "description": "25% of minimum RAM by default"},

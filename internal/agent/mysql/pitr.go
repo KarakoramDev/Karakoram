@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -135,88 +136,49 @@ var binlogGTID = regexp.MustCompile(`GTID_NEXT\s*=\s*'([^']+)'`)
 var binlogCommit = regexp.MustCompile(`original_commit_timestamp(?:=|\s+)\s*([0-9]+)`)
 var binlogPosition = regexp.MustCompile(`end_log_pos\s+([0-9]+)`)
 
+// Event headers use tabs in native mysqlbinlog output, with spaces in some
+// versions/formatters. Match whole header tokens, never SQL or row contents.
+func binlogHeader(line, event string) bool {
+	if !strings.HasPrefix(line, "#") {
+		return false
+	}
+	for offset := 0; offset < len(line); {
+		i := strings.Index(line[offset:], event)
+		if i < 0 {
+			return false
+		}
+		i += offset
+		end := i + len(event)
+		if i > 0 && (line[i-1] == ' ' || line[i-1] == '\t') &&
+			(end == len(line) || line[end] == ' ' || line[end] == '\t' || line[end] == '=') {
+			return true
+		}
+		offset = end
+	}
+	return false
+}
+
 func parseBinlogOutput(data []byte) (binlogSidecar, error) {
+	return parseBinlogStream(bytes.NewReader(data), nil)
+}
+
+// emit permits probes to discard transaction metadata as it is consumed.
+// Replay sidecars retain only one small record per committed transaction, never rows.
+func parseBinlogStream(r io.Reader, emit func(binlogTransaction) error) (binlogSidecar, error) {
 	var out binlogSidecar
-	scan := bufio.NewScanner(bytes.NewReader(data))
+	scan := bufio.NewScanner(r)
 	scan.Buffer(make([]byte, 4096), 4<<20)
 	var tx binlogTransaction
 	var position uint64
 	previous := false
-	finish := func() error {
-		if tx.GTID == "" {
-			return nil
-		}
-		if tx.OriginalCommitTimestamp == 0 {
-			return errors.New("missing_commit_timestamp")
-		}
-		tx.EndPosition = position
-		out.Transactions = append(out.Transactions, tx)
-		tx = binlogTransaction{}
-		return nil
-	}
-	for scan.Scan() {
-		line := scan.Text()
-		// DDL commits do not have an Xid event. Seal their previous Query
-		// boundary before consuming the next transaction or rotation header.
-		if strings.Contains(line, "GTID\t") || strings.Contains(line, "Rotate to ") {
-			if err := finish(); err != nil {
-				return out, err
-			}
-		}
-		if m := binlogPosition.FindStringSubmatch(line); m != nil {
-			position, _ = strconv.ParseUint(m[1], 10, 64)
-		}
-		if strings.Contains(line, "Previous-GTIDs") {
-			previous = true
-			continue
-		}
-		if previous {
-			v := strings.TrimSpace(strings.TrimPrefix(line, "#"))
-			if v == "[empty]" {
-				previous = false
-			} else if strings.HasPrefix(line, "# ") && !strings.Contains(v, " ") {
-				if _, err := parseRecoveryGTIDs(v); err == nil {
-					if out.PreviousGTIDSet != "" {
-						out.PreviousGTIDSet += ","
-					}
-					out.PreviousGTIDSet += v
-				} else {
-					previous = false
-				}
-			} else {
-				previous = false
-			}
-		}
-		if m := binlogCommit.FindStringSubmatch(line); m != nil {
-			if err := finish(); err != nil {
-				return out, err
-			}
-			tx.OriginalCommitTimestamp, _ = strconv.ParseInt(m[1], 10, 64)
-		}
-		if m := binlogGTID.FindStringSubmatch(line); m != nil && m[1] != "AUTOMATIC" {
-			if _, err := parseRecoveryGTIDs(m[1]); err != nil {
-				return out, err
-			}
-			tx.GTID = m[1]
-		}
-		if tx.GTID != "" && (strings.Contains(line, "Xid =") || strings.HasPrefix(line, "COMMIT") || strings.Contains(line, "COMMIT/*!*/")) {
-			if tx.OriginalCommitTimestamp == 0 {
-				return out, errors.New("missing_commit_timestamp")
-			}
-			tx.EndPosition = position
-			out.Transactions = append(out.Transactions, tx)
-			tx = binlogTransaction{}
-		}
-	}
-	if err := scan.Err(); err != nil {
-		return out, err
-	}
-	if err := finish(); err != nil {
-		return out, err
-	}
+	inTransaction := false
+	queryBoundary := false
 	set := recoveryGTIDs{}
-	for _, tx := range out.Transactions {
-		g, _ := parseRecoveryGTIDs(tx.GTID)
+	record := func() error {
+		g, err := parseRecoveryGTIDs(tx.GTID)
+		if err != nil {
+			return err
+		}
 		set.add(g)
 		if out.FirstCommitTimestamp == 0 || tx.OriginalCommitTimestamp < out.FirstCommitTimestamp {
 			out.FirstCommitTimestamp = tx.OriginalCommitTimestamp
@@ -224,6 +186,137 @@ func parseBinlogOutput(data []byte) (binlogSidecar, error) {
 		if tx.OriginalCommitTimestamp > out.LastCommitTimestamp {
 			out.LastCommitTimestamp = tx.OriginalCommitTimestamp
 		}
+		if emit != nil {
+			return emit(tx)
+		}
+		out.Transactions = append(out.Transactions, tx)
+		return nil
+	}
+	finish := func() error {
+		if tx.GTID == "" {
+			if tx.OriginalCommitTimestamp != 0 {
+				return errors.New("missing_transaction_gtid")
+			}
+			return nil
+		}
+		if inTransaction || !queryBoundary {
+			return errors.New("incomplete_binlog_transaction")
+		}
+		if tx.OriginalCommitTimestamp == 0 {
+			return errors.New("missing_commit_timestamp")
+		}
+		if err := record(); err != nil {
+			return err
+		}
+		tx = binlogTransaction{}
+		queryBoundary = false
+		return nil
+	}
+	var previousBlock strings.Builder
+	finishPrevious := func() error {
+		if previousBlock.Len() == 0 {
+			return nil
+		}
+		set, err := parseRecoveryGTIDs(previousBlock.String())
+		if err != nil {
+			return err
+		}
+		out.PreviousGTIDSet = set.String()
+		previousBlock.Reset()
+		return nil
+	}
+	for scan.Scan() {
+		if bytes.HasPrefix(scan.Bytes(), []byte("###")) {
+			continue
+		}
+		line := scan.Text()
+		// DDL commits do not have an Xid event. Seal their previous Query
+		// boundary before consuming the next transaction or rotation header.
+		if binlogHeader(line, "GTID") || binlogHeader(line, "Anonymous_GTID") || binlogHeader(line, "Rotate to") {
+			if err := finish(); err != nil {
+				return out, err
+			}
+		}
+		if m := binlogPosition.FindStringSubmatch(line); m != nil {
+			var err error
+			position, err = strconv.ParseUint(m[1], 10, 64)
+			if err != nil {
+				return out, err
+			}
+			if position >= 4 {
+				out.DecodePosition = position
+			}
+		}
+		if tx.GTID != "" && binlogHeader(line, "Query") {
+			tx.EndPosition = position
+			queryBoundary = true
+		}
+		if binlogHeader(line, "Previous-GTIDs") {
+			previous = true
+			continue
+		}
+		if previous {
+			v := strings.TrimSpace(strings.TrimPrefix(line, "#"))
+			headerMetadata := binlogCommit.MatchString(line) || strings.HasPrefix(v, "immediate_commit_timestamp=")
+			if strings.HasPrefix(line, "# ") && !strings.Contains(v, " ") && v != "[empty]" && !headerMetadata {
+				if previousBlock.Len() > 0 {
+					previousBlock.WriteByte(',')
+				}
+				previousBlock.WriteString(strings.TrimSuffix(v, ","))
+				continue
+			}
+			previous = false
+			if err := finishPrevious(); err != nil {
+				return out, err
+			}
+		}
+		if m := binlogCommit.FindStringSubmatch(line); m != nil {
+			// mysqlbinlog prints the original timestamp both in the GTID
+			// comment and in a versioned SET before GTID_NEXT. These are
+			// repeated fields of one header, not a transaction boundary.
+			if tx.GTID != "" {
+				if err := finish(); err != nil {
+					return out, err
+				}
+			}
+			var err error
+			tx.OriginalCommitTimestamp, err = strconv.ParseInt(m[1], 10, 64)
+			if err != nil {
+				return out, err
+			}
+		}
+		if m := binlogGTID.FindStringSubmatch(line); m != nil && m[1] != "AUTOMATIC" {
+			if _, err := parseRecoveryGTIDs(m[1]); err != nil {
+				return out, err
+			}
+			tx.GTID = m[1]
+		}
+		if tx.GTID != "" && (line == "BEGIN" || strings.HasPrefix(line, "XA START ")) {
+			inTransaction = true
+		}
+		// XA PREPARE is a durable GTID boundary (also used for ONE PHASE).
+		// Its later COMMIT/ROLLBACK, if any, has a separate GTID Query.
+		if tx.GTID != "" && (binlogHeader(line, "Xid") || binlogHeader(line, "XA PREPARE") || strings.HasPrefix(line, "COMMIT")) {
+			if tx.OriginalCommitTimestamp == 0 {
+				return out, errors.New("missing_commit_timestamp")
+			}
+			tx.EndPosition = position
+			if err := record(); err != nil {
+				return out, err
+			}
+			inTransaction = false
+			queryBoundary = false
+			tx = binlogTransaction{}
+		}
+	}
+	if err := scan.Err(); err != nil {
+		return out, err
+	}
+	if err := finishPrevious(); err != nil {
+		return out, err
+	}
+	if err := finish(); err != nil {
+		return out, err
 	}
 	out.GTIDSet = set.String()
 	if out.FirstCommitTimestamp != 0 {
@@ -378,10 +471,11 @@ type replayLogs struct {
 }
 
 func fetchReplayLogs(ctx context.Context, s myspec.Spec, r myspec.Restore, dir string, backup myspec.BackupResult) (replayLogs, string, error) {
-	c, err := s3Client(r.Source)
+	c, closeClient, err := s3Client(r.Source)
 	if err != nil {
 		return replayLogs{}, "", err
 	}
+	defer closeClient()
 	logs, err := readReplaySidecars(ctx, c, r.Source)
 	if err != nil {
 		return replayLogs{}, "", err

@@ -95,7 +95,7 @@ func TestGrantStatements(t *testing.T) {
 	if stmt != "REVOKE SELECT, CREATE VIEW ON `app_db`.* FROM 'app'@'%'" {
 		t.Fatal(stmt)
 	}
-	for _, privileges := range [][]string{nil, {"SUPER"}, {"GRANT_OPTION"}, {"ALL", "SELECT"}, {"SELECT", "SELECT"}, {"SELECT; DROP USER root"}} {
+	for _, privileges := range [][]string{nil, {"SUPER"}, {"CONNECTION_ADMIN"}, {"GRANT_OPTION"}, {"ALL", "SELECT"}, {"SELECT", "SELECT"}, {"SELECT; DROP USER root"}} {
 		grant.Privileges = privileges
 		if _, err = grantStatement("grant", grant, false); err == nil {
 			t.Fatalf("accepted invalid privileges %#v", privileges)
@@ -133,7 +133,8 @@ func TestAccessErrorsClosedVocabulary(t *testing.T) {
 
 type failingAccessDeps struct{}
 
-func (failingAccessDeps) GaleraAccess() bool { return false }
+func (failingAccessDeps) GaleraAccess() bool        { return false }
+func (failingAccessDeps) AccessRestoreFenced() bool { return false }
 
 func (failingAccessDeps) LocalAccessDB(context.Context) (*sql.DB, error) {
 	return nil, errors.New("private failure")

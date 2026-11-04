@@ -23,6 +23,13 @@ const ConfigCapabilityGaleraListenHost = "mysql-galera-listen-host"
 // ConfigCapabilityMySQLListenHost advertises support for SQL listener policy.
 const ConfigCapabilityMySQLListenHost = "mysql-listen-host"
 
+// ConfigCapabilityTemporalIPv6 advertises private IPv6 route discovery and listeners.
+const ConfigCapabilityTemporalIPv6 = "temporal-ipv6"
+
+// ConfigCapabilityPostgresLocalPeer advertises password-independent local
+// management authentication, including restore across administrator rotations.
+const ConfigCapabilityPostgresLocalPeer = "postgres-local-peer"
+
 // MemberConfig is the secret-bearing desired configuration pulled by a node agent.
 type MemberConfig struct {
 	Cluster               string                 `json:"cluster"`
@@ -93,6 +100,9 @@ type Status struct {
 	PBMRestoreIdentity bool `json:"pbmRestoreIdentity,omitempty"`
 	// CertificateReloadOnly advertises reload-only native certificate application.
 	CertificateReloadOnly bool `json:"certificateReloadOnly,omitempty"`
+	// MySQLRestoreCertification advertises native fencing, history probes and
+	// durable ProxySQL hold/release support as one negotiated restore feature.
+	MySQLRestoreCertification bool `json:"mysqlRestoreCertification,omitempty"`
 	// Error explains a blocked local recovery without making status unreachable.
 	Error string `json:"error,omitempty"`
 	// MongoReady observes authenticated router access to config-server metadata.

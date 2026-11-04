@@ -84,7 +84,7 @@ func TestAgent(t *testing.T) {
 	config.TLS = agentapi.TLSConfig{Mode: "requireTLS", CAPEM: string(certPEM), CertPEM: string(certPEM), KeyPEM: string(keyPEM)}
 	cp := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/internal/agent/v1/config" || r.Header.Get("Authorization") != "Bearer integration-token" {
-			http.Error(w, "unauthorized", 401)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

@@ -5,6 +5,7 @@ package postgres
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"golang.org/x/sys/unix"
 )
 
 var backupActionMu sync.Mutex
@@ -193,11 +195,53 @@ func durableJSON(name string, value any) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(name), ".receipt-")
+	return durableFile(name, b)
+}
+
+// openDurableDirectory pins the real, trusted parent inode for all subsequent
+// reads and publication. Pathname replacements cannot redirect those operations.
+func openDurableDirectory(path string) (*os.File, error) {
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+	d := os.NewFile(uintptr(fd), path)
+	info, err := d.Stat()
+	if err != nil {
+		_ = d.Close()
+		return nil, err
+	}
+	if !postgresFileOwned(info) || info.Mode().Perm()&0022 != 0 {
+		_ = d.Close()
+		return nil, errors.New("postgres directory must be agent-owned and not writable by other users")
+	}
+	return d, nil
+}
+
+func postgresFileOwned(info os.FileInfo) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat.Uid == uint32(os.Geteuid())
+}
+
+// durableFile atomically replaces an owner-only file in a verified directory.
+func durableFile(name string, b []byte) error {
+	d, err := openDurableDirectory(filepath.Dir(name))
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
+	defer d.Close()
+	return durableFileAt(d, filepath.Base(name), b)
+}
+
+func durableFileAt(d *os.File, name string, b []byte) error {
+	dirfd := int(d.Fd())
+	temp := ".receipt-" + rand.Text()
+	fd, err := unix.Openat(dirfd, temp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
+	if err != nil {
+		return err
+	}
+	defer unix.Unlinkat(dirfd, temp, 0)
+	f := os.NewFile(uintptr(fd), temp)
 	if err = f.Chmod(0600); err == nil {
 		_, err = f.Write(b)
 	}
@@ -211,14 +255,9 @@ func durableJSON(name string, value any) error {
 	if err != nil {
 		return err
 	}
-	if err = os.Rename(f.Name(), name); err != nil {
+	if err = unix.Renameat(dirfd, temp, dirfd, name); err != nil {
 		return err
 	}
-	d, err := os.Open(filepath.Dir(name))
-	if err != nil {
-		return err
-	}
-	defer d.Close()
 	return d.Sync()
 }
 func receiptPath(p paths, kind, id string) (string, error) {

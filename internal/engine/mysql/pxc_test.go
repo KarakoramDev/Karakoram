@@ -4,6 +4,7 @@ package mysql
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -19,6 +20,9 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 	_, rc, b := setup(t, "group")
 	p := New(Options{Provider: "pxc"})
 	rc.Cluster.Spec.Provider, rc.Cluster.Spec.Version, rc.Cluster.Spec.Topology.Type = "pxc", pxcCatalog[0].Version, "cluster"
+	probeSequence := int64(1000000)
+	probeReceipts := map[string]myspec.GaleraStatusResponse{}
+	sstCopied := map[string]bool{}
 	b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
 		switch r.URL.Path {
 		case "/v1/status":
@@ -26,7 +30,7 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 			if b.native[name].MemberState != "ONLINE" {
 				pid = 0
 			}
-			json.NewEncoder(w).Encode(agentapi.Status{Agent: b.agentBuild, ConfigVersion: b.applied[name], Processes: map[string]agentapi.ProcessStatus{"mysqld": {PID: pid}}})
+			json.NewEncoder(w).Encode(agentapi.Status{Agent: b.agentBuild, MySQLRestoreCertification: true, ConfigVersion: b.applied[name], Processes: map[string]agentapi.ProcessStatus{"mysqld": {PID: pid}}})
 			return true
 		case "/v1/mysql/galera-status":
 			st := b.native[name]
@@ -37,28 +41,70 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 				}
 			}
 			out := myspec.GaleraStatusResponse{ClusterStatus: "non-Primary", StateUUID: "11111111-2222-3333-4444-555555555555", LastCommitted: 10, ClusterSize: size, GTIDExecuted: st.GTIDExecuted}
+			out.ServerUUID = st.ServerUUID
+			cfg, err := p.MemberConfig(r.Context(), rc, name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var spec myspec.Spec
+			if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			current, _ := load(rc.Cluster)
+			if member := current.find(name); member != nil && !member.Initialized && st.MemberState == "ONLINE" && spec.Galera != nil && spec.Galera.SSTDonor != "" && !sstCopied[name] {
+				// A real initial SST copies executed history, including earlier
+				// certification probes; the receiver is not a blank GTID set.
+				st.GTIDExecuted = b.native[spec.Galera.SSTDonor].GTIDExecuted
+				b.native[name] = st
+				out.GTIDExecuted = st.GTIDExecuted
+				sstCopied[name] = true
+			}
+			out.OfflineMode = spec.Galera != nil && spec.Galera.RestoreFence
+			out.LastCommitted = probeSequence
 			if st.MemberState == "ONLINE" {
 				out.ClusterStatus, out.LocalStateComment, out.Ready, out.Connected = "Primary", "Synced", true, true
 			}
 			json.NewEncoder(w).Encode(out)
 			return true
-		case "/v1/mysql/proxy-status":
-			cfg, err := p.MemberConfig(r.Context(), rc, name)
-			if err != nil {
-				t.Error(err)
-				http.Error(w, "config unavailable", http.StatusServiceUnavailable)
+		case "/v1/mysql/galera-history-probe":
+			var req myspec.GaleraHistoryProbeRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatal(err)
+			}
+			if saved, ok := probeReceipts[req.Receipt]; ok {
+				_ = json.NewEncoder(w).Encode(saved)
 				return true
 			}
-			var spec myspec.Spec
-			if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil || spec.Proxy == nil {
-				t.Error("invalid proxy config", err)
-				http.Error(w, "invalid proxy config", http.StatusServiceUnavailable)
+			probeSequence++
+			size := 0
+			for peer, status := range b.native {
+				if status.MemberState == "ONLINE" {
+					size++
+				}
+				if status.GTIDExecuted != "" {
+					status.GTIDExecuted += ","
+				}
+				status.GTIDExecuted += fmt.Sprintf("11111111-2222-3333-4444-555555555555:%d", probeSequence)
+				b.native[peer] = status
+			}
+			out := myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, ClusterSize: size, StateUUID: "11111111-2222-3333-4444-555555555555", LastCommitted: probeSequence, GTIDExecuted: b.native[name].GTIDExecuted, ServerUUID: b.native[name].ServerUUID, OfflineMode: true}
+			probeReceipts[req.Receipt] = out
+			_ = json.NewEncoder(w).Encode(out)
+			return true
+		case "/v1/mysql/proxy-status":
+			proxy := b.proxyConfigs[name] // Handler already holds b.mu.
+			if proxy == nil {
+				http.Error(w, "proxy config not applied", http.StatusServiceUnavailable)
 				return true
 			}
 			var status myspec.ProxyStatusResponse
-			for _, peer := range spec.Proxy.Backends {
-				if peer.Host == b.leader && b.native[peer.Host].MemberState == "ONLINE" {
-					status.Backends = append(status.Backends, myspec.ProxyBackend{Hostgroup: myspec.ProxyWriterGroup, Host: peer.Host, Port: peer.Port, Status: "ONLINE"})
+			for _, peer := range proxy.Backends {
+				if b.native[peer.Host].MemberState == "ONLINE" {
+					group := myspec.ProxyReaderGroup
+					if peer.Host == b.leader {
+						group = myspec.ProxyWriterGroup
+					}
+					status.Backends = append(status.Backends, myspec.ProxyBackend{Hostgroup: group, Host: peer.Host, Port: peer.Port, Status: "ONLINE"})
 				}
 			}
 			json.NewEncoder(w).Encode(status)
@@ -188,7 +234,7 @@ func TestGroupResourceMemoryFloor(t *testing.T) {
 
 func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
 	for _, topology := range []string{"single", "group", "cluster"} {
-		for _, ram := range []float64{1, 2} {
+		for _, ram := range []float64{1, 2, 3, 4} {
 			var p *Core
 			var rc *engine.Context
 			var b *fakeBackend
@@ -224,7 +270,14 @@ func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
 					t.Fatal(err)
 				}
 				limit := int64(ram * (1 << 30))
-				if spec.BufferPoolBytes != limit/2 || spec.MaxConnections != 200 {
+				wantPool := limit / 2
+				if topology == "single" && ram == 1 {
+					wantPool = 256 << 20
+				}
+				if topology != "single" && ram == 2 {
+					wantPool = 768 << 20
+				}
+				if spec.BufferPoolBytes != wantPool || spec.MaxConnections != 200 {
 					t.Fatalf("%s RAM %g: unexpected memory defaults: %+v", topology, ram, spec)
 				}
 				// This is explicit cache headroom, not a bound on native RSS:
@@ -236,9 +289,11 @@ func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
 					}
 					caches += 128 << 20
 				} else if topology == "group" {
-					// Agent rendering derives this managed cache from the baseline
-					// pool, not the independently overridable SQL parameter.
-					caches += max(int64(128<<20), spec.BufferPoolBytes/4)
+					wantCache := int64(128 << 20)
+					if ram > 2 {
+						wantCache = limit / 8
+					}
+					caches += wantCache
 				}
 				if limit-caches < limit*3/8 {
 					t.Fatalf("%s RAM %g: explicit caches leave less than 37.5%% headroom", topology, ram)
@@ -304,7 +359,7 @@ func TestPXCScaleOutUsesSSTAndTLSRotation(t *testing.T) {
 				return false
 			}
 		}
-		return true
+		return !pxcFormationMappingPending(s)
 	})
 	if len(b.clones) != 0 {
 		t.Fatal("PXC cloned through GR", b.clones)
@@ -357,10 +412,12 @@ func TestPXCRestorePreparesSSTJoinersBeforeBootstrap(t *testing.T) {
 	p, rc, b := setupPXC(t)
 	converge(t, p, rc, b)
 	s, _ := load(rc.Cluster)
+	s.Formation.GTIDCertification = nil // Native restore.install retires the prior formation receipt.
 	s.Formation.FormationEpoch++
 	s.Formation.GroupName = "aaaaaaaabbbb4ccc8dddeeeeeeeeeeee"
 	s.Formation.State = "bootstrapping"
 	s.Formation.Reformation = &reformation{State: "bootstrapping"}
+	s.RestoreGTIDFence = "pxc-restore" // Restored startup already published the client fence.
 	for _, m := range s.data() {
 		m.Offline = m.Name != s.Formation.Seed
 		m.Initialized = false
@@ -436,7 +493,7 @@ func TestPXCResumeRecoversEveryStoppedMemberAndPinsSeedPosition(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.apply(t, p, rc)
-	if _, err := p.reconcileGaleraFormation(t.Context(), rc, s); err != nil {
+	if _, err := p.reconcileFormation(t.Context(), rc, s); err != nil {
 		t.Fatal(err)
 	}
 	if s.Formation.Reformation.State != "bootstrapping" || len(s.Formation.Reformation.GaleraObservations) != 3 {
@@ -464,7 +521,7 @@ func TestPXCScaleInReplacementAndResourceRollAvoidGR(t *testing.T) {
 	converge(t, p, rc, b)
 	rc.Cluster.Generation++
 	rc.Cluster.Spec.Components.Engine.Replicas = 3
-	day2Ticks(t, rc, b, func(s *state) bool { return len(s.data()) == 3 && s.Pending == nil })
+	day2Ticks(t, rc, b, func(s *state) bool { return len(s.data()) == 3 && s.Pending == nil && !pxcFormationMappingPending(s) })
 	old := b.leader
 	runDay2Operation(t, rc, b, &domain.Operation{ID: "pxc-replace", Kind: domain.OperationReplaceMember, Payload: json.RawMessage(`{"member":"` + old + `"}`)})
 	s, _ := load(rc.Cluster)

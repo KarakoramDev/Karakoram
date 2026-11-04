@@ -49,7 +49,7 @@ func (p *Provider) DeleteRetainedBackup(ctx context.Context, storage domain.Back
 	var keys []string
 	latest := ""
 	generation := int64(-1)
-	for object := range client.ListObjects(ctx, storage.Bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+	for object := range client.ListObjectsIter(ctx, storage.Bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
 		if object.Err != nil {
 			return fmt.Errorf("list retained repository: %w", object.Err)
 		}

@@ -9,6 +9,26 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 )
 
+func TestMemorySizingOperatorOverrides(t *testing.T) {
+	for _, topology := range []string{myspec.TopologySingle, myspec.TopologyGroup, myspec.TopologyCluster} {
+		for _, pool := range []string{"134217728", "1073741824"} {
+			s := coreTestSpec()
+			s.Topology = topology
+			s.BufferPoolBytes, s.MaxConnections = 768<<20, 200
+			if topology == myspec.TopologyGroup {
+				s.GroupReplication = testGroupSpec().GroupReplication
+			}
+			s.Parameters = map[string]string{"innodb_buffer_pool_size": pool, "max_connections": "30"}
+			config := renderConfig(s, dataPaths(t.TempDir()))
+			for key, value := range s.Parameters {
+				if !strings.Contains(config, "\n"+key+"="+optionQuote(value)+"\n") {
+					t.Fatalf("%s: override %s=%s lost", topology, key, value)
+				}
+			}
+		}
+	}
+}
+
 func TestGroupStartupWriteFence(t *testing.T) {
 	s := coreTestSpec()
 	s.Topology = myspec.TopologyGroup

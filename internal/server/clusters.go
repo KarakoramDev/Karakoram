@@ -300,8 +300,17 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return s.unsupportedClusterAction(name, p)
 	}
 	if name == "RotateSystemUser" && (p.Name() == "postgres" || p.Name() == "supabase") {
-		// PostgreSQL rotates only the Data MCP identities; managed roles stay engine-owned.
-		if in.User != engine.DataAccessReadUser && in.User != engine.DataAccessReadWriteUser {
+		if in.User == "postgres" {
+			admission, ok := p.(interface {
+				AdmitAdminRotation(context.Context, *engine.Context) error
+			})
+			if !ok {
+				return s.unsupportedClusterAction(name, p)
+			}
+			if err := admission.AdmitAdminRotation(ctx, rc); err != nil {
+				return s.failure(err)
+			}
+		} else if in.User != engine.DataAccessReadUser && in.User != engine.DataAccessReadWriteUser {
 			return s.unsupportedClusterAction(name, p)
 		}
 		if read, readWrite := engine.DataAccessLevels(c); in.User == engine.DataAccessReadUser && !read || in.User == engine.DataAccessReadWriteUser && !readWrite {
@@ -922,7 +931,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		return ok(api.Balancer{Enabled: v.Enabled, Running: &v.Running, Mode: &v.Mode})
 	case "GetPITRWindow":
-		windows, err := dp.PITRWindow(ctx, rc)
+		var windows, intervals []domain.TimeWindow
+		if provider, ok := dp.(engine.PITRIntervalsProvider); ok {
+			windows, intervals, err = provider.PITRWindowIntervals(ctx, rc)
+		} else {
+			windows, err = dp.PITRWindow(ctx, rc)
+			intervals = windows
+		}
 		if err != nil {
 			if errors.Is(err, engine.ErrNotSupported) {
 				return invalidField("source.pitrTime", domain.ReasonUnsupported, p.Describe().DisplayName+" does not support PITR for cluster "+c.Name)
@@ -942,7 +957,31 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				latest = w
 			}
 		}
-		return ok(api.PITRWindow{Available: true, Start: &latest.Start, End: &latest.End})
+		ranges := make([]api.PITRInterval, 0, len(intervals))
+		for _, w := range intervals {
+			interval := api.PITRInterval{Start: w.Start, End: w.End}
+			if w.Backup != "" {
+				interval.Backup = ptr(w.Backup)
+			}
+			ranges = append(ranges, interval)
+		}
+		slices.SortFunc(ranges, func(a, b api.PITRInterval) int {
+			if cmp := a.Start.Compare(b.Start); cmp != 0 {
+				return cmp
+			}
+			if cmp := a.End.Compare(b.End); cmp != 0 {
+				return cmp
+			}
+			var aBackup, bBackup string
+			if a.Backup != nil {
+				aBackup = *a.Backup
+			}
+			if b.Backup != nil {
+				bBackup = *b.Backup
+			}
+			return strings.Compare(aBackup, bBackup)
+		})
+		return ok(api.PITRWindow{Available: true, Start: &latest.Start, End: &latest.End, Intervals: &ranges})
 	case "GetClusterPlacement":
 		v, err := dp.Placement(ctx, rc)
 		if err != nil {
@@ -1160,7 +1199,7 @@ func (s *Server) createCluster(ctx context.Context, b *api.CreateClusterRequest,
 				return s.failure(engine.InvalidField("spec.dataSource.backup", domain.ReasonConflict, "backup provider does not match target provider"))
 			}
 		}
-		if d.PITRTime != nil && c.Spec.Provider == "pxc" {
+		if d.PITRTime != nil && (c.Spec.Provider == "pxc" || c.Spec.Provider == "mysql") {
 			sourceRC, sourceProvider, e := s.context(ctx, source)
 			if e != nil {
 				return s.failure(e)

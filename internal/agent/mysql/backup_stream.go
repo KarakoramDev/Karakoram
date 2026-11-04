@@ -123,6 +123,8 @@ func backupStreamMetadataFile(name string) bool {
 
 func backupManifestPipeline(a, b *exec.Cmd, metadata io.Writer, prefix string) (myspec.BackupObjectManifest, error) {
 	var empty myspec.BackupObjectManifest
+	var sourceStderr, cloudStderr backupStderrTail
+	a.Stderr, b.Stderr = &sourceStderr, &cloudStderr
 	reader, err := a.StdoutPipe()
 	if err != nil {
 		return empty, errors.New("pipeline_start")
@@ -152,14 +154,18 @@ func backupManifestPipeline(a, b *exec.Cmd, metadata io.Writer, prefix string) (
 		_ = b.Process.Kill()
 	}
 	sourceErr, cloudErr := a.Wait(), b.Wait()
+	reason, detail := "", ""
 	if streamErr != nil {
-		return empty, errors.New("pipeline_stream_failed")
+		reason, detail = "pipeline_stream_failed", "; "+backupStreamDiagnostic(streamErr)
+	} else if sourceErr != nil {
+		reason = "pipeline_source_failed"
+	} else if cloudErr != nil {
+		reason = "pipeline_sink_failed"
 	}
-	if sourceErr != nil {
-		return empty, errors.New("pipeline_source_failed")
-	}
-	if cloudErr != nil {
-		return empty, errors.New("pipeline_sink_failed")
+	if reason != "" {
+		return empty, fmt.Errorf("%s%s; %s; %s", reason, detail,
+			backupProcessDiagnostic("xtrabackup", a, sourceErr, streamErr != nil, &sourceStderr),
+			backupProcessDiagnostic("xbcloud", b, cloudErr, streamErr != nil, &cloudStderr))
 	}
 	return manifest, nil
 }

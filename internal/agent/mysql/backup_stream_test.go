@@ -133,10 +133,11 @@ func TestRepositoryCannotBlessReplacementBeforeManifestSealing(t *testing.T) {
 	}
 	objects := map[string][]byte{manifest.Objects[0].Key: nativeXBFrame('P', "ibdata1", bytes.Repeat([]byte("x"), len("trusted native source")), 0, nil)}
 	repo := manifestS3Fixture(t, objects)
-	client, err := s3Client(repo)
+	client, closeClient, err := s3Client(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closeClient()
 	if _, _, err := createBackupManifest(t.Context(), client, repo, manifest); err == nil {
 		t.Fatal("mutable repository bytes became their own trusted checksum")
 	}

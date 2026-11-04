@@ -41,6 +41,11 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		return result, engine.Invalid("MySQL member replacement requires group topology")
 	}
 	if s.Replacement == nil {
+		for _, m := range s.Members {
+			if m.ProxyDraining || m.ProxyDrainOperation != "" {
+				return result, fmt.Errorf("member replacement waits for agent rollout drain settlement of %s: %w", m.Name, engine.ErrUnavailable)
+			}
+		}
 		var previous replacementState
 		if len(op.Checkpoint) != 0 {
 			if err := json.Unmarshal(op.Checkpoint, &previous); err != nil {
@@ -66,11 +71,20 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		if old == nil || old.Role != "data" {
 			return result, engine.Invalid("replacement target must be a MySQL data member")
 		}
+		if old.ConfirmedVolumeLost {
+			if err := p.volumeRecoverySafe(ctx, rc, s, old); err != nil {
+				old.RuntimeRecoveryReason = err.Error()
+				return result, err
+			}
+		}
 		index := s.NextIndex
 		s.NextIndex++
 		name := fmt.Sprintf("%sm%d", rc.Cluster.Name, index)
 		s.Members = append(s.Members, &member{Name: name, Index: index, Role: "data", Volume: name + "v", Stage: "planned", ConfigVersion: s.ConfigVersion})
 		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: name, Stage: "join"}
+		if rc.Cluster.Spec.Provider == "pxc" {
+			preparePXCFormationCertification(s)
+		}
 		publishRevision(s)
 	}
 	if s.Replacement.Operation != op.ID {
@@ -85,6 +99,12 @@ func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *st
 	case "join":
 		next := s.find(cp.New)
 		if next == nil {
+			if cp.Recovery == "rollback" {
+				// The formation lifecycle may already have retired the entire
+				// unadmitted cohort before this replacement can resume.
+				cp.Stage = "done"
+				return replacementResult(cp), nil
+			}
 			return engine.OpResult{}, engine.ErrNotFound
 		}
 		if cp.Recovery == "rollback" {
@@ -126,6 +146,14 @@ func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *st
 			return replacementResult(cp), err
 		}
 		if st.MemberState == "ONLINE" {
+			// PXC join certification intentionally withholds routing until the
+			// replacement retires its predecessor and final membership certifies.
+			// Retirement still requires an already admitted surviving candidate.
+			if !pxcJoinRoutingFenced(s, next) {
+				if err := proxyRejoinReady(ctx, rc, s, next.Name); err != nil {
+					return replacementResult(cp), err
+				}
+			}
 			if rc.Operation != nil && rc.Operation.Actor != "system" {
 				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
 					result := replacementResult(cp)

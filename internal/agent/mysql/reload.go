@@ -39,6 +39,9 @@ func (e *Runner) reload(ctx context.Context, db *sql.DB, s, previous myspec.Spec
 	if s.SlowShutdown {
 		parameters["innodb_fast_shutdown"] = "0"
 	}
+	if s.Galera != nil {
+		parameters["offline_mode"] = strconv.FormatBool(s.Galera.RestoreFence)
+	}
 	for k := range previous.Parameters {
 		if myspec.RestartRequiredParameter(k) {
 			continue

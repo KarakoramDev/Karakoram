@@ -181,6 +181,7 @@ type StatusResponse struct {
 	MemberState      string       `json:"memberState"`
 	MemberRole       string       `json:"memberRole"`
 	GroupMembers     int          `json:"groupMembers,omitempty"`
+	GroupName        string       `json:"groupName,omitempty"`
 	ServerUUID       string       `json:"serverUUID"`
 	GTIDExecuted     string       `json:"gtidExecuted"`
 	ReadOnly         bool         `json:"readOnly"`
@@ -262,6 +263,7 @@ type BinlogArchiveStatus struct {
 	GapReason         string    `json:"gapReason,omitempty"`
 	ContiguousEndTime time.Time `json:"contiguousEndTime"`
 	ContiguousGTIDSet string    `json:"contiguousGTIDSet"`
+	Error             string    `json:"error,omitempty"`
 }
 type RestoreRequest struct {
 	Receipt    string  `json:"receipt"`
