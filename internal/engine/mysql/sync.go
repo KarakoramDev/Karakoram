@@ -194,6 +194,28 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if busy, e := p.reconcileRestoreRecovery(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	// During a history incident, a queued physical backup takes the next
+	// imperative turn once existing native ownership has settled. New work
+	// would fail its maintenance gate on that backup, and failed Sync prevents
+	// the reconciler from claiming it. This also covers a spec edit accepted
+	// after recovery-backup admission.
+	if p.Name() == "pxc" && activeGTIDIncident(s) != nil && rc.Store != nil && !s.Formation.reforming() {
+		bs, e := loadBackupState(rc.Cluster)
+		if e != nil {
+			return result, e
+		}
+		if canClaimOperation(s, bs) {
+			backups, e := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
+			if e != nil {
+				return result, e
+			}
+			for _, b := range backups {
+				if b.Phase == domain.PhasePending || b.Phase == domain.PhaseRunning {
+					return result, nil
+				}
+			}
+		}
+	}
 	for _, m := range s.Members {
 		if m.VolumeID != "" && m.ImportBatch == nil && !m.Removing && !m.ConfirmedVolumeLost {
 			disk, e := engine.PreflightVolumeGrowth(ctx, rc.Backend, m.Volume, m.VolumeID, m.Resources, desiredComponent(rc, m).Resources)
@@ -547,6 +569,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if s.Topology == "single" {
 			s.Formation.State = "formed"
 		}
+		s.NativeConvergedGeneration = rc.Cluster.Generation
 		if e := save(rc.Cluster, s); e != nil {
 			return result, e
 		}

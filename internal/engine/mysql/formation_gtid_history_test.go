@@ -158,7 +158,7 @@ func pxcHistoryStorage(t *testing.T, rc *engine.Context, b *fakeBackend) {
 
 // Exercise a persisted user operation and actual native backup receipt, rather
 // than calling the GTID acknowledgement helper directly.
-func queuedPXCHistoryFull(t *testing.T, rc *engine.Context, b *fakeBackend, name string) {
+func queuedPXCHistoryFull(t *testing.T, rc *engine.Context, b *fakeBackend, name string, beforeClaim ...func()) {
 	t.Helper()
 	item := &domain.Backup{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Name: name, Storage: "archive", Type: "full", Phase: domain.PhasePending}
 	if err := rc.Store.CreateBackup(t.Context(), item); err != nil {
@@ -169,6 +169,9 @@ func queuedPXCHistoryFull(t *testing.T, rc *engine.Context, b *fakeBackend, name
 		t.Fatal(err)
 	}
 	op := &domain.Operation{ID: "full-" + name, Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Kind: domain.OperationBackup, Phase: domain.PhaseRunning, Actor: "api", Payload: payload}
+	if len(beforeClaim) > 0 {
+		op.Phase = domain.PhasePending
+	}
 	st := rc.Store.(*store.Store)
 	if err := st.EnqueueOperation(t.Context(), op); err != nil {
 		t.Fatal(err)
@@ -190,6 +193,16 @@ func queuedPXCHistoryFull(t *testing.T, rc *engine.Context, b *fakeBackend, name
 		return prior != nil && prior(w, r, member)
 	}
 	defer func() { b.action = prior }()
+	for _, before := range beforeClaim {
+		before()
+	}
+	if len(beforeClaim) > 0 {
+		claimed, err := st.ClaimOperation(t.Context(), rc.Cluster.Ref())
+		if err != nil || claimed.ID != op.ID {
+			t.Fatalf("queued full was not claimable: %+v %v", claimed, err)
+		}
+		op = claimed
+	}
 	for range 20 {
 		p := New(Options{Provider: "pxc"})
 		result, err := p.RunOperation(t.Context(), rc, op)
@@ -285,6 +298,39 @@ func TestPXCHistoryLatchAllowsQueuedFullAcknowledgement(t *testing.T) {
 	assertPXCHistoryClientsServing(t, p, rc, s)
 	if actions.proxyStops != 0 || actions.probes != 0 {
 		t.Fatal("full acknowledgement re-entered whole-cluster certification", actions)
+	}
+}
+
+func TestPXCHistoryFullUnblocksHealthWaitingUpdate(t *testing.T) {
+	p, rc, b, _, _ := latchedServingPXC(t)
+	pxcHistoryStorage(t, rc, b)
+	rc.Cluster.Generation++
+	update := &domain.Operation{ID: "health-waiting-update", Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Kind: domain.OperationUpdate, Phase: domain.PhaseRunning, TargetGeneration: rc.Cluster.Generation}
+	if err := rc.Store.(*store.Store).EnqueueOperation(t.Context(), update); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+		b.apply(t, p, rc)
+	}
+	if rc.Cluster.Status.Phase != domain.PhaseDegraded || rc.Cluster.Status.ObservedGeneration >= rc.Cluster.Generation {
+		t.Fatal("history latch did not preserve the update health wait", rc.Cluster.Status)
+	}
+	if !p.IncidentBackupReady(t.Context(), rc.Cluster, rc.Secrets, "full") {
+		t.Fatal("health-waiting update blocked the explicit incident full")
+	}
+	queuedPXCHistoryFull(t, rc, b, "pending-update-acknowledgement")
+	s, err := load(rc.Cluster)
+	if err != nil || activeGTIDIncident(s) != nil || len(s.GTIDIncidents) == 0 {
+		t.Fatal("full failed to acknowledge while retaining incident evidence", err)
+	}
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	if rc.Cluster.Status.Phase != domain.PhaseReady || rc.Cluster.Status.ObservedGeneration != rc.Cluster.Generation {
+		t.Fatal("acknowledgement did not release update convergence", rc.Cluster.Status)
 	}
 }
 

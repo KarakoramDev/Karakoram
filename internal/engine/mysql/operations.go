@@ -22,21 +22,25 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	return canClaimOperation(s, bs), nil
+}
+
+func canClaimOperation(s *state, bs backupState) bool {
 	if bs.RestoreOperation != nil || s.RestoreGTIDBlocked != "" {
-		return false, nil
+		return false
 	}
 	if mapping := s.Formation.GTIDCertification; mapping != nil && pxcFormationMappingPending(s) {
-		return false, nil
+		return false
 	}
 	if s.Pending != nil || s.GaleraTLS != nil || s.Suspended || s.Formation.State != "formed" || s.Replacement != nil || s.TLSRotation != nil || s.Rolling != nil && s.Rolling.Stage != "backup" {
-		return false, nil
+		return false
 	}
 	for _, m := range s.Members {
 		if m.Stage != "joined" || m.ImportBatch != nil || m.ProxyDraining || m.ProxyDrainOperation != "" {
-			return false, nil
+			return false
 		}
 	}
-	return true, nil
+	return true
 }
 
 // A fully cleaned, terminal certification failure has completed native restore.

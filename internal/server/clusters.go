@@ -636,7 +636,15 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				upgradeBackup = admission.UpgradeBackupReady(ctx, c, s.Store)
 			}
 		}
-		if c.Deleting || !upgradeBackup && ((c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded) || c.Status.ObservedGeneration < c.Generation) {
+		incidentBackup := false
+		if c.Status.ObservedGeneration < c.Generation {
+			if admission, supported := p.(interface {
+				IncidentBackupReady(context.Context, *domain.Cluster, engine.SecretStore, string) bool
+			}); supported {
+				incidentBackup = admission.IncidentBackupReady(ctx, c, s.Store, string(b.Type))
+			}
+		}
+		if c.Deleting || !upgradeBackup && !incidentBackup && ((c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded) || c.Status.ObservedGeneration < c.Generation) {
 			state := string(c.Status.Phase)
 			if c.Deleting {
 				state += "; deletion is pending"

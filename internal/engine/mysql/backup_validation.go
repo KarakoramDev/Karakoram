@@ -15,6 +15,29 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+// IncidentBackupReady admits an explicit full while a history latch prevents
+// a desired-state tracking operation from becoming healthy. It does not certify
+// history or complete that operation: the ordinary backup claim policy excludes
+// active native mutations, and only the post-success sample can acknowledge.
+func (p *Core) IncidentBackupReady(ctx context.Context, c *domain.Cluster, secrets engine.SecretStore, kind string) bool {
+	if kind != "full" || p.Name() != "pxc" || c.Spec.Provider != p.Name() || c.Deleting || c.Status.Phase != domain.PhaseDegraded || secrets == nil {
+		return false
+	}
+	allowed, err := p.CanClaimOperation(c)
+	if err != nil || !allowed {
+		return false
+	}
+	s, err := load(c)
+	if err != nil || s.Formation.reforming() || s.Rolling != nil || s.NativeConvergedGeneration != c.Generation {
+		return false
+	}
+	rc := &engine.Context{Cluster: c, Secrets: secrets}
+	if err := loadGTIDJournal(ctx, rc, s); err != nil {
+		return false
+	}
+	return activeGTIDIncident(s) != nil
+}
+
 func normalizedDataSource(d *domain.DataSource, ns string) *domain.DataSource {
 	if d == nil {
 		return nil
