@@ -247,10 +247,8 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 			continue
 		}
 		var coverage myspec.PITRCoverageResponse
-		var admissionStarted time.Time
 		for _, observer := range observers {
 			coverage = myspec.PITRCoverageResponse{}
-			admissionStarted = time.Now().UTC()
 			e = mysqlAction(ctx, rc, observer, myspec.ActionPITRCoverage, myspec.PITRCoverageRequest{Source: repo, ObjectPaths: m.ObjectPaths, ObjectManifests: refs, RequireFresh: requireFresh, AcceptPending: true}, &coverage)
 			if e == nil {
 				break
@@ -276,7 +274,10 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 		}
 		// Legacy agents compute synchronously inside this request. Only the
 		// background protocol can return a cached proof and must attest freshness.
-		if requireFresh && !coverage.VerificationStartedAt.IsZero() && (!coverage.Fresh || coverage.VerificationStartedAt.Before(admissionStarted)) {
+		// The agent compares verification start with this request's arrival on
+		// its own clock; comparing its timestamp with the control plane's clock
+		// would reject fresh proofs whenever the agent clock lags behind.
+		if requireFresh && !coverage.VerificationStartedAt.IsZero() && !coverage.Fresh {
 			return nil, nil, engine.Invalid("agent returned PITR verification predating restore admission")
 		}
 		for _, w := range coverage.Windows {

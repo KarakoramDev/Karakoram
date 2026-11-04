@@ -194,6 +194,9 @@ Missing or invalid restore inputs fail closed.
 Updated agents expose pending/progress and freshness metadata. During a mixed-
 version rollout, a legacy agent's successful synchronous coverage response is
 still fresh for that request; it cannot provide the background convergence fix.
+Freshness is attested per request by the source agent using its own clock;
+the control plane does not compare agent verification timestamps with its local
+clock. This control-plane-only correction also works with v0.4.3 agents.
 The control plane explicitly negotiates pending responses with `acceptPending`.
 A legacy control plane receives an observation error while coverage is pending
 or expired, matching a legacy agent's unsuccessful synchronous request; it can
