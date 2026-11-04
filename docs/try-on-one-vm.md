@@ -92,6 +92,24 @@ select * from hello;
 
 The revealed `postgres` user is the cluster's superuser. Use it only for this test; for applications create a restricted role ([PostgreSQL access and TLS](postgres/access-and-tls.md)).
 
+## Captures from the test run
+
+These captures are from Karakoram v0.4.3 on 2026-11-04. The test VM ran on Zerops; Samyazz, Karakoram's maintainer, works at Zerops. Hostnames and placement identifiers are blurred in the Ready capture. The wizard still uses some Zerops-specific wording on Dokploy; that wording does not describe the provider used here.
+
+![PostgreSQL single-member cluster in the create wizard](assets/try-on-one-vm/01-create-basics.png)
+
+![Create wizard review before submitting the cluster](assets/try-on-one-vm/01-create-review.png)
+
+![Ready PostgreSQL cluster with two healthy members](assets/try-on-one-vm/02-ready-overview.png)
+
+![Rendering of captured psql output showing PostgreSQL version, a successful insert and its read-back](assets/try-on-one-vm/03-query-result.png)
+
+The last image is a terminal-style rendering of the [unaltered captured output](assets/try-on-one-vm/psql-output.txt), including its timestamps, not a screenshot of a terminal.
+
+[Watch the edited recording (MP4)](assets/try-on-one-vm/create-to-query.mp4). It uses the original wizard footage, with an idle section marked **sped up 4×**, then a labelled still of the later Ready overview. The provisioning wait is omitted, not shown in real time; the measured Create → Ready time was 4 min 34 s. The final frame is the captured query-output rendering.
+
+![Animated preview of the create wizard, Ready capture and captured query output](assets/try-on-one-vm/create-to-query.webp)
+
 ## 7. Clean up
 
 Delete the cluster in the UI if you want to watch Karakoram remove its runtimes and volumes, then delete the VM. Nothing outside the VM was created.
