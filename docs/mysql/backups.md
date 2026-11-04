@@ -101,7 +101,9 @@ archiving; verify that the endpoint advances after post-backup writes.
 Archive attempts that fail decoding, rotation or upload now report
 `BinlogArchive=False/ArchiveFailed`, a Warning event and an agent log diagnostic.
 The condition includes a safe error category; inspect the writer agent log for
-the full native diagnostic. A successful later pass clears the attempt failure.
+the full native diagnostic. The sanitized last-attempt result is stored durably
+per repository and survives agent restarts; only a successful later pass clears
+the attempt failure. Failure to read or persist that result is itself unhealthy.
 Neither a failed attempt nor the writer's current position extends the recovery
 window: only successfully uploaded, contiguous transaction metadata does.
 

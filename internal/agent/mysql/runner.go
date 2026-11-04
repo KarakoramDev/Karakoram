@@ -24,24 +24,24 @@ import (
 )
 
 type Runner struct {
-	mu                     sync.RWMutex
-	current                myspec.Spec
-	dir                    string
-	node                   *agent.Node
-	db                     *sql.DB
-	dbKey                  [32]byte
-	metricMu               sync.Mutex
-	questions              float64
-	questionTime           time.Time
-	rejoinCancel           context.CancelFunc
-	archiveCancel          context.CancelFunc
-	archiveBackup          myspec.Backup
-	archiveError           string
-	coverageServiceMu      sync.Mutex
-	coverageRefresh        *coverageRefresh
-	coverageStopped        bool
-	proxyTLSReloadFallback bool
-	dataTLSReloadPending   bool
+	mu                        sync.RWMutex
+	current                   myspec.Spec
+	dir                       string
+	node                      *agent.Node
+	db                        *sql.DB
+	dbKey                     [32]byte
+	metricMu                  sync.Mutex
+	questions                 float64
+	questionTime              time.Time
+	rejoinCancel              context.CancelFunc
+	archiveCancel             context.CancelFunc
+	archiveBackup             myspec.Backup
+	archiveResultWriteFailure string
+	coverageServiceMu         sync.Mutex
+	coverageRefresh           *coverageRefresh
+	coverageStopped           bool
+	proxyTLSReloadFallback    bool
+	dataTLSReloadPending      bool
 }
 
 func New() *Runner                                      { return &Runner{} }

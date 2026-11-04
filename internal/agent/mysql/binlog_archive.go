@@ -194,8 +194,19 @@ func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	if err != nil {
 		return myspec.BinlogArchiveStatus{Error: "archive_index_invalid"}, nil
 	}
+	resultPath := archiveIndexPath(p, s.Backup.Repository) + ".attempt"
+	raw, readErr := os.ReadFile(resultPath)
+	if readErr == nil {
+		if json.Unmarshal(raw, &idx.Status.Error) != nil {
+			idx.Status.Error = "archive_attempt_invalid"
+		}
+	} else if !os.IsNotExist(readErr) {
+		idx.Status.Error = "archive_attempt_unavailable"
+	}
 	e.mu.RLock()
-	idx.Status.Error = e.archiveError
+	if e.archiveResultWriteFailure == resultPath {
+		idx.Status.Error = "archive_attempt_write_failed"
+	}
 	e.mu.RUnlock()
 	if !idx.Status.LastEventTime.IsZero() {
 		idx.Status.LagSeconds = time.Since(idx.Status.LastEventTime).Seconds()
@@ -240,7 +251,7 @@ func (e *Runner) configureArchiveLoop(enabled bool, archive func(context.Context
 	e.archiveBackup = *e.current.Backup
 	go func() {
 		for {
-			s, _ := e.state()
+			s, p := e.state()
 			if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Galera != nil && s.Galera.RestoreFence {
 				return
 			}
@@ -256,26 +267,40 @@ func (e *Runner) configureArchiveLoop(enabled bool, archive func(context.Context
 			if ctx.Err() != nil {
 				return
 			}
-			e.recordArchiveResult(err)
+			e.recordArchiveResult(p, s.Backup.Repository, err)
 		}
 	}()
 }
 
-// Keep failures separate from durable upload receipts: an unsuccessful attempt
-// never advances the archived position, and the next successful pass clears it.
-func (e *Runner) recordArchiveResult(err error) {
+// Attempt results are repository-scoped and independent of upload receipts.
+// A restart must retain a failed attempt until a successful pass clears it.
+func (e *Runner) recordArchiveResult(p paths, repo myspec.Repository, err error) {
 	message := ""
 	if err != nil {
 		// Native diagnostics can contain SQL or local paths. Publish only the
 		// stable error category; full diagnostics belong in the agent log.
 		message, _, _ = strings.Cut(err.Error(), ":")
 	}
+	resultPath := archiveIndexPath(p, repo) + ".attempt"
+	archiveMu.Lock()
+	writeErr := privateDir(p.root)
+	if writeErr == nil {
+		writeErr = durableJSON(resultPath, message)
+	}
 	e.mu.Lock()
-	e.archiveError = message
+	if writeErr != nil {
+		e.archiveResultWriteFailure = resultPath
+	} else if e.archiveResultWriteFailure == resultPath {
+		e.archiveResultWriteFailure = ""
+	}
 	node := e.node
 	e.mu.Unlock()
+	archiveMu.Unlock()
 	if err != nil && node != nil {
 		node.Logger().Warn("MySQL binlog archive failed", "error", err)
+	}
+	if writeErr != nil && node != nil {
+		node.Logger().Warn("MySQL binlog archive result persistence failed", "error", writeErr)
 	}
 }
 func hashFile(name string) (string, int64, error) {
