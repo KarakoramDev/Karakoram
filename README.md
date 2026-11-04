@@ -73,7 +73,7 @@ Coding agents: read [AGENTS.md](AGENTS.md) for repository boundaries and contrib
 
 Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative source/reference links resolve.
 
-- **Getting started:** [Overview](README.md) · [Quick start](docs/quickstart.md) · [Install](docs/install.md) · [Providers](docs/providers.md) · [Operating costs](docs/operating-costs.md) · [Upgrade](docs/upgrade.md)
+- **Getting started:** [Overview](README.md) · [Try it on one VM](docs/try-on-one-vm.md) · [Quick start](docs/quickstart.md) · [Install](docs/install.md) · [Providers](docs/providers.md) · [Operating costs](docs/operating-costs.md) · [Upgrade](docs/upgrade.md)
 - **Control plane:** [Architecture](docs/architecture.md) · [Clusters and operations](docs/clusters.md) · [Backups and storage](docs/backups.md) · [Namespaces and relays](docs/namespaces.md) · [Zerops provider](docs/zerops.md) · [Dokploy provider](docs/dokploy.md) · [Nomad provider](docs/nomad.md) · [Monitoring and events](docs/monitoring.md) · [Access control](docs/access-control.md) · [Security](docs/security.md) · [Operations and troubleshooting](docs/operations.md) · [Limitations](docs/limitations.md)
 - **Interfaces:** [Web UI](docs/web-ui.md) · [CLI](docs/cli.md) · [REST API and SDK](docs/api.md) · [MCP quick start](docs/mcp-quickstart.md) · [MCP server](docs/mcp.md) · [Cluster data MCP](docs/data-mcp.md)
 - **Operator agents:** [karakoram-operator skill](skills/karakoram-operator/SKILL.md) · [Skill installation](skills/README.md)
