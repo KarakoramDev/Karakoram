@@ -59,6 +59,8 @@ claude mcp add --transport http karakoram https://YOUR-CONTROL-PLANE/mcp --heade
 
 Client configuration formats change; use the client's remote Streamable HTTP option, endpoint URL and bearer header if its format differs.
 
+The [MCP Registry](https://registry.modelcontextprotocol.io/) lists this endpoint as `io.github.KarakoramDev/karakoram`, defined by `server.json` in the repository root. The entry is a URL template, not a hosted service: clients that install from a registry ask for your control plane's host name and an API token.
+
 ## Tools, completion and confirmation
 
 Tool names are stable snake_case names from the [OpenAPI](https://www.openapis.org/) agent metadata. Path and query parameters are top-level arguments; JSON request bodies are under `body`. Nullable fields accept JSON `null`, including merge-patch removals and removing an API token's expiry. Lists are sorted and filtered by server mode, current RBAC and token restrictions. Narrow large lists using OpenAPI tags, for example `/mcp?toolsets=Clusters,Backups`; names are case-insensitive. Include `Workflows` to retain workflow tools when narrowing.
