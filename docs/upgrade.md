@@ -4,6 +4,117 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading to v0.4.4
+
+v0.4.4 is a hotfix of v0.4.3 with only two MySQL/PXC point-in-time recovery
+corrections. It does not include the features planned for v0.4.5.
+
+### Fixed in v0.4.4
+
+**MySQL PITR archiving after schema/account statements:** the parser now accepts
+native `mysqlbinlog` space/tab Query headers, including standalone queries
+without Xid. In v0.4.3, such events could silently stop archiving while the
+`BinlogArchive` condition still appeared healthy. MySQL single-instance, Group
+Replication and PXC clusters with PITR enabled are affected; full backups are
+not affected. Successful schema/account changes alone do not prove archive
+health: some statements carry Xid and could already continue archiving.
+
+Failed decode, rotation or upload attempts now report
+`BinlogArchive=False/ArchiveFailed`, a Warning event with reason `ArchiveFailed`,
+and an agent log diagnostic.
+The condition has a safe error category; the writer agent log adds sanitized
+native or client causes (for example, a MySQL error number or an S3 status).
+Only a completed successful pass clears the attempt failure; skipped passes
+keep it. Only uploaded, contiguous metadata can extend the recovery window.
+
+**MySQL point-in-time restore and clone admission across clock skew:** in
+v0.4.3, a point-in-time restore or clone could be rejected with "agent returned
+PITR verification predating restore admission" whenever the writer node's clock
+was even milliseconds behind the control plane's. The control plane now trusts
+the agent's per-request freshness attestation instead of comparing timestamps
+from different clocks. This part is control-plane-only: it works with v0.4.3
+agents and needs no agent relaunch. Earlier releases lack the check.
+
+### Required rollout and recovery
+
+1. **Back up state, then upgrade the control plane first.** Use the
+   [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
+   the original `KARAKORAM_MASTER_KEY` separately, and retain the old executable
+   with its pre-upgrade state. Deploy v0.4.4 through your provider's documented
+   singleton control-plane deployment path. Control-plane rollback does not
+   undo database or infrastructure changes.
+2. **Relaunch every affected MySQL/PXC data-member agent.** In a maintenance
+   window, apply a genuinely changed CPU or memory resource target; rolling
+   maintenance stops and redeploys members with the current executable. An
+   unchanged patch, control-plane restart or `karactl clusters restart` does
+   not replace agents. MySQL/PXC have no `upgrade-agents` command in v0.4.4.
+   Check provider capacity, keep a validated backup and independent recovery
+   path, and expect writer-handoff interruptions (downtime for a singleton).
+   Do not attempt the roll without a healthy majority. Verify each member's
+   build, replication and client writes. See the
+   [resource-change relaunch guidance](#existing-clusters-and-member-artifacts).
+   This fix is in data-member agents; it does not require a PXC proxy rollout.
+   Earlier proxy certification/TLS rollout requirements remain separate.
+3. **Re-enable PITR if disabled**, setting `spec.backup.pitr.enabled: true`
+   only after all affected data agents run the corrected code. Retain native
+   binlogs while catch-up finishes: the next scheduled archive pass retries
+   still-present unarchived closed binlogs in native order, preserving existing
+   receipts. No manual skip or index edit is needed to repair a parser stall.
+4. **Take a successful full backup from the current writer** before relying on
+   PITR. On single-member clusters (and any cluster whose writer did not change
+   during the relaunch), retained binlogs from the stuck period are archived and
+   point-in-time recovery covers that period again, starting from the original
+   full backup — verified by automated tests, not live. On Group Replication
+   and PXC clusters the relaunch moves the writer (one writer handoff), so
+   coverage restarts from the next full backup and the stuck period cannot be
+   restored to a point in time; restore from a full backup instead. Keep
+   earlier backups and proven windows.
+5. **Verify the window advances** with `karactl backups pitr-window CLUSTER`
+   after post-backup writes and completed archive uploads/coverage checks.
+   Inspect `BinlogArchive` and any Warning event or writer-agent diagnostic.
+   A zero-width full-backup snapshot is not continuous PITR coverage.
+
+**Purged binlogs cannot be recovered by upgrading.** Retained backlog can be
+archived automatically, but purged unarchived logs leave a permanent PITR gap.
+A missing pending file reports `unarchived_binlog_purged`; do not force coverage
+across the gap. Preserve earlier coverage and establish a fresh full baseline.
+
+**Do not downgrade the control plane after rolling agents.** In particular,
+a control plane below v0.4.3 cannot negotiate the agents' pending/freshness
+coverage contract. Keep the upgraded control plane with the corrected agents.
+
+### Known issues in v0.4.4
+
+The [continuing limitations](#continuing-limitations) from v0.4.3 still apply:
+PostgreSQL administrator-password rotation is unavailable, Temporal is unsupported
+on Zerops, Nomad live coverage is incomplete, and PITR displays only the interval
+with the latest end. See [all current limitations](limitations.md).
+
+- **PXC clusters can be wrongly flagged as having diverged GTID history after a
+  member restart** (also present in earlier v0.4 releases). After any member
+  restarts and rejoins while writes continue — a rolling CPU, memory or
+  parameter change, an engine upgrade, a `mysqld` crash or agent restart, TLS
+  rotation, suspend/resume or a restore — the cluster can report Degraded with
+  a GTID history incident even though all members have the same data.
+  Incremental backups are blocked and point-in-time recovery coverage stops
+  advancing until a full backup succeeds. Workaround: take a full backup; the
+  flag clears about 20 seconds after it completes. If a cluster change (for
+  example a resource change or proxy count change) was still running when the
+  flag appeared, the cluster can get stuck: the manual full backup and
+  cancelling the change are both refused. To recover, add an enabled
+  full-backup schedule a few minutes ahead next to your existing schedules
+  (`spec.backup.schedules`: name, cron, `type: full`, `retainCount`,
+  `enabled: true`) with `karactl clusters patch CLUSTER -f change.yaml`; change
+  nothing else in that patch; this works when the change itself had already
+  been applied and the cluster was only waiting to report healthy (for example
+  a finished proxy count change): the scheduled full clears the flag and the
+  pending change completes. Afterwards restore your original schedules.
+  If the change was still rolling through members when the flag appeared, the
+  scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
+  serving reads and writes, so leave it as it is and upgrade once the fix is
+  released. This needs configured backup storage and healthy members. A fix is
+  planned for v0.4.5.
+
 ## Upgrading to v0.4.3
 
 Back up control-plane state using the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup),
@@ -434,6 +545,50 @@ still checks all proven intervals and accepts a target in the hidden earlier
 range if its backup chain and archived coverage remain valid; the display does
 not prove those earlier recovery points are gone. A display fix is planned for
 a later release.
+
+### Known issues in v0.4.3
+
+- **MySQL PITR archiving can silently stop after a schema or account change
+  — fixed in v0.4.4** (v0.4.3 only; single, Group Replication and PXC).
+  Native `mysqlbinlog` Query headers use a tab; the old parser expected a
+  space. A standalone Query event without Xid, including a no-op schema or
+  account statement, can stop uploads while `BinlogArchive` still looks healthy.
+  Statements such as `CREATE DATABASE`, `CREATE TABLE`, `ALTER`, `CREATE USER`
+  and `GRANT`, including Karakoram-managed changes, can encounter this path;
+  successful changes alone do not prove archive health. Full backups are
+  unaffected. Compare the endpoint from `karactl backups pitr-window CLUSTER`
+  with current time and check that it advances after writes. A new full,
+  toggling PITR or restarting native processes does not repair the old parser.
+  Install the corrected data-member agents using the
+  [v0.4.4 upgrade procedure](#upgrading-to-v044). Retained unarchived binlogs
+  are retried automatically; purged unarchived logs leave a permanent gap.
+  On Group Replication and PXC the relaunch moves the writer, so point-in-time
+  recovery into the stalled period itself is not available.
+
+- **PXC clusters can be wrongly flagged as having diverged GTID history after a
+  member restart** (also present in earlier v0.4 releases). After any member
+  restarts and rejoins while writes continue — a rolling CPU, memory or
+  parameter change, an engine upgrade, a `mysqld` crash or agent restart, TLS
+  rotation, suspend/resume or a restore — the cluster can report Degraded with
+  a GTID history incident even though all members have the same data.
+  Incremental backups are blocked and point-in-time recovery coverage stops
+  advancing until a full backup succeeds. Workaround: take a full backup; the
+  flag clears about 20 seconds after it completes. If a cluster change (for
+  example a resource change or proxy count change) was still running when the
+  flag appeared, the cluster can get stuck: the manual full backup and
+  cancelling the change are both refused. To recover, add an enabled
+  full-backup schedule a few minutes ahead next to your existing schedules
+  (`spec.backup.schedules`: name, cron, `type: full`, `retainCount`,
+  `enabled: true`) with `karactl clusters patch CLUSTER -f change.yaml`; change
+  nothing else in that patch; this works when the change itself had already
+  been applied and the cluster was only waiting to report healthy (for example
+  a finished proxy count change): the scheduled full clears the flag and the
+  pending change completes. Afterwards restore your original schedules.
+  If the change was still rolling through members when the flag appeared, the
+  scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
+  serving reads and writes, so leave it as it is and upgrade once the fix is
+  released. This needs configured backup storage and healthy members. A fix is
+  planned for v0.4.5.
 
 ## Upgrading to v0.4.2
 
