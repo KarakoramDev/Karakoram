@@ -193,6 +193,29 @@ in v0.4.3 with the [required rollout procedures](upgrade.md#upgrading-to-v043).
 Their old workarounds remain [historical guidance](upgrade.md#known-issues-in-v042),
 not current v0.4.3 limitations. Existing history latches are not silently cleared.
 
+## Known issues in v0.4.3
+
+The following issue is fixed in the next release.
+
+- **PXC clusters can be wrongly flagged as having diverged GTID history after a
+  member restart** (also present in earlier v0.4 releases). After any member
+  restarts and rejoins while writes continue — a rolling CPU, memory or
+  parameter change, an engine upgrade, a `mysqld` crash or agent restart, TLS
+  rotation, suspend/resume or a restore — the cluster can report Degraded with
+  a GTID history incident even though all members have the same data.
+  Incremental backups are blocked and point-in-time recovery coverage stops
+  advancing until a full backup succeeds. Workaround: take a full backup; the
+  flag clears about 20 seconds after it completes. If a cluster change (for
+  example a resource change or proxy count change) was still running when the
+  flag appeared, the cluster can get stuck: the manual full backup and
+  cancelling the change are both refused. To recover, add an enabled
+  full-backup schedule a few minutes ahead next to your existing schedules
+  (`spec.backup.schedules`: name, cron, `type: full`, `retainCount`,
+  `enabled: true`) with `karactl clusters patch CLUSTER -f change.yaml`; the
+  scheduled full clears the flag and the pending change completes. Afterwards
+  restore your original schedules. This needs configured backup storage and
+  healthy members. A fix is planned for the next release.
+
 ## Engine limits
 
 - [MongoDB limits](mongodb/README.md#limits)
