@@ -221,6 +221,25 @@ An observed log purged before upload is a gap. The continuous endpoint freezes a
 
 Time targets resolve to the last complete transaction whose original commit timestamp is at or before the target. Microsecond commit metadata and transaction end positions matter: second-resolution `mysqlbinlog --stop-datetime` cannot distinguish commits within the same second. The recovery implementation preserves GTIDs and excludes already recovered transactions; low-level GTID/position replay must never skip a missing dependency. Public restore workflows use their documented backup/time target fields; an internal GTID boundary is not a separate CLI/API target flag.
 
+v0.4.5 correctly handles physical fulls containing imported or purged-only GTIDs
+that never appeared in that member's binary logs (for example after restore, Group
+Replication clone provisioning, or PXC SST). Coverage verifies the exact
+snapshot file/position to distinguish this baseline history from logged
+dependencies; it does not require purged-only history to reappear in every
+`Previous_gtids` event. A missing anchor remains conservative, and missing
+post-snapshot dependencies still stop coverage.
+
+When verified same-source binlogs cannot extend the chain, **PITR** reports
+`False/CoverageBlocked` with the reason and frozen endpoint, and emits a
+deduplicated Warning event. The already verified recovery window remains
+usable. **BinlogArchive** reports upload health independently and can remain
+`True`; newer uploaded files alone are not proof of a recoverable target.
+Inspect and resolve the missing history before establishing a replacement full.
+On affected earlier versions, repeatedly taking a full on a member whose
+`Previous_gtids` omits baseline history does not repair forward coverage: each
+full can extend only through its own snapshot file. Monitor the recovery window
+end against archived transaction times, not only archive lag.
+
 A fresh full backup establishes a new **replay-lineage anchor**, not just a
 completion timestamp. Retained pre-full binary logs are not eligible merely
 because they contain a GTID absent from that full: the same old row can have

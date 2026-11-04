@@ -264,6 +264,81 @@ func TestBinlogArchiveConditionRequiresArchivedTransaction(t *testing.T) {
 	}
 }
 
+func TestPITRCoverageBlockedDespiteHealthyUploads(t *testing.T) {
+	p, rc, b := backupFixture(t, "single")
+	rc.Cluster.Spec.Backup.PITR.Enabled = true
+	base := inventoryBackup(t, rc, "base", "full", "", 10, time.Unix(10, 0))
+	events := &gtidEvents{}
+	rc.Events = events
+	blocked := "binlog_dependency_missing"
+	healthyPath := ""
+	fallback := b.action
+	b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
+		switch r.URL.Path {
+		case "/v1/mysql/archive-status":
+			json.NewEncoder(w).Encode(myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000008", LastEventTime: time.Unix(50, 0)})
+		case "/v1/mysql/pitr-coverage":
+			reason := blocked
+			if healthyPath != "" {
+				var request myspec.PITRCoverageRequest
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					t.Fatal(err)
+				}
+				if request.ObjectPaths[0] == healthyPath {
+					reason = ""
+				}
+			}
+			json.NewEncoder(w).Encode(myspec.PITRCoverageResponse{Windows: []myspec.PITRWindow{{Start: time.Unix(10, 0), End: time.Unix(20, 0)}}, BlockedReason: reason})
+		default:
+			return fallback != nil && fallback(w, r, name)
+		}
+		return true
+	}
+	for i := range 3 {
+		var status domain.ClusterStatus
+		if err := p.backupStatus(t.Context(), rc, &status); err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, c := range status.Conditions {
+			if c.Type == "PITR" {
+				found = true
+				if i < 2 && (c.Status != "False" || c.Reason != "CoverageBlocked" || !strings.Contains(c.Message, blocked)) {
+					t.Fatal(c)
+				}
+				if i == 2 && (c.Status != "True" || c.Reason != "WindowAvailable") {
+					t.Fatal(c)
+				}
+			}
+		}
+		if !found || status.Backup.PITRWindow == nil || len(events.events) != 1 || events.events[0].Type != "Warning" || events.events[0].Reason != "CoverageBlocked" {
+			t.Fatalf("missing safe prefix or deduplicated warning: %+v %+v", status, events.events)
+		}
+		rc.Cluster.Status = status
+		if i == 1 {
+			blocked = ""
+		}
+	}
+	// An equally advanced healthy root must win in either inventory order.
+	other := inventoryBackup(t, rc, "other", "full", "", 20, time.Unix(10, 0))
+	blocked = "binlog_dependency_missing"
+	for _, path := range []string{base.MySQL.ObjectPaths[0], other.MySQL.ObjectPaths[0]} {
+		healthyPath = path
+		var status domain.ClusterStatus
+		if err := p.backupStatus(t.Context(), rc, &status); err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range status.Conditions {
+			if c.Type == "PITR" && (c.Status != "True" || c.Reason != "WindowAvailable") {
+				t.Fatalf("blocked root masked healthy coverage: %+v", c)
+			}
+		}
+		if len(events.events) != 1 {
+			t.Fatal("healthy root emitted blocked warning")
+		}
+	}
+}
+
 func TestBackupStatusSelectsNewestPITRWindow(t *testing.T) {
 	p, rc, b := backupFixture(t, "single")
 	rc.Cluster.Spec.Backup.PITR.Enabled = true
