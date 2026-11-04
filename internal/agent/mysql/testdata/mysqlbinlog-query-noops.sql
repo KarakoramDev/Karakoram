@@ -1,0 +1,23 @@
+-- Continue after mysqlbinlog-queries.sql on the same fresh server.
+CREATE DATABASE example;
+CREATE DATABASE IF NOT EXISTS example;
+CREATE TABLE example.items (id INT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS example.items (id INT PRIMARY KEY);
+CREATE USER 'fixture_user'@'localhost';
+CREATE USER IF NOT EXISTS 'fixture_user'@'localhost';
+SET SESSION binlog_format='STATEMENT';
+BEGIN;
+INSERT INTO example.items VALUES (1);
+INSERT INTO example.items VALUES (2);
+COMMIT;
+SET SESSION binlog_format='ROW';
+XA START 'fixture_onephase';
+INSERT INTO example.items VALUES (3);
+XA END 'fixture_onephase';
+XA COMMIT 'fixture_onephase' ONE PHASE;
+DROP USER 'fixture_user'@'localhost';
+DROP TABLE example.items;
+DROP TABLE IF EXISTS example.items;
+DROP DATABASE example;
+DROP DATABASE IF EXISTS example;
+FLUSH BINARY LOGS;

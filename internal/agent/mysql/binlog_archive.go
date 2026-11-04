@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/minio/minio-go/v7"
 )
 
@@ -188,12 +190,29 @@ func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Galera != nil && s.Galera.RestoreFence {
 		return myspec.BinlogArchiveStatus{}, errors.New("binlog_archiving_disabled")
 	}
+	if !filepath.IsAbs(p.root) {
+		return myspec.BinlogArchiveStatus{Error: errArchiveStateDir.Error()}, nil
+	}
 	archiveMu.Lock()
 	defer archiveMu.Unlock()
 	idx, err := loadArchiveState(archiveIndexPath(p, s.Backup.Repository))
 	if err != nil {
-		return idx.Status, errors.New("archive_index_invalid")
+		return myspec.BinlogArchiveStatus{Error: "archive_index_invalid"}, nil
 	}
+	resultPath := archiveIndexPath(p, s.Backup.Repository) + ".attempt"
+	raw, readErr := os.ReadFile(resultPath)
+	if readErr == nil {
+		if json.Unmarshal(raw, &idx.Status.Error) != nil {
+			idx.Status.Error = "archive_attempt_invalid"
+		}
+	} else if !os.IsNotExist(readErr) {
+		idx.Status.Error = "archive_attempt_unavailable"
+	}
+	e.mu.RLock()
+	if e.archiveResultWriteFailure == resultPath {
+		idx.Status.Error = "archive_attempt_write_failed"
+	}
+	e.mu.RUnlock()
 	if !idx.Status.LastEventTime.IsZero() {
 		idx.Status.LagSeconds = time.Since(idx.Status.LastEventTime).Seconds()
 		if idx.Status.LagSeconds < 0 {
@@ -237,7 +256,7 @@ func (e *Runner) configureArchiveLoop(enabled bool, archive func(context.Context
 	e.archiveBackup = *e.current.Backup
 	go func() {
 		for {
-			s, _ := e.state()
+			s, p := e.state()
 			if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Galera != nil && s.Galera.RestoreFence {
 				return
 			}
@@ -248,10 +267,114 @@ func (e *Runner) configureArchiveLoop(enabled bool, archive func(context.Context
 			case <-time.After(interval):
 			}
 			run, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			_ = archive(run)
+			err := archive(run)
 			cancel()
+			if ctx.Err() != nil {
+				return
+			}
+			e.recordArchiveResult(p, s.Backup.Repository, err)
 		}
 	}()
+}
+
+var errArchiveSkipped = errors.New("archive_skipped")
+var errArchiveStateDir = errors.New("archive_state_directory_invalid")
+
+// Loss of writer admission is not a successful archive pass. Probe failures
+// are failures, whereas an observed ineligible role simply defers the attempt.
+func archiveWriterAdmission(st myspec.StatusResponse, probeErr error, galera bool) error {
+	if probeErr != nil {
+		return fmt.Errorf("binlog_status_failed: %w", probeErr)
+	}
+	if !st.WriterEligible(galera) {
+		return errArchiveSkipped
+	}
+	return nil
+}
+
+// Native/client errors can embed SQL, account names, URLs or response bodies.
+// Retain typed diagnostic codes and OS causes, never those untrusted messages.
+func archiveDiagnostic(err error) string {
+	if err == nil {
+		return ""
+	}
+	switch cause := err.(type) {
+	case *mysqldriver.MySQLError:
+		return fmt.Sprintf("MySQL error %d (SQLSTATE %s)", cause.Number, cause.SQLState)
+	case minio.ErrorResponse:
+		return fmt.Sprintf("S3 error %s (HTTP %d)", cause.Code, cause.StatusCode)
+	case *net.OpError:
+		return cause.Op + " " + cause.Net + ": " + archiveDiagnostic(cause.Err)
+	case *os.PathError:
+		return cause.Op + ": " + archiveDiagnostic(cause.Err)
+	case syscall.Errno:
+		return cause.Error()
+	case *exec.ExitError:
+		return fmt.Sprintf("mysqlbinlog exit code %d", cause.ExitCode())
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded.Error()
+	}
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled.Error()
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		var messages strings.Builder
+		for i, cause := range joined.Unwrap() {
+			if i > 0 {
+				messages.WriteString("; ")
+			}
+			messages.WriteString(archiveDiagnostic(cause))
+		}
+		return messages.String()
+	}
+	if cause := errors.Unwrap(err); cause != nil {
+		return archiveDiagnostic(cause)
+	}
+	switch err.Error() {
+	case "invalid_gtid", "missing_transaction_gtid", "incomplete_binlog_transaction", "missing_commit_timestamp":
+		return err.Error()
+	default:
+		return fmt.Sprintf("cause type %T", err)
+	}
+}
+
+// Attempt results are repository-scoped and independent of upload receipts.
+// A restart must retain a failed attempt until a successful pass clears it.
+func (e *Runner) recordArchiveResult(p paths, repo myspec.Repository, err error) {
+	if errors.Is(err, errArchiveSkipped) {
+		return
+	}
+	message := ""
+	if err != nil {
+		// Native diagnostics can contain SQL or local paths. Publish only the
+		// stable error category; full diagnostics belong in the agent log.
+		message, _, _ = strings.Cut(err.Error(), ":")
+	}
+	resultPath := archiveIndexPath(p, repo) + ".attempt"
+	archiveMu.Lock()
+	writeErr := errArchiveStateDir
+	if filepath.IsAbs(p.root) {
+		writeErr = privateDir(p.root)
+	}
+	if writeErr == nil {
+		writeErr = durableJSON(resultPath, message)
+	}
+	e.mu.Lock()
+	if writeErr != nil {
+		e.archiveResultWriteFailure = resultPath
+	} else if e.archiveResultWriteFailure == resultPath {
+		e.archiveResultWriteFailure = ""
+	}
+	node := e.node
+	e.mu.Unlock()
+	archiveMu.Unlock()
+	if err != nil && node != nil {
+		node.Logger().Warn("MySQL binlog archive failed", "error", message, "cause", archiveDiagnostic(err))
+	}
+	if writeErr != nil && node != nil {
+		node.Logger().Warn("MySQL binlog archive result persistence failed", "cause", archiveDiagnostic(writeErr))
+	}
 }
 func hashFile(name string) (string, int64, error) {
 	f, err := os.Open(name)
@@ -355,11 +478,14 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	defer archiveMu.Unlock()
 	s, p := e.state()
 	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Role != myspec.RoleData || s.Galera != nil && s.Galera.RestoreFence {
-		return nil
+		return errArchiveSkipped
+	}
+	if !filepath.IsAbs(p.root) {
+		return errArchiveStateDir
 	}
 	st, err := e.status(ctx)
-	if err != nil || !st.WriterEligible(s.Galera != nil) {
-		return nil
+	if err := archiveWriterAdmission(st, err, s.Galera != nil); err != nil {
+		return err
 	}
 	db, err := e.LocalAccessDB(ctx)
 	if err != nil {
@@ -420,38 +546,6 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 	if err != nil || len(logs) == 0 {
 		return errors.New("binlog_query_failed")
 	}
-	// Only a file containing a committed transaction needs bounded rotation.
-	current := logs[len(logs)-1]
-	localCurrent := filepath.Join(filepath.Dir(base), current.name)
-	resume, err := resumeBinlog(localCurrent, uuid+"/"+current.name, idx.Active)
-	if err != nil {
-		return fmt.Errorf("binlog_read_failed: %w", err)
-	}
-	hasTransactions := false
-	decoded, err := decodeBinlogFrom(ctx, s, localCurrent, resume.Position, func(binlogTransaction) error {
-		hasTransactions = true
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if decoded.DecodePosition >= resume.Position {
-		resume.Position = decoded.DecodePosition
-	}
-	idx.Active = &resume
-	if hasTransactions {
-		latest, err := status(ctx)
-		if err != nil || !latest.WriterEligible(s.Galera != nil) {
-			return nil
-		}
-		if _, err = db.ExecContext(ctx, "FLUSH BINARY LOGS"); err != nil {
-			return errors.New("binlog_rotate_failed")
-		}
-		logs, err = list()
-		if err != nil || len(logs) == 0 {
-			return errors.New("binlog_query_failed")
-		}
-	}
 	present := map[string]bool{}
 	for _, f := range logs {
 		key := uuid + "/" + f.name
@@ -486,6 +580,47 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 	}
 	if err = writeArchivePending(indexPath, idx.Pending); err != nil {
 		return errors.New("archive_index_write")
+	}
+	// Persist the native inventory before decoding can fail. A later purge
+	// must remain distinguishable from a successfully archived file.
+	if err = writeArchiveSummary(indexPath, idx); err != nil {
+		return errors.New("archive_index_write")
+	}
+	// Only a file containing a committed transaction needs bounded rotation.
+	current := logs[len(logs)-1]
+	localCurrent := filepath.Join(filepath.Dir(base), current.name)
+	resume, err := resumeBinlog(localCurrent, uuid+"/"+current.name, idx.Active)
+	if err != nil {
+		return fmt.Errorf("binlog_read_failed: %w", err)
+	}
+	hasTransactions := false
+	decoded, err := decodeBinlogFrom(ctx, s, localCurrent, resume.Position, func(binlogTransaction) error {
+		hasTransactions = true
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if decoded.DecodePosition >= resume.Position {
+		resume.Position = decoded.DecodePosition
+	}
+	idx.Active = &resume
+	if hasTransactions {
+		latest, err := status(ctx)
+		if err := archiveWriterAdmission(latest, err, s.Galera != nil); err != nil {
+			return err
+		}
+		if _, err = db.ExecContext(ctx, "FLUSH BINARY LOGS"); err != nil {
+			return fmt.Errorf("binlog_rotate_failed: %w", err)
+		}
+		logs, err = list()
+		if err != nil || len(logs) == 0 {
+			return errors.New("binlog_query_failed")
+		}
+		idx.Pending[uuid+"/"+logs[len(logs)-1].name] = true
+		if err = writeArchivePending(indexPath, idx.Pending); err != nil {
+			return errors.New("archive_index_write")
+		}
 	}
 	if err = writeArchiveSummary(indexPath, idx); err != nil {
 		return errors.New("archive_index_write")
@@ -573,10 +708,10 @@ func uploadArchive(ctx context.Context, c *minio.Client, r myspec.Repository, ob
 	} else {
 		code := minio.ToErrorResponse(err).Code
 		if code != "NoSuchKey" && code != "NotFound" && code != "NoSuchObject" {
-			return errors.New("archive_upload_failed")
+			return fmt.Errorf("archive_upload_failed: %w", err)
 		}
 		if _, err = c.FPutObject(ctx, r.S3.Bucket, object, local, minio.PutObjectOptions{ContentType: "application/octet-stream", UserMetadata: map[string]string{"sha256": sidecar.SHA256}}); err != nil {
-			return errors.New("archive_upload_failed")
+			return fmt.Errorf("archive_upload_failed: %w", err)
 		}
 	}
 	b, err := json.Marshal(sidecar)
@@ -584,7 +719,7 @@ func uploadArchive(ctx context.Context, c *minio.Client, r myspec.Repository, ob
 		return errors.New("archive_metadata_invalid")
 	}
 	if _, err = c.PutObject(ctx, r.S3.Bucket, object+".json", bytes.NewReader(b), int64(len(b)), minio.PutObjectOptions{ContentType: "application/json"}); err != nil {
-		return errors.New("archive_upload_failed")
+		return fmt.Errorf("archive_upload_failed: %w", err)
 	}
 	return nil
 }

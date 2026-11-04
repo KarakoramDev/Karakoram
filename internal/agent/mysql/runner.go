@@ -24,23 +24,24 @@ import (
 )
 
 type Runner struct {
-	mu                     sync.RWMutex
-	current                myspec.Spec
-	dir                    string
-	node                   *agent.Node
-	db                     *sql.DB
-	dbKey                  [32]byte
-	metricMu               sync.Mutex
-	questions              float64
-	questionTime           time.Time
-	rejoinCancel           context.CancelFunc
-	archiveCancel          context.CancelFunc
-	archiveBackup          myspec.Backup
-	coverageServiceMu      sync.Mutex
-	coverageRefresh        *coverageRefresh
-	coverageStopped        bool
-	proxyTLSReloadFallback bool
-	dataTLSReloadPending   bool
+	mu                        sync.RWMutex
+	current                   myspec.Spec
+	dir                       string
+	node                      *agent.Node
+	db                        *sql.DB
+	dbKey                     [32]byte
+	metricMu                  sync.Mutex
+	questions                 float64
+	questionTime              time.Time
+	rejoinCancel              context.CancelFunc
+	archiveCancel             context.CancelFunc
+	archiveBackup             myspec.Backup
+	archiveResultWriteFailure string
+	coverageServiceMu         sync.Mutex
+	coverageRefresh           *coverageRefresh
+	coverageStopped           bool
+	proxyTLSReloadFallback    bool
+	dataTLSReloadPending      bool
 }
 
 func New() *Runner                                      { return &Runner{} }
@@ -144,6 +145,9 @@ func availableLocalPool(ctx context.Context, pool *sql.DB, open func() (*sql.DB,
 	return replacement, replacement.PingContext(ctx)
 }
 func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConfig) ([]string, error) {
+	if !filepath.IsAbs(n.DataDir()) {
+		return nil, errArchiveStateDir
+	}
 	s, err := decodeSpec(c)
 	if err != nil {
 		return nil, err

@@ -74,11 +74,29 @@ func TestPITRCoveragePendingPublishesProgressWithoutWindow(t *testing.T) {
 }
 
 func TestPITRAdmissionSupportsLegacySynchronousAndFreshBackgroundAgents(t *testing.T) {
-	for _, name := range []string{"legacy-synchronous", "background-fresh", "background-unfresh", "background-predates-admission"} {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		legacy bool
+		skew   time.Duration
+		fresh  bool
+	}{
+		{name: "legacy-synchronous", legacy: true},
+		{name: "background-fresh", fresh: true},
+		{name: "background-behind-milliseconds", skew: -5 * time.Millisecond, fresh: true},
+		{name: "background-ahead-milliseconds", skew: 5 * time.Millisecond, fresh: true},
+		{name: "background-behind-minutes", skew: -5 * time.Minute, fresh: true},
+		{name: "background-ahead-minutes", skew: 5 * time.Minute, fresh: true},
+		{name: "background-unfresh"},
+		{name: "background-stale-behind", skew: -5 * time.Minute},
+		{name: "background-stale-ahead", skew: 5 * time.Minute},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			p, rc, backend := backupFixture(t, "single")
 			rc.Cluster.Spec.Backup.PITR.Enabled = true
 			inventoryBackup(t, rc, "base", "full", "", 10, time.Unix(10, 0))
+			// Anchor before calling admission so a lagging agent's timestamp is
+			// deterministically earlier than the control plane's request start.
+			verificationStartedAt := time.Now().UTC().Add(tc.skew)
 			backend.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
 				if r.URL.Path != "/v1/mysql/pitr-coverage" {
 					return false
@@ -91,21 +109,15 @@ func TestPITRAdmissionSupportsLegacySynchronousAndFreshBackgroundAgents(t *testi
 					t.Error("admission did not request freshness")
 				}
 				response := myspec.PITRCoverageResponse{Windows: []myspec.PITRWindow{{Start: time.Unix(10, 0), End: time.Unix(20, 0)}}}
-				if name != "legacy-synchronous" {
-					response.VerificationStartedAt = time.Now().UTC()
-					response.Fresh = true
-				}
-				if name == "background-unfresh" {
-					response.Fresh = false
-				}
-				if name == "background-predates-admission" {
-					response.VerificationStartedAt = time.Now().Add(-time.Minute)
+				if !tc.legacy {
+					response.VerificationStartedAt = verificationStartedAt
+					response.Fresh = tc.fresh
 				}
 				_ = json.NewEncoder(w).Encode(response)
 				return true
 			}
 			_, err := p.ValidatePITRRestore(t.Context(), rc, time.Unix(15, 0))
-			reject := name == "background-unfresh" || name == "background-predates-admission"
+			reject := !tc.legacy && !tc.fresh
 			if reject && (err == nil || !strings.Contains(err.Error(), "predating")) {
 				t.Fatalf("stale background proof admitted: %v", err)
 			}

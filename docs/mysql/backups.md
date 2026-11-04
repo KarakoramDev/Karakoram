@@ -98,6 +98,49 @@ observation reports `Unknown/ObservationUnavailable`. A full-backup-only
 zero-width window is a snapshot recovery point, not evidence of continuous
 archiving; verify that the endpoint advances after post-backup writes.
 
+Archive attempts that fail decoding, rotation or upload now report
+`BinlogArchive=False/ArchiveFailed`, a Warning event and an agent log diagnostic.
+The condition includes a safe error category; the writer agent log adds sanitized
+native/client causes (for example, MySQL error number/SQLSTATE or S3 code/status),
+without SQL, account statements or decoded native output. The sanitized
+last-attempt result is stored durably per repository and survives agent restarts;
+only a completed successful pass clears it. Writer-ineligible/fenced skips retain
+the prior result, and status probe failures report `binlog_status_failed`.
+Failure to read or persist the attempt result is itself unhealthy.
+Member state directories must be absolute; an empty or relative directory is
+rejected as `archive_state_directory_invalid`, never used for attempt-state writes.
+Repeated status probes within one observation pass do not duplicate a successfully
+recorded Warning; a failed event recording remains retryable.
+Neither a failed attempt nor the writer's current position extends the recovery
+window: only successfully uploaded, contiguous transaction metadata does.
+
+### Upgrading an archive stalled after DDL
+
+Older agents can stop archiving at a native tab-separated Query header without
+an Xid (for example, `CREATE DATABASE IF NOT EXISTS` on an existing database).
+Ordinary atomic DDL/account statements carrying Xid may continue, so successful
+user/database changes alone do not establish archive health. The corrected
+parser handles native space/tab headers, standalone queries, transaction-wrapped
+row/statement DML, compressed transactions and durable XA prepare boundaries.
+
+Install the corrected **member agents**, not just the control plane: upgrade the
+control plane first, then relaunch member agents. On releases with MySQL
+`upgrade-agents`, use that rollout; on releases without it, a genuine CPU/memory
+resource change relaunches the agents. Follow the [upgrade guidance](../upgrade.md)
+and the topology's availability requirements before relaunching members.
+At the next scheduled archive pass, existing durable receipts are retained and
+all still-present, unarchived closed binlogs are retried automatically in native
+order; no manual skip, index edit or new baseline is required to repair a parser
+stall. Coverage advances after those uploads complete and pass lineage checks.
+Keep native binary logs until this catch-up finishes.
+
+Purged, unarchived logs cannot be reconstructed by an upgrade. A missing pending
+file reports `unarchived_binlog_purged` and freezes the contiguous archive end;
+physical-source/GTID coverage checks also reject missing history, including a gap
+that predates the local pending inventory. Do not force the window across it.
+Preserve earlier restorable coverage and take a fresh full backup to establish
+a new recovery baseline after the gap.
+
 Each archive pass releases its repository connection pool when it completes or
 fails; backup, restore and coverage observations do the same. This prevents
 short archive intervals from accumulating abandoned idle S3/TLS connections.
@@ -151,6 +194,9 @@ Missing or invalid restore inputs fail closed.
 Updated agents expose pending/progress and freshness metadata. During a mixed-
 version rollout, a legacy agent's successful synchronous coverage response is
 still fresh for that request; it cannot provide the background convergence fix.
+Freshness is attested per request by the source agent using its own clock;
+the control plane does not compare agent verification timestamps with its local
+clock. This control-plane-only correction also works with v0.4.3 agents.
 The control plane explicitly negotiates pending responses with `acceptPending`.
 A legacy control plane receives an observation error while coverage is pending
 or expired, matching a legacy agent's unsuccessful synchronous request; it can

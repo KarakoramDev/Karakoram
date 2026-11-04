@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -295,10 +296,8 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 			continue
 		}
 		var coverage myspec.PITRCoverageResponse
-		var admissionStarted time.Time
 		for _, observer := range observers {
 			coverage = myspec.PITRCoverageResponse{}
-			admissionStarted = time.Now().UTC()
 			e = mysqlAction(ctx, rc, observer, myspec.ActionPITRCoverage, myspec.PITRCoverageRequest{Source: repo, ObjectPaths: m.ObjectPaths, ObjectManifests: refs, RequireFresh: requireFresh, AcceptPending: true}, &coverage)
 			if e == nil {
 				break
@@ -324,7 +323,10 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 		}
 		// Legacy agents compute synchronously inside this request. Only the
 		// background protocol can return a cached proof and must attest freshness.
-		if requireFresh && !coverage.VerificationStartedAt.IsZero() && (!coverage.Fresh || coverage.VerificationStartedAt.Before(admissionStarted)) {
+		// The agent compares verification start with this request's arrival on
+		// its own clock; comparing its timestamp with the control plane's clock
+		// would reject fresh proofs whenever the agent clock lags behind.
+		if requireFresh && !coverage.VerificationStartedAt.IsZero() && !coverage.Fresh {
 			return nil, nil, engine.Invalid("agent returned PITR verification predating restore admission")
 		}
 		for _, w := range coverage.Windows {
@@ -497,11 +499,58 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 					condition.Reason = "ArchivePending"
 					condition.Message = "No binlog transaction has been archived"
 				}
+				if a.Error != "" {
+					condition.Status = "False"
+					condition.Reason = "ArchiveFailed"
+					condition.Message = "Binlog archiving failed: " + a.Error + "; recovery coverage ends at the last successfully archived transaction"
+					known := false
+					for _, old := range rc.Cluster.Status.Conditions {
+						if old.Type == condition.Type && old.Reason == condition.Reason && old.Message == condition.Message {
+							known = true
+							break
+						}
+					}
+					if !known && rc.Events != nil {
+						if err := recordArchiveWarning(ctx, rc, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Resource: writer, Type: "Warning", Reason: condition.Reason, Message: condition.Message, CreatedAt: now(rc)}); err != nil {
+							return err
+						}
+					}
+				}
 			}
 			status.Conditions = append(status.Conditions, condition)
 		}
 	}
 	return nil
+}
+
+type archiveWarningKey struct {
+	namespace, cluster, resource, reason, message string
+}
+
+type archiveWarningResult struct {
+	once sync.Once
+	err  error
+}
+
+// ObserveStatus retries before publishing conditions. Deduplicate successful
+// appends within that pass, without losing warnings first seen on the retry or
+// suppressing a retry after the recorder failed.
+func recordArchiveWarning(ctx context.Context, rc *engine.Context, event domain.Event) error {
+	cache := engine.ObservationPassCache(ctx)
+	if cache == nil {
+		return rc.Events.Record(ctx, event)
+	}
+	key := archiveWarningKey{domain.NormalizedNamespace(event.Namespace), event.Cluster, event.Resource, event.Reason, event.Message}
+	value, found := cache.Load(key)
+	if !found {
+		value, _ = cache.LoadOrStore(key, &archiveWarningResult{})
+	}
+	result := value.(*archiveWarningResult)
+	result.once.Do(func() { result.err = rc.Events.Record(ctx, event) })
+	if result.err != nil {
+		cache.CompareAndDelete(key, result)
+	}
+	return result.err
 }
 
 var _ engine.PITRRestoreValidator = (*Core)(nil)
