@@ -215,6 +215,20 @@ blocked-change recovery are fixed in v0.4.5, not by the hotfix.
   On Group Replication and PXC the relaunch moves the writer, so point-in-time
   recovery into the stalled period itself is not available.
 
+- **MySQL point-in-time recovery can silently stop extending after the writer
+  changes in Group Replication and PXC clusters** (also present in
+  v0.4.0–v0.4.3). When the writer moves — automatic failover, switchover, or
+  rolling maintenance — to a member whose data was copied in rather than
+  replayed from its own binlogs, binlogs keep uploading and `BinlogArchive`
+  stays healthy, but the end of the point-in-time window stops advancing.
+  This applies to most Group Replication and PXC clusters, because members that
+  join when the cluster forms are copied by Group Replication clone or PXC state
+  transfer, and to any cluster created from a backup, cloned or restored in
+  place. Restores to points before the freeze still work, and full backups
+  are not affected. A new full backup does not restart coverage. To check,
+  compare the window end from `karactl backups pitr-window CLUSTER` with the
+  current time. Until the fix, rely on full backups and schedule them as often
+  as your recovery point requires. A fix is planned for the next release.
 - **On Zerops, raising the resources of a member that failed its first deployment
   doesn't take effect** (also present in v0.4.3). If a newly added member, extra
   component or proxy exhausts its deployment retries — for example because it
