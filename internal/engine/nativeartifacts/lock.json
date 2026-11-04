@@ -14,6 +14,54 @@
     "build": "upstream-release"
   },
   {
+    "name": "openbao",
+    "version": "2.7.1",
+    "file": "openbao_2.7.1_linux_amd64.tar.gz",
+    "sha256": "0e2f1ce10d124e03112b50dd2fbec6b78003783253bc3a91587938f39d1e2243",
+    "size": 74865426,
+    "upstreamURL": "https://github.com/openbao/openbao/releases/download/v2.7.1/openbao_2.7.1_linux_amd64.tar.gz",
+    "license": "MPL-2.0",
+    "source": {
+      "repo": "https://github.com/openbao/openbao",
+      "commit": "a5db72cef75c24b920ade02065b18dd8eb666bac"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "openbao-plugin-database-mongodb",
+    "version": "0.0.1",
+    "file": "openbao-plugin-database-mongodb_linux_amd64_v1.tar.gz",
+    "sha256": "225c89a188052067d896395a344fc40ba951808cb145ddfa6b07b0be296e632d",
+    "size": 7109156,
+    "upstreamURL": "https://github.com/openbao/openbao-plugins/releases/download/database-mongodb-v0.0.1/openbao-plugin-database-mongodb_linux_amd64_v1.tar.gz",
+    "license": "MPL-2.0",
+    "source": {
+      "repo": "https://github.com/openbao/openbao-plugins",
+      "commit": "f9750bd6c8fb2e5447d2227f65c159a9032b4da0"
+    },
+    "build": "upstream-release",
+    "executableMembers": [
+      "openbao-plugin-database-mongodb_linux_amd64_v1"
+    ]
+  },
+  {
+    "name": "openbao-plugin-kms-aws",
+    "version": "0.1.0",
+    "file": "openbao-plugin-kms-aws_linux_amd64_v1.tar.gz",
+    "sha256": "cec959c8159045db34ae8ba2f58f89d4e631f9b49f9b5e5cd55e72a0058a69ad",
+    "size": 6422912,
+    "upstreamURL": "https://github.com/openbao/openbao-plugins/releases/download/kms-aws-v0.1.0/openbao-plugin-kms-aws_linux_amd64_v1.tar.gz",
+    "license": "MPL-2.0",
+    "source": {
+      "repo": "https://github.com/openbao/openbao-plugins",
+      "commit": "0c68457d68ae5741013ee30623525303860a8b22"
+    },
+    "build": "upstream-release",
+    "executableMembers": [
+      "openbao-plugin-kms-aws_linux_amd64_v1"
+    ]
+  },
+  {
     "name": "proxysql",
     "version": "3.0.11",
     "file": "proxysql_3.0.11-ubuntu24_amd64.deb",
@@ -274,8 +322,8 @@
     "name": "supabase-supavisor",
     "version": "2.9.13",
     "file": "supabase-supavisor-2.9.13-ubuntu24.04-amd64.tar.gz",
-    "sha256": "ee3aad0698fe8472a349b251613b4477c7486b25f88a765dd94ca49613237676",
-    "size": 30281034,
+    "sha256": "5d8f95c44c3a299324e26e31a9f675518f8c7725befb2599230e969ae3040c8a",
+    "size": 30287788,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
@@ -310,11 +358,494 @@
     ]
   },
   {
+    "name": "keycloak",
+    "version": "26.8.1",
+    "file": "keycloak-26.8.1.tar.gz",
+    "sha256": "4e2740b181faa2ea623a1c2ecf00855935311e546046e2f857615a47ed24cbe8",
+    "size": 173928500,
+    "upstreamURL": "https://github.com/keycloak/keycloak/releases/download/26.8.1/keycloak-26.8.1.tar.gz",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/keycloak/keycloak",
+      "commit": "24ed1dadf3f246a555adb6d3d4a99e9b3003fb3b"
+    },
+    "build": "official",
+    "runtimeDeps": [
+      "ca-certificates",
+      "openjdk-21-jre-headless"
+    ]
+  },
+  {
+    "name": "timescaledb-pg16",
+    "version": "2.31.0",
+    "file": "timescaledb-pg16-2.31.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "abd38f5faeaa45536a954d7aa87af633dcf4c5b549693507a4fa3136b717c6f4",
+    "size": 6791940,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/timescale/timescaledb",
+      "commit": "4fa2a7c6b579171a1a8966fd87a0d4189ebab43b"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 16,
+    "extensions": [
+      "timescaledb"
+    ],
+    "extensionFlags": {
+      "timescaledb": {
+        "preload": true,
+        "unavailableFeatures": [
+          "tsl"
+        ]
+      }
+    }
+  },
+  {
+    "name": "timescaledb-pg17",
+    "version": "2.31.0",
+    "file": "timescaledb-pg17-2.31.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "bbadda2e2f91aa0363445cef13463f5e8e800211fc6d87333f79680e87ae92a1",
+    "size": 7147772,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/timescale/timescaledb",
+      "commit": "4fa2a7c6b579171a1a8966fd87a0d4189ebab43b"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 17,
+    "extensions": [
+      "timescaledb"
+    ],
+    "extensionFlags": {
+      "timescaledb": {
+        "preload": true,
+        "unavailableFeatures": [
+          "tsl"
+        ]
+      }
+    }
+  },
+  {
+    "name": "timescaledb-pg18",
+    "version": "2.31.0",
+    "file": "timescaledb-pg18-2.31.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "f3b0206b1e9fd84223ae7bb824d41e9d553998ed43dcaa45d340e08612708c1a",
+    "size": 7217107,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/timescale/timescaledb",
+      "commit": "4fa2a7c6b579171a1a8966fd87a0d4189ebab43b"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 18,
+    "extensions": [
+      "timescaledb"
+    ],
+    "extensionFlags": {
+      "timescaledb": {
+        "preload": true,
+        "unavailableFeatures": [
+          "tsl"
+        ]
+      }
+    }
+  },
+  {
+    "name": "citus-pg16",
+    "version": "14.2.0",
+    "file": "citus-pg16-14.2.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "a8023dbb392902e05df92fde20c8e7388d07d5717ac643bd85e7c69c07ad03ab",
+    "size": 9819524,
+    "upstreamURL": "",
+    "license": "AGPL-3.0-only",
+    "source": {
+      "repo": "https://github.com/citusdata/citus",
+      "commit": "58702e722c6efbae45e3cade885b476e4fddc7e1"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6",
+      "libpq5",
+      "libssl3t64",
+      "liblz4-1",
+      "libzstd1"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 16,
+    "extensions": [
+      "citus"
+    ],
+    "extensionFlags": {
+      "citus": {
+        "preload": true
+      }
+    }
+  },
+  {
+    "name": "citus-pg17",
+    "version": "14.2.0",
+    "file": "citus-pg17-14.2.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "aaed83af3e0a6629a501b6ef763dfa28ea568e3cb1b02bb89e73c9619e9a4b56",
+    "size": 10461169,
+    "upstreamURL": "",
+    "license": "AGPL-3.0-only",
+    "source": {
+      "repo": "https://github.com/citusdata/citus",
+      "commit": "58702e722c6efbae45e3cade885b476e4fddc7e1"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6",
+      "libpq5",
+      "libssl3t64",
+      "liblz4-1",
+      "libzstd1"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 17,
+    "extensions": [
+      "citus"
+    ],
+    "extensionFlags": {
+      "citus": {
+        "preload": true
+      }
+    }
+  },
+  {
+    "name": "citus-pg18",
+    "version": "14.2.0",
+    "file": "citus-pg18-14.2.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "6cff2bf55781c16d54fd6aa07647d39bc3359bdd435b464e470748c7387910b8",
+    "size": 10643223,
+    "upstreamURL": "",
+    "license": "AGPL-3.0-only",
+    "source": {
+      "repo": "https://github.com/citusdata/citus",
+      "commit": "58702e722c6efbae45e3cade885b476e4fddc7e1"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6",
+      "libpq5",
+      "libssl3t64",
+      "liblz4-1",
+      "libzstd1",
+      "libcurl4t64"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 18,
+    "extensions": [
+      "citus"
+    ],
+    "extensionFlags": {
+      "citus": {
+        "preload": true
+      }
+    }
+  },
+  {
+    "name": "temporal-server-1.31",
+    "version": "1.31.4",
+    "file": "temporal_1.31.4_linux_amd64.tar.gz",
+    "sha256": "85f4b9405d934239415e3a8de9594ec6844f269401645fca6565a6abfc1cbc5d",
+    "size": 93836793,
+    "upstreamURL": "https://github.com/temporalio/temporal/releases/download/v1.31.4/temporal_1.31.4_linux_amd64.tar.gz",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/temporalio/temporal",
+      "commit": "9a9a1f0fa8a5a4edf29a90c4069352da094920fc"
+    },
+    "build": "upstream-release",
+    "runtimeDeps": [
+      "ca-certificates"
+    ]
+  },
+  {
+    "name": "temporal-server-1.32",
+    "version": "1.32.1",
+    "file": "temporal_1.32.1_linux_amd64.tar.gz",
+    "sha256": "4260448d650c1ba7ee7683ff0c93d5c6a1709260e3a7ef543bfa34e06cff6051",
+    "size": 100242778,
+    "upstreamURL": "https://github.com/temporalio/temporal/releases/download/v1.32.1/temporal_1.32.1_linux_amd64.tar.gz",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/temporalio/temporal",
+      "commit": "af08a5e5f2dd40f545f2afac7780daaa6987001e"
+    },
+    "build": "upstream-release",
+    "runtimeDeps": [
+      "ca-certificates"
+    ]
+  },
+  {
+    "name": "temporal-ui-server",
+    "version": "2.56.0",
+    "file": "ui-server_2.56.0_linux_amd64.tar.gz",
+    "sha256": "c9d767a49815d475f00e4882f4cf4b00ff89d3253c9d410f41c93b40b739e2ec",
+    "size": 10082262,
+    "upstreamURL": "https://github.com/temporalio/ui-server/releases/download/v2.56.0/ui-server_2.56.0_linux_amd64.tar.gz",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/temporalio/ui-server",
+      "commit": "1a0c78c9022cbd985c61fa92be6c4d9fef5cac5c"
+    },
+    "build": "upstream-release",
+    "runtimeDeps": [
+      "ca-certificates"
+    ]
+  },
+  {
+    "name": "percona-server-8.4.11-11",
+    "version": "8.4.11-11",
+    "file": "Percona-Server-8.4.11-11-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "a8048701a124737ca816d1c098146703d0387109dbf519a333873ddf0a53dde3",
+    "size": 177929124,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-Server-8.4/Percona-Server-8.4.11-11/binary/tarball/Percona-Server-8.4.11-11-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-server",
+      "commit": "57878ff8786a8ba85433fd3e273fb7cf3fd9bfed"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64",
+      "libtirpc3t64"
+    ]
+  },
+  {
+    "name": "percona-server-8.0.46-37",
+    "version": "8.0.46-37",
+    "file": "Percona-Server-8.0.46-37-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "9a76c3e9c71e3eb354bc066289086bd347cf24a3ac7c4fc2bc74788ec3ce0fa6",
+    "size": 152334402,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-Server-8.0/Percona-Server-8.0.46-37/binary/tarball/Percona-Server-8.0.46-37-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-server",
+      "commit": "39e2b60e71bb30f081bea095d97ab5378a7a6f27"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64",
+      "libtirpc3t64"
+    ]
+  },
+  {
+    "name": "percona-xtradb-cluster-8.4.11-11.1",
+    "version": "8.4.11-11.1",
+    "file": "Percona-XtraDB-Cluster_8.4.11-11.1_Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "739c4a5ff8a356760e370a1d487aa2587eabca31a452b22e8c320af69416f8b0",
+    "size": 234385037,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-XtraDB-Cluster-84/Percona-XtraDB-Cluster-8.4.11/binary/tarball/Percona-XtraDB-Cluster_8.4.11-11.1_Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-xtradb-cluster",
+      "commit": "33f7510189c5719c852837d7ad9ba5e7d6431f4d"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64",
+      "socat",
+      "openssl"
+    ]
+  },
+  {
+    "name": "percona-xtradb-cluster-8.0.46-38.1",
+    "version": "8.0.46-38.1",
+    "file": "Percona-XtraDB-Cluster_8.0.46-38.1_Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "cf0d075622e28c82e01d2da04cc78a449213fb1115c1e6fa5aacc5db02c6be20",
+    "size": 182505750,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-XtraDB-Cluster-80/Percona-XtraDB-Cluster-8.0.46/binary/tarball/Percona-XtraDB-Cluster_8.0.46-38.1_Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-xtradb-cluster",
+      "commit": "947005d5e9f5337b7c89777ae530c18bdf5a7baf"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64",
+      "socat",
+      "openssl"
+    ]
+  },
+  {
+    "name": "percona-xtrabackup-8.4.0-7",
+    "version": "8.4.0-7",
+    "file": "percona-xtrabackup-8.4.0-7-Linux-x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "073936ff8f2c37fb3b2771b357fd2e71f5d5f40ab9e5fba259a46032f88d2af8",
+    "size": 55517012,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-XtraBackup-8.4/Percona-XtraBackup-8.4.0-7/binary/tarball/percona-xtrabackup-8.4.0-7-Linux-x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-xtrabackup",
+      "commit": "4093cfd863c49d7d625e52086397728978181f00"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64"
+    ]
+  },
+  {
+    "name": "percona-xtrabackup-8.0.35-36",
+    "version": "8.0.35-36",
+    "file": "percona-xtrabackup-8.0.35-36-Linux-x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "c8bb153fc2dffe422eed494065f935855ad2b71aaf4a9ff89e531596ed167495",
+    "size": 25900293,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-XtraBackup-8.0/Percona-XtraBackup-8.0.35-36/binary/tarball/percona-xtrabackup-8.0.35-36-Linux-x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-xtrabackup",
+      "commit": "7233322c3bd27f0482a2a4e67edec97de887c14a"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64"
+    ]
+  },
+  {
+    "name": "percona-server-8.4.10-10",
+    "version": "8.4.10-10",
+    "file": "Percona-Server-8.4.10-10-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "672cad83a69c3b3c157cbe1f331160787272fa50e126cb412a7643764604e1b5",
+    "size": 177288238,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-Server-8.4/Percona-Server-8.4.10-10/binary/tarball/Percona-Server-8.4.10-10-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-server",
+      "commit": "d76e81f492e19c31022071220ad811efe977f5ed"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64",
+      "libtirpc3t64"
+    ]
+  },
+  {
+    "name": "percona-server-8.0.45-36",
+    "version": "8.0.45-36",
+    "file": "Percona-Server-8.0.45-36-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "f9de695f577e1c81ade6ec1891290258c9d9c043ac7b3e086879838b21233679",
+    "size": 152280524,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-Server-8.0/Percona-Server-8.0.45-36/binary/tarball/Percona-Server-8.0.45-36-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-server",
+      "commit": "8fe4a72dfbc3f2d4959cf277704ccefe6b534bd2"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64",
+      "libtirpc3t64"
+    ]
+  },
+  {
+    "name": "neo4j-community-2026.09.0",
+    "version": "2026.09.0",
+    "file": "neo4j-community-2026.09.0-unix.tar.gz",
+    "sha256": "cdaa0905d9a533bbbc474d239c268f69978982eb5ca3177666c04c9792d1c399",
+    "size": 274263836,
+    "upstreamURL": "https://dist.neo4j.org/neo4j-community-2026.09.0-unix.tar.gz",
+    "license": "GPL-3.0-only",
+    "source": {
+      "repo": "https://github.com/neo4j/neo4j",
+      "commit": "54a7dcf7c2501b31866199143364c5332da8936f"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "neo4j-community-2026.10.0",
+    "version": "2026.10.0",
+    "file": "neo4j-community-2026.10.0-unix.tar.gz",
+    "sha256": "36f68f8af6ab86f29b2ebe46361f50fc9be68076156623e86d1e12b801169d6d",
+    "size": 250599741,
+    "upstreamURL": "https://dist.neo4j.org/neo4j-community-2026.10.0-unix.tar.gz",
+    "license": "GPL-3.0-only",
+    "source": {
+      "repo": "https://github.com/neo4j/neo4j",
+      "commit": "eaa00ca9d84bb77c1180f716913da33394cd8bc5"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "temurin-jre-21",
+    "version": "21.0.12.1+1",
+    "file": "OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz",
+    "sha256": "2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500",
+    "size": 52059408,
+    "upstreamURL": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz",
+    "license": "GPL-2.0-only WITH Classpath-exception-2.0",
+    "source": {
+      "repo": "https://github.com/adoptium/jdk21u",
+      "commit": "eac07229cf6cacc8a22eb79f4929e7fed61338b7"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "weaviate-1.40",
+    "version": "1.40.1",
+    "file": "weaviate-v1.40.1-linux-amd64.tar.gz",
+    "sha256": "ed3234edb870310bb0d73f247781f9b597e4ca34e65d95c3ba8d5bed4dcbd13e",
+    "size": 74030635,
+    "upstreamURL": "https://github.com/weaviate/weaviate/releases/download/v1.40.1/weaviate-v1.40.1-linux-amd64.tar.gz",
+    "license": "BSD-3-Clause AND LicenseRef-Weaviate-Enterprise",
+    "source": {
+      "repo": "https://github.com/weaviate/weaviate",
+      "commit": "e0c3f76b59d11413f015de897ba035f43c9ecf01"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "weaviate-1.39",
+    "version": "1.39.12",
+    "file": "weaviate-v1.39.12-linux-amd64.tar.gz",
+    "sha256": "82a073d157c6d8e70a54031ece9b090bcaf7f6520796b2fd0eedabccdf9c4c2d",
+    "size": 73267992,
+    "upstreamURL": "https://github.com/weaviate/weaviate/releases/download/v1.39.12/weaviate-v1.39.12-linux-amd64.tar.gz",
+    "license": "BSD-3-Clause AND LicenseRef-Weaviate-Enterprise",
+    "source": {
+      "repo": "https://github.com/weaviate/weaviate",
+      "commit": "6007f7029a40c567a94535e88cfe50445e7e0369"
+    },
+    "build": "upstream-release"
+  },
+  {
     "name": "mongodb-mcp-server",
     "version": "3.1.0",
     "file": "mongodb-mcp-server-3.1.0-ubuntu24.04-amd64.tar.gz",
-    "sha256": "a5c6f723b4c4eaf87ecbc3da336a5c1ec784e47a087e351e89aff65e70018242",
-    "size": 239960287,
+    "sha256": "0aa99f140c71ebc894f1e58e25ece6eb0a2df85194dc49e5f1c8046aa4757fad",
+    "size": 239960478,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
