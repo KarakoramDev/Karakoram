@@ -442,9 +442,17 @@ coverage contract. Keep the upgraded control plane with the corrected agents.
   extras and proxies, disable the component and enable it again with the larger
   resources; for a data member added by scaling out, scale back in to remove it,
   then scale out again with the new resources; for a brand-new cluster that
-  never became Ready, delete it and create it again. Never delete a cluster
-  that already holds data to work around this, for example when only a
-  replacement member is stuck. Neo4j and the Data MCP companion are not
+  never became Ready, delete it and create it again. If a replacement member
+  is stuck in a cluster that already holds data, never delete the cluster;
+  instead: for PostgreSQL and Supabase, cancel the replace operation
+  (`karactl operations cancel OPERATION`), which removes only the new member
+  and keeps the original; for MySQL Group Replication and PXC, cancel the
+  replace operation before the old member starts retiring; for MongoDB, wait
+  for the operation to time out (about 2 hours), which removes the new member;
+  for RabbitMQ, Elasticsearch, Weaviate and OpenBao, leave the cluster as it
+  is and upgrade once the fix is released. After cancelling or a timeout,
+  check that the new member is actually gone before making further changes.
+  Neo4j and the Data MCP companion are not
   affected. A fix is planned for the next release.
 
 ## Upgrading to v0.4.3
