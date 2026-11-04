@@ -31,6 +31,9 @@ type distributedAgents struct {
 	calls                 []string
 	loseDrain, loseRemove bool
 	connectivityFailed    bool
+	adminRotations        []string
+	legacyReceipts        map[string]bool
+	statusFault           map[string]string
 }
 
 func setupDistributed(t *testing.T, replicas int) (*Core, *engine.Context, *fakeBackend, *distributedAgents) {
@@ -86,12 +89,35 @@ func setupDistributed(t *testing.T, replicas int) (*Core, *engine.Context, *fake
 				proxy.ServeHTTP(w, r)
 				return
 			}
+			if fake.statusFault[name] == "unreachable" {
+				http.Error(w, "agent unavailable", http.StatusServiceUnavailable)
+				return
+			}
 			role := "replica"
 			if name == leader(m.Group) {
 				role = "primary"
 			}
+			if fake.statusFault[name] == "starting" {
+				role = "starting"
+			}
 			options, _ := ParseOptions(m.Options)
-			json.NewEncoder(w).Encode(pgspec.StatusResponse{Role: role, Leader: leader(m.Group), Running: !m.Offline, Streaming: role == "replica", Version: m.Version, SystemID: fmt.Sprintf("group-%d", m.Group), Timeline: 1, WALPosition: "1/100", EtcdHealthy: true, EtcdMemberID: name + "-etcd", CredentialReceipts: true, SlotStatusKnown: true, WALStatusKnown: true, ArchiveStatusKnown: true, SharedMemoryParameters: fakeSharedMemory(options.Parameters), HealthCapabilities: &pgspec.HealthCapabilities{LocalEtcd: true, ReplicationSlots: true, WALArchive: true, ReplicationDistance: true, PatroniPause: true}})
+			json.NewEncoder(w).Encode(pgspec.StatusResponse{Role: role, Leader: leader(m.Group), Running: !m.Offline && fake.statusFault[name] != "starting" && fake.statusFault[name] != "unready", Streaming: role == "replica", Version: m.Version, SystemID: fmt.Sprintf("group-%d", m.Group), Timeline: 1, WALPosition: "1/100", EtcdHealthy: true, EtcdMemberID: name + "-etcd", CredentialReceipts: true, AdminRotation: true, AdminRotationLocalReceipts: !fake.legacyReceipts[name], SlotStatusKnown: true, WALStatusKnown: true, ArchiveStatusKnown: true, SharedMemoryParameters: fakeSharedMemory(options.Parameters), HealthCapabilities: &pgspec.HealthCapabilities{LocalEtcd: true, ReplicationSlots: true, WALArchive: true, ReplicationDistance: true, PatroniPause: true}})
+		case "/v1/postgres/roles":
+			var req pgspec.AccessRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Error(err)
+			}
+			if req.Operation != "admin-rotation" || m == nil || name != leader(m.Group) {
+				t.Error("administrator rotation did not target a group primary")
+				http.Error(w, "invalid rotation", http.StatusBadRequest)
+				return
+			}
+			if fake.legacyReceipts[name] {
+				json.NewEncoder(w).Encode(pgspec.AccessResult{Outcome: "unknown", Code: "transaction_unconfirmed"})
+				return
+			}
+			fake.adminRotations = append(fake.adminRotations, name)
+			json.NewEncoder(w).Encode(pgspec.AccessResult{Outcome: "applied", RoleOID: 10})
 		case "/v1/postgres/citus-status", "/v1/postgres/citus-connectivity":
 			if r.URL.Path == "/v1/postgres/citus-connectivity" && fake.connectivityFailed {
 				http.Error(w, "worker authentication unavailable", http.StatusServiceUnavailable)

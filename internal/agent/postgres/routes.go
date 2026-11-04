@@ -190,6 +190,7 @@ func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.Stat
 	if s.LocalPeerAuth {
 		c, err = localPeerConnect(ctx, s, p)
 		out.AdminRotation = err == nil
+		out.AdminRotationLocalReceipts = out.AdminRotation
 	}
 	if c == nil {
 		legacy := s

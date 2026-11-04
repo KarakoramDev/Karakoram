@@ -15,24 +15,27 @@ import (
 )
 
 type receiptSQL struct {
-	oid              uint32
-	digest           string
-	receiptOID       uint32
-	mutations        int
-	rejectMembership bool
-	loseCommit       bool
-	beginError       error
-	requireRoleLock  bool
-	statements       []string
+	oid                   uint32
+	digest                string
+	receiptOID            uint32
+	mutations             int
+	rejectMembership      bool
+	loseCommit            bool
+	beginError            error
+	requireRoleLock       bool
+	citusRemoteAuthBroken bool
+	statements            []string
 }
 type receiptTx struct {
 	pgx.Tx
-	db         *receiptSQL
-	oid        uint32
-	digest     string
-	receiptOID uint32
-	rolledBack bool
-	roleLocked bool
+	db                   *receiptSQL
+	oid                  uint32
+	digest               string
+	receiptOID           uint32
+	rolledBack           bool
+	roleLocked           bool
+	propagationDisabled  bool
+	metadataSyncDisabled bool
 }
 
 func (s *receiptSQL) Begin(context.Context) (pgx.Tx, error) {
@@ -44,6 +47,13 @@ func (s *receiptSQL) Begin(context.Context) (pgx.Tx, error) {
 func (tx *receiptTx) Exec(_ context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 	tx.db.statements = append(tx.db.statements, sql)
 	switch {
+	case strings.Contains(sql, "set_config('citus.enable_ddl_propagation','off',true)"):
+		tx.propagationDisabled = true
+		tx.metadataSyncDisabled = strings.Contains(sql, "set_config('citus.enable_metadata_sync','off',true)")
+	case sql == accessReceiptDDL:
+		if tx.db.citusRemoteAuthBroken && (!tx.propagationDisabled || !tx.metadataSyncDisabled) {
+			return pgconn.CommandTag{}, &pgconn.PgError{Code: "28P01"}
+		}
 	case sql == "LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE":
 		tx.roleLocked = true
 	case strings.HasPrefix(sql, "DROP ROLE"):

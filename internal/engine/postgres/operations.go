@@ -60,7 +60,11 @@ func (p *Core) scaleDown(ctx context.Context, rc *engine.Context, s *state, resu
 
 // CanClaimOperation leaves Sync-owned maintenance ahead of queued imperative
 // work: upgrades, directional restarts and terminal replacement recovery.
-func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
+func (p *Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
+	return p.canClaimOperation(c, false)
+}
+
+func (*Core) canClaimOperation(c *domain.Cluster, rotationPublication bool) (bool, error) {
 	s, err := load(c)
 	if err != nil {
 		return false, err
@@ -81,7 +85,8 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 			return false, nil
 		}
 		for _, m := range s.data() {
-			if m.Stage != "joined" || !initialRestore && !s.group(m.Group).formed() {
+			publishing := rotationPublication && m.Stage == "deployed" && m.ProxyReady
+			if m.Stage != "joined" && !publishing || !initialRestore && !s.group(m.Group).formed() {
 				return false, nil
 			}
 		}
@@ -107,7 +112,12 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 		recovery, recoveryErr := p.rotateAdministrator(ctx, rc, &domain.Operation{ID: journal.Operation, Kind: domain.OperationRotateSystemUser, Payload: json.RawMessage(`{"user":"postgres"}`)})
 		return engine.OpResult{Message: "Administrator rotation recovery owns the cluster: " + recovery.Message, RequeueAfter: time.Second}, recoveryErr
 	}
-	allowed, err := p.CanClaimOperation(rc.Cluster)
+	// An admitted rotation publishes configuration through Sync, temporarily
+	// moving already-joined Citus members back to deployed. Only its sealed
+	// owner may observe that publication; all foreign maintenance fences remain.
+	rotationPublication := journal != nil && journal.Operation == op.ID &&
+		journal.Stage != "rotated" && journal.Stage != "rejected" && administratorRotationOperation(op)
+	allowed, err := p.canClaimOperation(rc.Cluster, rotationPublication)
 	if err != nil {
 		return engine.OpResult{}, err
 	}

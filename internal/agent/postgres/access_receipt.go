@@ -50,6 +50,13 @@ func journalRole(ctx context.Context, c accessBeginner, req pgspec.AccessRequest
 		return unknown
 	}
 	defer tx.Rollback(ctx)
+	if req.Operation == "admin-rotation" {
+		// Receipt schema/table DDL is node-local too. Fence before any DDL:
+		// a worker must never need the already-rotated coordinator to recover.
+		if _, err = tx.Exec(ctx, "SELECT pg_catalog.set_config('citus.enable_ddl_propagation','off',true), pg_catalog.set_config('citus.enable_metadata_sync','off',true) WHERE EXISTS (SELECT FROM pg_catalog.pg_extension WHERE extname='citus')"); err != nil {
+			return unknown
+		}
+	}
 	// Serialize receipt creation and lookup before the first schema/table DDL,
 	// including separate requests racing on the same otherwise absent role.
 	if _, err = tx.Exec(ctx, "SELECT pg_catalog.pg_advisory_xact_lock(68474219400333)"); err != nil {
@@ -105,10 +112,6 @@ func journalRole(ctx context.Context, c accessBeginner, req pgspec.AccessRequest
 		}
 	}
 	if req.Operation == "admin-rotation" {
-		// Citus role DDL must remain local to this writable group primary.
-		if _, err = tx.Exec(ctx, "SELECT pg_catalog.set_config('citus.enable_ddl_propagation','off',true) WHERE EXISTS (SELECT FROM pg_catalog.pg_extension WHERE extname='citus')"); err != nil {
-			return unknown
-		}
 		_, err = tx.Exec(ctx, "ALTER ROLE postgres PASSWORD "+sqlQuote(*req.Role.Password))
 	} else if req.RoleOperation == "delete" {
 		_, err = tx.Exec(ctx, "DROP ROLE "+pgx.Identifier{req.Role.Name}.Sanitize())

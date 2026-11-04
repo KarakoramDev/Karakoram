@@ -285,9 +285,11 @@ type StatusResponse struct {
 	// member protocols from failed probes in a capable implementation.
 	HealthCapabilities *HealthCapabilities `json:"healthCapabilities,omitempty"`
 	// CredentialReceipts advertises durable credential mutation replay.
-	CredentialReceipts bool   `json:"credentialReceipts,omitempty"`
-	AdminRotation      bool   `json:"adminRotation,omitempty"`
-	Role               string `json:"role"` // primary, replica, standalone, proxy, starting, stopped
+	CredentialReceipts bool `json:"credentialReceipts,omitempty"`
+	AdminRotation      bool `json:"adminRotation,omitempty"`
+	// AdminRotationLocalReceipts fences all Citus receipt DDL before mutation.
+	AdminRotationLocalReceipts bool   `json:"adminRotationLocalReceipts,omitempty"`
+	Role                       string `json:"role"` // primary, replica, standalone, proxy, starting, stopped
 	// Running reports whether PostgreSQL (or ProxySQL) accepts connections.
 	Running bool `json:"running"`
 	// DataRecoveryRequired refuses empty initialization after data loss.

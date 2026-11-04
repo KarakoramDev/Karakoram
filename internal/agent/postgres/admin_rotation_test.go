@@ -71,3 +71,51 @@ func TestAdministratorReceiptSurvivesLostCommit(t *testing.T) {
 		t.Fatal("receipt conflict accepted or disclosed credential")
 	}
 }
+
+// Model the live order: the coordinator committed, so worker DDL contacting
+// it with the still-published old password fails with 28P01.
+func TestAdministratorWorkerReceiptAfterCoordinatorRotation(t *testing.T) {
+	verifier := testVerifier()
+	req := pgspec.AccessRequest{Operation: "admin-rotation", RequestID: "half-rotation", Role: &pgspec.RoleWrite{Role: pgspec.Role{Name: "postgres"}, Password: &verifier}}
+	coordinator := &receiptSQL{oid: 10}
+	if result := journalRole(t.Context(), coordinator, req); result.Outcome != "applied" {
+		t.Fatal(result)
+	}
+	for range 2 {
+		worker := &receiptSQL{oid: 10, citusRemoteAuthBroken: true, loseCommit: true}
+		if result := journalRole(t.Context(), worker, req); result.Outcome != "unknown" || worker.receiptOID == 0 {
+			t.Fatalf("worker could not commit a local receipt after coordinator rotation: %+v", result)
+		}
+		if result := journalRole(t.Context(), worker, req); result.Outcome != "applied" || worker.mutations != 1 {
+			t.Fatalf("worker receipt replay did not converge forward: %+v", result)
+		}
+	}
+}
+
+func TestAdministratorCitusFencedBeforeConnectionQueries(t *testing.T) {
+	s := testSpec()
+	s.Superuser = pgspec.Credentials{Username: "postgres", Password: "published-synthetic"}
+	s.AlternateSuperuser = &pgspec.Credentials{Username: "postgres", Password: "pending-synthetic"}
+	s.Citus = &pgspec.Citus{Database: "citus"}
+	p := dataPaths(t.TempDir())
+	cfg, err := administratorConnectionConfig(s, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Host != p.socket || cfg.User != "postgres" || cfg.Password != "" || cfg.Database != "citus" || cfg.TLSConfig != nil || len(cfg.Fallbacks) != 0 {
+		t.Fatal("administrator connection depends on remote or published-password authentication")
+	}
+	for _, key := range []string{"citus.enable_ddl_propagation", "citus.enable_metadata_sync"} {
+		if cfg.RuntimeParams[key] != "off" {
+			t.Fatal("Citus fence absent from connection startup before recovery checks and BEGIN", key)
+		}
+	}
+	if cfg.RuntimeParams["citus.use_secondary_nodes"] != "never" {
+		t.Fatal("administrator connection can route to a secondary")
+	}
+	s.Citus = nil
+	cfg, err = administratorConnectionConfig(s, p)
+	if err != nil || cfg.Password != "" || cfg.RuntimeParams["citus.enable_ddl_propagation"] != "" {
+		t.Fatal("non-Citus local peer connection changed", err)
+	}
+}

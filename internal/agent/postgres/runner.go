@@ -128,12 +128,26 @@ func localConnectionConfig(s pgspec.Spec, p paths) (*pgx.ConnConfig, error) {
 }
 
 func localPeerConnect(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error) {
+	cfg, err := administratorConnectionConfig(s, p)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.ConnectConfig(ctx, cfg)
+}
+
+// administratorConnectionConfig fences Citus at connection startup, before
+// recovery checks, BEGIN, or transaction hooks can initialize remote work.
+func administratorConnectionConfig(s pgspec.Spec, p paths) (*pgx.ConnConfig, error) {
 	cfg, err := localConnectionConfig(s, p)
 	if err != nil {
 		return nil, err
 	}
 	cfg.Password = ""
-	return pgx.ConnectConfig(ctx, cfg)
+	if s.Citus != nil {
+		cfg.RuntimeParams["citus.enable_ddl_propagation"] = "off"
+		cfg.RuntimeParams["citus.enable_metadata_sync"] = "off"
+	}
+	return cfg, nil
 }
 
 func localConnectWith(ctx context.Context, s pgspec.Spec, p paths, connect func(context.Context, *pgx.ConnConfig) (*pgx.Conn, error)) (*pgx.Conn, error) {

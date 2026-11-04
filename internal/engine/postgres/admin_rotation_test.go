@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func TestAdministratorRotationJournalRecovery(t *testing.T) {
@@ -224,6 +226,143 @@ func TestAdministratorRotationEveryCitusGroupPrimary(t *testing.T) {
 	}
 }
 
+func TestAdministratorRotationCitusConfigurationPublication(t *testing.T) {
+	p, rc, _, agents := setupDistributed(t, 3)
+	rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"citus":{"workerGroups":2}}`)
+	// Replicated multi-group formation needs more steps than the default fixture.
+	for range 150 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	converge(t, p, rc)
+	rc.Cluster.Spec.Backup.Storage = ""
+	op := &domain.Operation{ID: "citus-publication", Kind: domain.OperationRotateSystemUser, Payload: json.RawMessage(`{"user":"postgres"}`)}
+	published := map[string]bool{}
+	var selected string
+	for range 150 {
+		result, err := p.RunOperation(t.Context(), rc, op)
+		if err != nil {
+			t.Fatalf("rotation failed during %s: %v", op.Step, err)
+		}
+		j, err := readAdminRotation(t.Context(), rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if selected == "" {
+			selected = j.Password
+		}
+		s, err := load(rc.Cluster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range s.data() {
+			if m.Stage == "deployed" {
+				published[j.Stage] = true
+				if allowed, err := p.CanClaimOperation(rc.Cluster); err != nil || allowed {
+					t.Fatalf("configuration publication admitted unrelated work: %t %v", allowed, err)
+				}
+			}
+		}
+		active, err := secret(t.Context(), rc, "users/postgres")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(agents.adminRotations) < 3 && string(active) == selected {
+			t.Fatal("published administrator credential before every group receipt")
+		}
+		op.Checkpoint, op.Step = result.Checkpoint, result.Step
+		if result.Done {
+			active, err := secret(t.Context(), rc, "users/postgres")
+			if err != nil || string(active) != selected {
+				t.Fatal("rotation did not publish the selected credential", err)
+			}
+			if !published["transition"] || !published["publish"] || !published["cleanup"] {
+				t.Fatalf("did not exercise every configuration publication barrier: %v", published)
+			}
+			if len(agents.adminRotations) != 3 {
+				t.Fatalf("expected one native transaction per group, got %v", agents.adminRotations)
+			}
+			for i, name := range agents.adminRotations {
+				if m := s.find(name); m == nil || m.Group != []int{1, 2, 0}[i] {
+					t.Fatalf("native transaction missed worker-first group %d", i)
+				}
+			}
+			return
+		}
+	}
+	t.Fatal("Citus administrator rotation did not converge")
+}
+
+func TestAdministratorRotationCitusPublicationRetainsMaintenanceFences(t *testing.T) {
+	for _, name := range []string{
+		"pending", "rolling", "upgrade", "replacement", "scale", "rebalance",
+		"restore", "backup", "import", "unformed", "member-count", "new-member", "unjoined",
+		"wrong-user", "completed-journal",
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, rc, _, _ := setupDistributed(t, 3)
+			rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"citus":{"workerGroups":2}}`)
+			s, err := load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.Topology = "distributed"
+			s.allocate(rc.Cluster)
+			s.Formed = true
+			s.GroupFormed = map[int]bool{1: true, 2: true}
+			for _, m := range s.data() {
+				m.Stage, m.ProxyReady = "joined", true
+			}
+			m := s.data()[0]
+			m.Stage = "deployed"
+			j := &adminRotation{Operation: "publication-owner", Stage: "transition", Groups: []int{0, 1, 2}}
+			op := &domain.Operation{ID: j.Operation, Kind: domain.OperationRotateSystemUser, Payload: json.RawMessage(`{"user":"postgres"}`)}
+			switch name {
+			case "pending":
+				s.Pending = &pending{}
+			case "rolling":
+				s.Rolling = &rollingState{}
+			case "upgrade":
+				s.Upgrade = &upgradeState{}
+			case "replacement":
+				s.Replacement = &replacementState{Recovery: "active"}
+			case "scale":
+				s.CitusScale = &citusScaleState{}
+			case "rebalance":
+				s.Rebalance = &citusRebalanceCheckpoint{}
+			case "restore":
+				s.RestoreRecovery = &domain.Operation{ID: "foreign-restore"}
+			case "backup":
+				s.CitusOperation = "foreign-backup"
+			case "import":
+				m.ImportBatch = &engine.ImportPlan{}
+			case "unformed":
+				s.GroupFormed[2] = false
+			case "member-count":
+				s.Members = s.Members[1:]
+			case "new-member":
+				m.ProxyReady = false
+			case "unjoined":
+				m.Stage = "imported"
+			case "wrong-user":
+				op.Payload = json.RawMessage(`{"user":"application"}`)
+			case "completed-journal":
+				j.Stage = "rotated"
+			}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			if err := saveAdminRotation(t.Context(), rc, j); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := p.RunOperation(t.Context(), rc, op); err == nil || !strings.Contains(err.Error(), "maintenance owns the cluster") {
+				t.Fatalf("rotation bypassed %s fence: %v", name, err)
+			}
+		})
+	}
+}
+
 func TestAdministratorRotationProxyPublicationBarrier(t *testing.T) {
 	p, rc, _, s, _, late := replicatedProxyFixture(t)
 	late.applied(s.ConfigVersion - 1)
@@ -288,5 +427,149 @@ func TestAdministratorLocalPeerConfigurationCapability(t *testing.T) {
 		if !capable && strings.Contains(string(cfg.EngineSpec), "localPeerAuth") {
 			t.Fatal("old strict-decoder agent received a new configuration field")
 		}
+	}
+}
+
+type rotationRecoveryBackend struct {
+	*fakeBackend
+	agents   *distributedAgents
+	upgraded []string
+}
+
+func (b *rotationRecoveryBackend) Deploy(ctx context.Context, name string, d infra.Deployment) (infra.Op, error) {
+	op, err := b.fakeBackend.Deploy(ctx, name, d)
+	if err == nil {
+		b.agents.mu.Lock()
+		delete(b.agents.legacyReceipts, name)
+		b.agents.mu.Unlock()
+		b.upgraded = append(b.upgraded, name)
+	}
+	return op, err
+}
+
+func TestAdministratorRotationRescuesLegacyHalfAppliedCitus(t *testing.T) {
+	for _, replicas := range []int{1, 3} {
+		t.Run(fmt.Sprint(replicas), func(t *testing.T) {
+			p, rc, backend, agents := setupDistributed(t, replicas)
+			rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"citus":{"workerGroups":2}}`)
+			for range 150 {
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s := converge(t, p, rc)
+			rc.Cluster.Spec.Backup.Storage = ""
+			old, err := secret(t.Context(), rc, "users/postgres")
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Exact pre-upgrade journal: group 0 accepted, workers have no
+			// receipt and old published proxy logins get backend 28P01.
+			j := &adminRotation{Operation: "recover-half-applied", Stage: "native", Previous: string(old), Password: "new-synthetic", Verifier: "stable-synthetic", Groups: []int{0, 1, 2}, Completed: 1}
+			agents.legacyReceipts = map[string]bool{}
+			for _, m := range s.data() {
+				if m.Group != 0 {
+					agents.legacyReceipts[m.Name] = true
+				}
+			}
+			if err := saveAdminRotation(t.Context(), rc, j); err != nil {
+				t.Fatal(err)
+			}
+			owner := &domain.Operation{ID: j.Operation, Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Kind: domain.OperationRotateSystemUser, Payload: json.RawMessage(`{"user":"postgres"}`)}
+			if err := rc.Store.EnqueueOperation(t.Context(), owner); err != nil {
+				t.Fatal(err)
+			}
+			// Model the native coordinator's single verifier against the real
+			// rendered proxy backend login, rather than only inspecting secrets.
+			proxyBackendCode := func() string {
+				for _, m := range s.Members {
+					if m.Role != "proxy" {
+						continue
+					}
+					config, err := p.MemberConfig(t.Context(), rc, m.Name)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var spec pgspec.Spec
+					if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+						t.Fatal(err)
+					}
+					if spec.Proxy == nil || len(spec.Proxy.Users) == 0 {
+						t.Fatal("proxy fixture lacks an administrator backend login")
+					}
+					if spec.Proxy.Users[0].Password != j.Password {
+						return "28P01"
+					}
+					return ""
+				}
+				t.Fatal("proxy fixture missing")
+				return ""
+			}
+			if proxyBackendCode() != "28P01" {
+				t.Fatal("fixture did not reproduce the half-rotation proxy outage")
+			}
+			recovery := &rotationRecoveryBackend{fakeBackend: backend, agents: agents}
+			rc.Backend = recovery
+			for range 100 {
+				// Ordinary Sync resumes the same owner after CP upgrade. No
+				// separately admitted upgrade-agents operation or SQL is used.
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				current, err := readAdminRotation(t.Context(), rc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				active, _ := secret(t.Context(), rc, "users/postgres")
+				if current.Completed < 3 && string(active) != string(old) {
+					t.Fatal("proxy credential published before worker receipts")
+				}
+				if current.Completed < 3 && proxyBackendCode() != "28P01" {
+					t.Fatal("proxy login changed before all worker receipts")
+				}
+				if current.Stage == "rotated" {
+					if string(active) != "new-synthetic" {
+						t.Fatal("forward recovery did not publish the new proxy credential")
+					}
+					if proxyBackendCode() != "" {
+						t.Fatal("proxy backend login did not recover after publication")
+					}
+					if len(recovery.upgraded) != 2 || len(agents.adminRotations) != 2 {
+						t.Fatalf("did not refresh and resume both worker primaries: %v %v", recovery.upgraded, agents.adminRotations)
+					}
+					return
+				}
+			}
+			t.Fatal("half-applied Citus rotation did not converge forward")
+		})
+	}
+}
+
+func TestAdministratorRotationReportsBlockedReceipt(t *testing.T) {
+	p, rc, _ := setup(t, "single")
+	converge(t, p, rc)
+	j := &adminRotation{Operation: "blocked-receipt", Stage: "native", Previous: "old-synthetic", Password: "new-synthetic", Verifier: "stable-synthetic", Groups: []int{0}}
+	if err := saveAdminRotation(t.Context(), rc, j); err != nil {
+		t.Fatal(err)
+	}
+	installBackupAgent(t, rc, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/postgres/status" {
+			json.NewEncoder(w).Encode(pgspec.StatusResponse{Running: true, Role: "primary"})
+		} else {
+			json.NewEncoder(w).Encode(pgspec.AccessResult{Outcome: "unknown", Code: "transaction_unconfirmed"})
+		}
+	})
+	op := &domain.Operation{ID: j.Operation, Kind: domain.OperationRotateSystemUser, Payload: json.RawMessage(`{"user":"postgres"}`)}
+	for range 29 {
+		if _, err := p.RunOperation(t.Context(), rc, op); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := p.RunOperation(t.Context(), rc, op); err == nil || !strings.Contains(err.Error(), "blocked at group 0 after 30 attempts") {
+		t.Fatalf("missing actionable bounded recovery failure: %v", err)
+	}
+	current, _ := readAdminRotation(t.Context(), rc)
+	if current.Password != j.Password || current.Completed != 0 {
+		t.Fatal("blocked recovery destroyed the sealed forward intent")
 	}
 }

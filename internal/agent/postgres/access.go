@@ -745,7 +745,21 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 						return &accessError{http.StatusServiceUnavailable, "access action requires the Patroni primary with its leader lock"}
 					}
 				}
-				c, err := localConnect(ctx, s, dataPaths(locked.DataDir()))
+				p := dataPaths(locked.DataDir())
+				var c *pgx.Conn
+				if req.Operation == "admin-rotation" {
+					// Never depend on a published password during recovery.
+					if !s.LocalPeerAuth {
+						return &accessError{http.StatusServiceUnavailable, "administrator rotation requires active owner-local peer authentication"}
+					}
+					cfg, configErr := administratorConnectionConfig(s, p)
+					if configErr != nil {
+						return configErr
+					}
+					c, err = pgx.ConnectConfig(ctx, cfg)
+				} else {
+					c, err = localConnect(ctx, s, p)
+				}
 				if err != nil {
 					return err
 				}

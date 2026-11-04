@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
@@ -32,14 +34,20 @@ func administratorRotationOperation(op *domain.Operation) bool {
 // This entire journal is sealed, including the stable SCRAM verifier. Neither
 // operation checkpoints nor native receipts contain credential material.
 type adminRotation struct {
-	Operation string `json:"operation"`
-	Stage     string `json:"stage"`
-	Previous  string `json:"previous,omitempty"`
-	Password  string `json:"password,omitempty"`
-	Verifier  string `json:"verifier,omitempty"`
-	Groups    []int  `json:"groups"`
-	Completed int    `json:"completed"`
-	InFlight  bool   `json:"inFlight,omitempty"`
+	Operation   string    `json:"operation"`
+	Stage       string    `json:"stage"`
+	Previous    string    `json:"previous,omitempty"`
+	Password    string    `json:"password,omitempty"`
+	Verifier    string    `json:"verifier,omitempty"`
+	Groups      []int     `json:"groups"`
+	Completed   int       `json:"completed"`
+	InFlight    bool      `json:"inFlight,omitempty"`
+	AgentMember string    `json:"agentMember,omitempty"`
+	AgentDeploy *infra.Op `json:"agentDeploy,omitempty"`
+	// AgentSelected marks a candidate not yet crossing the dispatch boundary.
+	// Absent on older journals: conservatively treat their member as in flight.
+	AgentSelected bool `json:"agentSelected,omitempty"`
+	Attempts      int  `json:"attempts,omitempty"`
 }
 
 func readAdminRotation(ctx context.Context, rc *engine.Context) (*adminRotation, error) {
@@ -140,6 +148,11 @@ func (p *Core) rotateAdministrator(ctx context.Context, rc *engine.Context, op *
 			j.Groups = append(j.Groups, group)
 		}
 		sort.Ints(j.Groups)
+		// Workers first limits the coordinator/proxy password publication
+		// window. Persisted journals retain their original order and cursor.
+		if s.Topology == "distributed" && len(j.Groups) > 1 && j.Groups[0] == 0 {
+			j.Groups = append(j.Groups[1:], 0)
+		}
 		if err = saveAdminRotation(ctx, rc, j); err != nil {
 			return engine.OpResult{}, err
 		}
@@ -216,19 +229,62 @@ func (p *Core) rotateAdministrator(ctx context.Context, rc *engine.Context, op *
 	if err != nil {
 		return engine.OpResult{}, err
 	}
+	// A saved runtime deployment may have stopped the group's only agent.
+	// Recover that durable intent before requiring a live SQL primary.
+	if s.Topology == "distributed" && (j.AgentMember != "" || j.AgentDeploy != nil) {
+		pending, recoveryErr := p.adminRotationAgent(ctx, rc, s, j)
+		if recoveryErr != nil {
+			return engine.OpResult{}, recoveryErr
+		}
+		if pending != nil {
+			return *pending, nil
+		}
+	}
+	reason := "no running writable primary; restore member health"
 	for _, m := range s.group(group).data() {
 		status, e := live(ctx, rc, m.Name)
-		if e != nil || !status.Running || status.Role != "primary" && status.Role != "standalone" {
+		if e != nil || status.Role != "primary" && status.Role != "standalone" {
+			continue
+		}
+		if s.Topology == "distributed" && !status.AdminRotationLocalReceipts {
+			// Legacy readiness can fail on cross-group authentication even
+			// while its owner-local peer connection and Patroni role work.
+			if !status.Running && !status.AdminRotation {
+				continue
+			}
+			// Persist the selected group/member independently of the runtime
+			// receipt so terminal retries survive loss of its live agent.
+			j.AgentMember = m.Name
+			j.AgentSelected = true
+			if err = saveAdminRotation(ctx, rc, j); err != nil {
+				return engine.OpResult{}, err
+			}
+			pending, recoveryErr := p.adminRotationAgent(ctx, rc, s, j)
+			if recoveryErr != nil {
+				return engine.OpResult{}, recoveryErr
+			}
+			if pending != nil {
+				return *pending, nil
+			}
+			return result(j.Stage, "Local-receipt agent converged; rediscovering writable primary", false)
+		}
+		if !status.Running {
 			continue
 		}
 		a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 		if e != nil {
+			reason = "agent connection unavailable; restore agent connectivity"
 			continue
 		}
 		var receipt pgspec.AccessResult
 		e = a.Engine(ctx, "postgres", "roles", pgspec.AccessRequest{Operation: "admin-rotation", RequestID: op.ID, Role: &pgspec.RoleWrite{Role: pgspec.Role{Name: "postgres"}, Password: &j.Verifier}}, &receipt)
 		a.Close()
-		if e != nil || receipt.Outcome == "unknown" {
+		if e != nil {
+			reason = "agent request unavailable; restore agent connectivity and local peer authentication"
+			break
+		}
+		if receipt.Outcome == "unknown" {
+			reason = receipt.Code + "; inspect node-local receipt transaction and local peer authentication"
 			break
 		}
 		if receipt.Outcome == "rejected" {
@@ -242,6 +298,7 @@ func (p *Core) rotateAdministrator(ctx context.Context, rc *engine.Context, op *
 				}
 				return result(j.Stage, "Native transaction rejected; retiring pending configuration with original credential unchanged", false)
 			}
+			reason = receipt.Code + "; resolve the native role/receipt conflict without replacing the sealed intent"
 			break
 		}
 		if receipt.Outcome != "applied" {
@@ -249,12 +306,152 @@ func (p *Core) rotateAdministrator(ctx context.Context, rc *engine.Context, op *
 		}
 		j.Completed++
 		j.InFlight = false
+		j.Attempts = 0
 		if err = saveAdminRotation(ctx, rc, j); err != nil {
 			return engine.OpResult{}, err
 		}
 		return result(j.Stage, fmt.Sprintf("Group %d administrator transaction acknowledged", group), false)
 	}
-	return result(j.Stage, fmt.Sprintf("Forward recovery: waiting for group %d writable primary credential receipt", group), false)
+	j.Attempts++
+	if err = saveAdminRotation(ctx, rc, j); err != nil {
+		return engine.OpResult{}, err
+	}
+	if j.Attempts >= 30 {
+		return engine.OpResult{}, engine.Invalid("Administrator forward recovery blocked at group %d after %d attempts: %s; restore the group's owner-local peer access and native role/receipt identity, then allow the same sealed rotation to resume; do not start another rotation or reset credentials", group, j.Attempts, reason)
+	}
+	return result(j.Stage, fmt.Sprintf("Forward recovery: waiting for group %d writable primary credential receipt (%s)", group, reason), false)
+}
+
+// adminRotationAgent reconciles the durable runtime intent without requiring
+// the runtime it is repairing to accept agent or database connections. A nil
+// result means the caller may rediscover a writable primary for native SQL.
+func (p *Core) adminRotationAgent(ctx context.Context, rc *engine.Context, s *state, j *adminRotation) (*engine.OpResult, error) {
+	wait := func(message string) (*engine.OpResult, error) {
+		return &engine.OpResult{Step: j.Stage, Message: message, RequeueAfter: time.Second}, nil
+	}
+	target := s.find(j.AgentMember)
+	if target == nil || target.Role != "data" || target.Group != j.Groups[j.Completed] {
+		return nil, engine.Invalid("Administrator recovery deployment member does not match the pending sealed group")
+	}
+	var deployment infra.OpState
+	var deployErr error
+	exhausted := false
+	if j.AgentDeploy != nil {
+		deployment, deployErr = rc.Backend.OpStatus(ctx, *j.AgentDeploy)
+		if deployment.Status == "DeploymentRetriesExhausted" && deployErr == nil {
+			deployErr = &infra.DeploymentExhaustedError{Service: target.Name, LastError: deployment.Message}
+		}
+		exhausted = errors.Is(deployErr, infra.ErrDeploymentRetriesExhausted)
+		if deployErr != nil && !exhausted {
+			return nil, fmt.Errorf("administrator recovery agent deployment for %s: %w", target.Name, deployErr)
+		}
+		if !deployment.Done && !deployment.Failed && !exhausted {
+			return wait("Forward recovery: waiting for local-receipt agent deployment on " + target.Name)
+		}
+	}
+	// Observations may retire a terminal/obsolete intent, but are never a
+	// prerequisite for polling or retrying the runtime's saved deployment.
+	primaryCapable, targetCapable := false, false
+	for _, m := range s.group(target.Group).data() {
+		status, err := live(ctx, rc, m.Name)
+		if err != nil || !status.Running || !status.AdminRotationLocalReceipts {
+			continue
+		}
+		if m.Name == target.Name {
+			targetCapable = true
+		}
+		if status.Role == "primary" || status.Role == "standalone" {
+			primaryCapable = true
+		}
+	}
+	if primaryCapable || j.AgentDeploy != nil && !deployment.Failed && !exhausted && targetCapable {
+		j.AgentDeploy, j.AgentMember = nil, ""
+		j.AgentSelected = false
+		return nil, saveAdminRotation(ctx, rc, j)
+	}
+	if j.AgentDeploy != nil {
+		if !deployment.Failed && !exhausted {
+			return nil, engine.Invalid("Administrator recovery deployment for %s completed without owner-local receipt capability; verify the matching v0.4.5-or-newer agent artifact and local peer authentication, then resume the same sealed rotation", target.Name)
+		}
+		// Retire only the terminal receipt. Keep the selected member so a
+		// failed singleton can be redeployed without a live-primary probe.
+		j.AgentDeploy = nil
+		if err := saveAdminRotation(ctx, rc, j); err != nil {
+			return nil, err
+		}
+		if exhausted {
+			spec, err := p.agentUpgradeRuntimeSpec(rc, target)
+			if err != nil {
+				return nil, err
+			}
+			return nil, engine.RecordDeploymentExhausted(ctx, rc, target.Name, spec, deployErr)
+		}
+		return wait("Forward recovery: retrying local-receipt agent deployment on " + target.Name)
+	}
+	if rc.Store == nil {
+		return nil, engine.Invalid("Administrator recovery requires its retained operation record before deploying an agent")
+	}
+	owner, err := rc.Store.GetOperation(ctx, j.Operation)
+	if err != nil {
+		return nil, fmt.Errorf("administrator recovery cannot load its retained operation authorization: %w", err)
+	}
+	if owner == nil || owner.ID != j.Operation || !administratorRotationOperation(owner) || owner.Cluster != rc.Cluster.Name || domain.NormalizedNamespace(owner.Namespace) != domain.NormalizedNamespace(rc.Cluster.Namespace) {
+		return nil, engine.Invalid("Administrator recovery retained operation does not match its sealed cluster owner")
+	}
+	caller := rc.Operation
+	rc.Operation = owner
+	defer func() { rc.Operation = caller }()
+	if window := rc.WaitForWindow(); window.RequeueAfter > 0 {
+		return &engine.OpResult{Step: j.Stage, Message: "Administrator recovery requires a local-receipt agent upgrade; waiting for maintenance window", RequeueAfter: window.RequeueAfter}, nil
+	}
+	if j.AgentSelected {
+		// Selection before a window wait is not authority to disrupt a
+		// former primary. Re-observe this group at the first dispatch boundary.
+		var primary *member
+		for _, m := range s.group(target.Group).data() {
+			status, statusErr := live(ctx, rc, m.Name)
+			if statusErr != nil || !status.Running && !status.AdminRotation || status.Role != "primary" && status.Role != "standalone" {
+				continue
+			}
+			if status.AdminRotationLocalReceipts {
+				j.AgentDeploy, j.AgentMember, j.AgentSelected = nil, "", false
+				return nil, saveAdminRotation(ctx, rc, j)
+			}
+			primary = m
+			break
+		}
+		if primary == nil {
+			return wait("Forward recovery: waiting for the pending group's current primary before initial agent deployment")
+		}
+		if primary.Name != target.Name {
+			target = primary
+			j.AgentMember = primary.Name
+			if err := saveAdminRotation(ctx, rc, j); err != nil {
+				return nil, err
+			}
+		}
+	}
+	spec, err := p.agentUpgradeRuntimeSpec(rc, target)
+	if err != nil {
+		return nil, err
+	}
+	if j.AgentSelected {
+		// Persist intent before submission: a lost response may already have
+		// disrupted this runtime, so later recovery must not require it live.
+		j.AgentSelected = false
+		if err := saveAdminRotation(ctx, rc, j); err != nil {
+			return nil, err
+		}
+	}
+	submitted, err := engine.Deploy(ctx, rc, target.Name, spec)
+	if err != nil {
+		return nil, fmt.Errorf("administrator recovery agent upgrade for %s: %w", target.Name, err)
+	}
+	j.AgentDeploy = &submitted
+	if err := saveAdminRotation(ctx, rc, j); err != nil {
+		return nil, err
+	}
+	return wait("Forward recovery: installing local-receipt agent on " + target.Name)
 }
 
 func (p *Core) adminConfigurationPending(ctx context.Context, rc *engine.Context) (string, error) {
