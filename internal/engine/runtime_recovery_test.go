@@ -26,6 +26,8 @@ func recoveryFixture(t *testing.T, stateful bool) (*Context, *fake.Backend, Runt
 	t.Helper()
 	b := fake.New(fake.Options{})
 	m := RuntimeMember{MemberService: MemberService{Cluster: "demo", Member: "member", Token: "token", Containers: 1}, ServiceID: new(string), Recovery: &RuntimeRecovery{}}
+	// Runtime recovery is entered only after an engine has deployed the member.
+	m.Recovery.Deployed = true
 	specs := []infra.ServiceSpec{}
 	if stateful {
 		m.Volume = "volume"
@@ -89,6 +91,18 @@ func TestRuntimeRecoveryStopDeleteAndVolumeLoss(t *testing.T) {
 				if m.Recovery.ImportPlan == nil || m.Recovery.Op != nil {
 					t.Fatal("runtime import batch was not checkpointed before submission")
 				}
+				raw, err := json.Marshal(m.Recovery)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var restored RuntimeRecovery
+				if err := json.Unmarshal(raw, &restored); err != nil {
+					t.Fatal(err)
+				}
+				if !restored.Deployed {
+					t.Fatal("runtime recovery lost its established deployment provenance")
+				}
+				m.Recovery = &restored
 				if _, err = ReconcileRuntime(t.Context(), rc, m); err != nil {
 					t.Fatal(err)
 				}

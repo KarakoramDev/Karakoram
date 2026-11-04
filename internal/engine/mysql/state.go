@@ -147,9 +147,10 @@ type member struct {
 	PendingReplicas int `json:"pendingReplicas,omitempty"`
 }
 type pending struct {
-	Op     infra.Op `json:"op"`
-	Action string   `json:"action"`
-	Member string   `json:"member"`
+	Op        infra.Op          `json:"op"`
+	Action    string            `json:"action"`
+	Member    string            `json:"member"`
+	Resources *domain.Resources `json:"resources,omitempty"`
 }
 
 func load(c *domain.Cluster) (*state, error) {

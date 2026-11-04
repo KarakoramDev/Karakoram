@@ -86,3 +86,87 @@ func TestUnplacedResizeDeferredRecordsBoundedFailure(t *testing.T) {
 		t.Fatalf("missing bounded-failure event: %+v", events.events)
 	}
 }
+
+type initialResourceBackend struct {
+	infra.Backend
+	calls int
+	err   error
+}
+
+func (b *initialResourceBackend) SetResources(context.Context, string, infra.Resources) (infra.Op, error) {
+	b.calls++
+	return infra.Op{ID: "initial-resources", Kind: "resources"}, b.err
+}
+
+type initialRuntimeResourceBackend struct{ *initialResourceBackend }
+
+func (*initialRuntimeResourceBackend) ResourceUpdatesDeployRuntime() bool { return true }
+
+func TestPrepareInitialDeploymentResourcesPreservesFence(t *testing.T) {
+	for _, runtimeDeployment := range []bool{false, true} {
+		t.Run(map[bool]string{false: "capacity-only", true: "runtime-deployment"}[runtimeDeployment], func(t *testing.T) {
+			b := &initialResourceBackend{}
+			rc := &Context{Cluster: &domain.Cluster{Name: "demo"}, Backend: b}
+			if runtimeDeployment {
+				rc.Backend = &initialRuntimeResourceBackend{b}
+			}
+			spec := infra.RuntimeSpec{Args: []string{"agent"}}
+			old := infra.Resources{MinRAM: .25, MaxRAM: .25}
+			desired := infra.Resources{MinRAM: .5, MaxRAM: .5}
+			RecordDeploymentExhausted(t.Context(), rc, "component", spec, &infra.DeploymentExhaustedError{Attempts: 4})
+			if _, changed, err := PrepareInitialDeploymentResources(t.Context(), rc, "component", spec, true, desired, old); changed || !errors.Is(err, infra.ErrDeploymentRetriesExhausted) || b.calls != 0 {
+				t.Fatalf("exhaustion fence bypassed: changed=%v calls=%d err=%v", changed, b.calls, err)
+			}
+			rc.Cluster.Spec.RetryEpoch++
+			op, changed, err := PrepareInitialDeploymentResources(t.Context(), rc, "component", spec, true, desired, old)
+			if !changed || err != nil || op.ID != "initial-resources" || b.calls != 1 {
+				t.Fatalf("rearm did not apply capacity: changed=%v op=%+v calls=%d err=%v", changed, op, b.calls, err)
+			}
+			if _, changed, err := PrepareInitialDeploymentResources(t.Context(), rc, "component", spec, true, desired, desired); changed || err != nil || b.calls != 1 {
+				t.Fatal("unchanged capacity was submitted again")
+			}
+			b.err = errors.New("resource update rejected")
+			if _, changed, err := PrepareInitialDeploymentResources(t.Context(), rc, "component", spec, true, desired, old); changed || !errors.Is(err, b.err) {
+				t.Fatalf("resource failure was ignored: changed=%v err=%v", changed, err)
+			}
+		})
+	}
+}
+
+func TestPrepareInitialDeploymentResourcesSkipsEstablishedRecovery(t *testing.T) {
+	for _, runtimeDeployment := range []bool{false, true} {
+		t.Run(map[bool]string{false: "capacity-only", true: "runtime-deployment"}[runtimeDeployment], func(t *testing.T) {
+			b := &initialResourceBackend{}
+			rc := &Context{Cluster: &domain.Cluster{Name: "demo"}, Backend: b}
+			if runtimeDeployment {
+				rc.Backend = &initialRuntimeResourceBackend{b}
+			}
+			rc.Cluster.Spec.RetryEpoch = 1
+			old, desired := infra.Resources{MinRAM: 1, MaxRAM: 1}, infra.Resources{MinRAM: 2, MaxRAM: 2}
+			if _, changed, err := PrepareInitialDeploymentResources(t.Context(), rc, "component", infra.RuntimeSpec{}, false, desired, old); changed || err != nil || b.calls != 0 {
+				t.Fatalf("recovery replaced accepted resources: changed=%v calls=%d err=%v", changed, b.calls, err)
+			}
+		})
+	}
+}
+
+func TestInitialResourceRearmRequiresDurableFailureAndNewEpoch(t *testing.T) {
+	rc := &Context{Cluster: &domain.Cluster{}}
+	recovery := RuntimeRecovery{Initialized: true, Deployed: true, InitialResources: true}
+	if recovery.InitialResourceRearm(rc, "member") {
+		t.Fatal("initial correction marker without failure authorized a resize")
+	}
+	rc.Cluster.Status.DeploymentFailures = map[string]domain.DeploymentFailure{"member": {RetryEpoch: 3}}
+	rc.Cluster.Spec.RetryEpoch = 3
+	if recovery.InitialResourceRearm(rc, "member") {
+		t.Fatal("initial correction marker bypassed the exhausted epoch")
+	}
+	rc.Cluster.Spec.RetryEpoch = 4
+	if !recovery.InitialResourceRearm(rc, "member") {
+		t.Fatal("explicit re-arm lost the initial bootstrap correction")
+	}
+	recovery.InitialResources = false
+	if recovery.InitialResourceRearm(rc, "member") {
+		t.Fatal("ordinary established recovery inherited initial correction authority")
+	}
+}

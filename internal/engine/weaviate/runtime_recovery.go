@@ -47,6 +47,7 @@ func (p *Provider) reconcileRuntime(ctx context.Context, rc *engine.Context, s *
 		if m.Removing || m.Stage != "ready" && m.Stage != "deployed" {
 			continue
 		}
+		m.RuntimeRecovery.Deployed = true
 		input, e := runtimeMember(ctx, rc, m)
 		if e != nil {
 			return true, e

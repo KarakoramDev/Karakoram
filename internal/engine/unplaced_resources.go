@@ -55,14 +55,24 @@ func ApplyDeploymentResourceRollback(err error, applied *infra.Resources) bool {
 	return true
 }
 
-// PrepareInitialDeploymentResources brings capacity up to date before an
-// imported member's already-authorized ordinary deployment/re-arm. A raced
-// bootstrap may have initialized storage before stopping; this is not another
-// never-placed shortcut. The normal stop/deploy lifecycle and durable failure
-// fence apply. The provider tracks the resource operation before deploying.
-func PrepareInitialDeploymentResources(ctx context.Context, rc *Context, name string, spec infra.RuntimeSpec, desired, applied infra.Resources) (infra.Op, bool, error) {
-	capability, ok := rc.Backend.(infra.RuntimeResourceDeployment)
-	if !ok || !capability.ResourceUpdatesDeployRuntime() || reflect.DeepEqual(desired, applied) {
+// InitialResourceRearm preserves the existing initial-bootstrap resize recovery:
+// placement may have initialized storage before the conditional stop failed.
+// It is not authority for ordinary established-runtime recovery, and a completed
+// deployment clears the marker before any subsequent recovery can use it.
+func (r *RuntimeRecovery) InitialResourceRearm(rc *Context, name string) bool {
+	failure, ok := rc.Cluster.Status.DeploymentFailures[name]
+	return r.InitialResources && ok && rc.Cluster.Spec.RetryEpoch > failure.RetryEpoch
+}
+
+// PrepareInitialDeploymentResources brings capacity up to date before a
+// never-deployed member's already-authorized ordinary deployment/re-arm.
+// Callers must supply durable initial-deployment provenance: an imported stage
+// alone also describes established-runtime recovery, which must restore accepted
+// bounds and leave desired changes to its normal maintenance-gated lifecycle.
+// The deployment failure fence applies on every backend. The provider tracks the
+// resource operation before deploying.
+func PrepareInitialDeploymentResources(ctx context.Context, rc *Context, name string, spec infra.RuntimeSpec, initial bool, desired, applied infra.Resources) (infra.Op, bool, error) {
+	if !initial || reflect.DeepEqual(desired, applied) {
 		return infra.Op{}, false, nil
 	}
 	if DeploymentBlocked(rc, name, spec) {

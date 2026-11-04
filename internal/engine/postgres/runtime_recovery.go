@@ -16,6 +16,9 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 		if m.Removing || m.Offline || (m.Stage == "planned" || m.Stage == "imported") && !m.RuntimeRecovery.Initialized || desiredComponent(rc, m).Replicas == 0 {
 			continue
 		}
+		if m.Stage == "joined" || m.Stage == "deployed" {
+			m.RuntimeRecovery.Deployed = true
+		}
 		if m.Stage == "joined" && m.Volume != "" {
 			m.RuntimeRecovery.Initialized = true
 		}

@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
@@ -23,7 +24,8 @@ func TestBlockedDeploymentResizePrecedesPendingObservation(t *testing.T) {
 	p, rc, f, _ := coreSetup(t, 1)
 	s := coreConverge(t, p, rc, f)
 	m := s.Members[0]
-	m.RuntimeRecovery.Initialized = false
+	m.RuntimeRecovery = engine.RuntimeRecovery{}
+	m.Version = ""
 	m.Stage = stageImported
 	m.Resources.MinCPU, m.Resources.MaxCPU = 4, 4
 	f.services[m.Name].Resources = m.Resources
@@ -43,7 +45,8 @@ func TestUnchangedBlockedDeploymentDoesNotResizeRuntimeDiskBounds(t *testing.T) 
 	p, rc, f, _ := coreSetup(t, 1)
 	s := coreConverge(t, p, rc, f)
 	m := s.Members[0]
-	m.RuntimeRecovery.Initialized = false
+	m.RuntimeRecovery = engine.RuntimeRecovery{}
+	m.Version = ""
 	m.Stage = stageImported
 	rc.Cluster.Spec.Components.Engine.Resources.MinDisk = 5
 	rc.Cluster.Spec.Components.Engine.Resources.MaxDisk = 10

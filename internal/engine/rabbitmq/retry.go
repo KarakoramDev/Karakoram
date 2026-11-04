@@ -207,9 +207,12 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 		return false, nil
 	}
 	var resizeErr error
-	if m := s.find(v.Member); v.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && m.Stage != "ready" && !m.Resume {
+	if m := s.find(v.Member); v.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && !m.RuntimeRecovery.Deployed && m.Stage != "ready" && !m.Resume {
 		var changed bool
 		changed, resizeErr = engine.ResizeUnplacedDeployment(ctx, rc, m.Name, runtimeResources(rc.Cluster.Spec.Components.Engine.Resources), &m.Resources, &v.Op)
+		if changed || resizeErr != nil {
+			m.RuntimeRecovery.InitialResources = true
+		}
 		if changed {
 			return true, nil
 		}
@@ -273,6 +276,8 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 			m.Stage = "resume-deployed"
 		}
 		m.Version = v.Version
+		m.RuntimeRecovery.Deployed = true
+		m.RuntimeRecovery.InitialResources = false
 	case "upgrade", "restart":
 		m.Version = v.Version
 		m.ChangeStep = "reload"

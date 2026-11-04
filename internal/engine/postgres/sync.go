@@ -675,7 +675,8 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				continue
 			}
 			desired := desiredComponent(rc, m).Resources
-			if op, changed, e := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, desired, m.Resources); changed || e != nil {
+			initial := !m.RuntimeRecovery.Deployed && !m.RuntimeRecovery.Initialized || m.RuntimeRecovery.InitialResourceRearm(rc, m.Name)
+			if op, changed, e := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, initial, desired, m.Resources); changed || e != nil {
 				if e == nil {
 					p.track(s, m, "resize", op)
 					s.Pending.Resources = desired
@@ -701,9 +702,12 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			rc.SyncWait = fmt.Sprintf("observing runtime deployment %s", m.Name)
 			var st infra.OpState
 			var e error
-			if !m.RuntimeRecovery.Initialized {
+			if !m.RuntimeRecovery.Initialized && !m.RuntimeRecovery.Deployed {
 				var changed bool
 				changed, e = engine.ResizeUnplacedDeployment(ctx, rc, m.Name, desiredComponent(rc, m).Resources, &m.Resources, m.DeployOp)
+				if changed || e != nil {
+					m.RuntimeRecovery.InitialResources = true
+				}
 				if changed {
 					return result, nil
 				}
@@ -739,6 +743,8 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				return result, fmt.Errorf("deployment failed for %s", m.Name)
 			}
 			m.Stage = "deployed"
+			m.RuntimeRecovery.Deployed = true
+			m.RuntimeRecovery.InitialResources = false
 			m.DeployOp = nil
 		}
 	}

@@ -138,6 +138,18 @@ func (p *Provider) advancePending(ctx context.Context, rc *engine.Context, s *st
 				engine.ApplyDeploymentStatus(rc, &rc.Cluster.Status)
 				return true, nil
 			}
+			if m.Stage == "imported" {
+				desired := rc.Cluster.Spec.Components.Engine.Resources
+				// Do not mark persistent-volume capacity applied by a runtime update.
+				desired.MinDisk, desired.MaxDisk = m.Resources.MinDisk, m.Resources.MaxDisk
+				initial := m.Version == "" && !m.RuntimeRecovery.Deployed && !m.RuntimeRecovery.Initialized
+				if resources, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, initial, runtimeResources(desired), runtimeResources(m.Resources)); changed || err != nil {
+					if err == nil {
+						s.Pending = &pending{Op: &resources, Action: "resources", Member: m.Name, Resources: &desired}
+					}
+					return true, err
+				}
+			}
 			op, e = engine.Deploy(ctx, rc, m.Name, spec)
 		case "stop":
 			op, e = rc.Backend.Stop(ctx, m.Name)
@@ -146,7 +158,11 @@ func (p *Provider) advancePending(ctx context.Context, rc *engine.Context, s *st
 		case "delete-volume":
 			op, e = rc.Backend.DeleteServiceByID(ctx, m.Volume, m.VolumeID)
 		case "resources":
-			op, e = rc.Backend.SetResources(ctx, m.Name, runtimeResources(m.Resources))
+			resources := m.Resources
+			if q.Resources != nil {
+				resources = *q.Resources
+			}
+			op, e = rc.Backend.SetResources(ctx, m.Name, runtimeResources(resources))
 		case "volume-resources":
 			op, e = rc.Backend.SetResources(ctx, m.Volume, domain.Resources{MinDisk: m.Resources.MinDisk, MaxDisk: m.Resources.MaxDisk})
 		default:
@@ -250,6 +266,11 @@ func (p *Provider) advancePending(ctx context.Context, rc *engine.Context, s *st
 		m.ImportPlan = nil
 	case "deploy":
 		m.Stage = "deployed"
+		m.RuntimeRecovery.Deployed = true
+	case "resources":
+		if q.Resources != nil {
+			m.Resources = *q.Resources
+		}
 	case "stop":
 		m.CleanupStep = "stopped"
 	case "delete-runtime":

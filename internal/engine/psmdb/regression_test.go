@@ -113,8 +113,15 @@ func TestConfigReplicaSetBootstrapsBeforeRouterDeployment(t *testing.T) {
 	}
 	s.Sets["cfg"].Stage = "ready"
 	_ = save(rc.Cluster, s)
-	if _, err := p.Sync(context.Background(), rc); err != nil {
-		t.Fatal(err)
+	// Imported routers first synchronize capacity, then observe that resource
+	// operation before submitting their initial deployment.
+	for range 5 {
+		if _, err := p.Sync(context.Background(), rc); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.deployments) > 0 {
+			break
+		}
 	}
 	if len(f.deployments) != 1 {
 		t.Fatal("router did not deploy after config set ready")

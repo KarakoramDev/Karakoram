@@ -140,7 +140,9 @@ func observePending(ctx context.Context, rc *engine.Context, s *componentState) 
 		m.Stage = engine.ComponentDeployed
 	case "resize":
 		m.Resources = q.Resources
-		m.Stage = engine.ComponentDeployed
+		if m.Stage != engine.ComponentImported {
+			m.Stage = engine.ComponentDeployed
+		}
 	case "public":
 		m.Public = q.Public
 	case "stop-public":
@@ -502,6 +504,15 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 				runtime, e := p.runtimeSpec(deploymentContext, m)
 				if e != nil {
 					return e
+				}
+				if m.Stage == engine.ComponentImported {
+					initial := !m.RuntimeDeployed && !m.Recovering
+					if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, runtime, initial, d.Resources, m.Resources); changed || err != nil {
+						if err == nil {
+							s.Pending = &componentPending{Component: m.Component, Action: "resize", Op: op, Resources: d.Resources}
+						}
+						return err
+					}
 				}
 				op, e := engine.Deploy(ctx, rc, m.Name, runtime)
 				if e != nil {

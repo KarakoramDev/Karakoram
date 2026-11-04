@@ -220,7 +220,8 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *internalSt
 	}
 	if action == "deploy" && m.Stage == "imported" && !m.Resume {
 		desired := runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)
-		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, desired, m.Resources); changed || err != nil {
+		initial := m.Version == "" && (!m.RuntimeRecovery.Deployed && !m.RuntimeRecovery.Initialized || m.RuntimeRecovery.InitialResourceRearm(rc, m.Name))
+		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, initial, desired, m.Resources); changed || err != nil {
 			if err == nil {
 				s.Pending = &pending{Op: op, Action: "resources", Member: m.Name, Resources: desired, Version: version}
 			}

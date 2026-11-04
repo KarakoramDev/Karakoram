@@ -399,6 +399,7 @@ func observe(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 		s.Import = nil
 	case "deploy":
 		s.Deployed = true
+		s.Recovery.Deployed = true
 	case "public":
 		s.Public = q.Public
 	case "resize":
@@ -476,6 +477,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, err
 	}
 	if s.Deployed {
+		s.Recovery.Deployed = true
 		recovery, e := engine.ReconcileRuntime(ctx, rc, s.runtimeMember(rc, t.Token))
 		if recovery.Imported {
 			s.Deployed = false
@@ -533,6 +535,14 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		runtime, e := p.runtime(rc, s)
 		if e != nil {
 			return result, e
+		}
+		desired := rc.Cluster.Spec.Components.Engine.Resources
+		initial := !s.Recovery.Deployed && !s.Recovery.Initialized
+		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, s.Member, runtime, initial, desired, s.Resources); changed || err != nil {
+			if err == nil {
+				s.Pending = &pending{Op: op, Action: "resize", Resources: desired}
+			}
+			return result, err
 		}
 		op, e := engine.Deploy(ctx, rc, s.Member, runtime)
 		if e != nil {

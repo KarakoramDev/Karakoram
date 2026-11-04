@@ -8,6 +8,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
@@ -33,7 +34,7 @@ func TestBlockedProxyResizeSupersedesInitialDeployment(t *testing.T) {
 		t.Fatal("missing proxy")
 	}
 	proxy.Stage = "deploying"
-	proxy.RuntimeRecovery.Initialized = false
+	proxy.RuntimeRecovery = engine.RuntimeRecovery{}
 	proxy.Resources.MinCPU, proxy.Resources.MaxCPU = 4, 4
 	proxy.DeployOp = &infra.Op{ID: "blocked", Kind: "deploy"}
 	f.services[proxy.Name].Resources = proxy.Resources
@@ -106,7 +107,7 @@ func TestUnplacedResizeFailureIsDurableAndRearmConverges(t *testing.T) {
 					proxy = m
 				}
 			}
-			proxy.Stage, proxy.RuntimeRecovery.Initialized = "deploying", false
+			proxy.Stage, proxy.RuntimeRecovery = "deploying", engine.RuntimeRecovery{}
 			proxy.Resources.MinRAM, proxy.Resources.MaxRAM = 4, 4
 			previous := proxy.Resources
 			f.services[proxy.Name].Resources = previous

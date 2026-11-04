@@ -228,6 +228,7 @@ func (p *Provider) observeReceipt(ctx context.Context, rc *engine.Context, s *in
 		}
 	case "deploy":
 		m.Stage = "deployed"
+		m.RuntimeRecovery.Deployed = true
 		if m.Resume {
 			m.Stage = "resume-deployed"
 		}

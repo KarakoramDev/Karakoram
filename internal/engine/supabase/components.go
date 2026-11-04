@@ -420,10 +420,13 @@ func (p *Provider) observeComponent(ctx context.Context, rc *engine.Context, s *
 		}
 	}
 	var err error
-	if m := s.Members[q.Component]; q.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && m.Stage != engine.ComponentJoined {
+	if m := s.Members[q.Component]; q.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && !m.RuntimeRecovery.Deployed && m.Stage != engine.ComponentJoined {
 		desired := rc.Cluster.Spec.Components.Extra[q.Component].Resources
 		var changed bool
 		changed, err = engine.ResizeUnplacedDeployment(ctx, rc, m.Name, desired, &m.Resources, &q.Op)
+		if changed || err != nil {
+			m.RuntimeRecovery.InitialResources = true
+		}
 		if changed {
 			return true, nil
 		}
@@ -533,6 +536,8 @@ func (p *Provider) observeComponent(ctx context.Context, rc *engine.Context, s *
 		m.DeploymentFailure = nil
 		m.RuntimeFailure = nil
 		m.RuntimePort = q.RuntimePort
+		m.RuntimeRecovery.Deployed = true
+		m.RuntimeRecovery.InitialResources = false
 	case "scale":
 		m.Replicas = q.Replicas
 		if q.RetainedRecovery {
@@ -931,7 +936,8 @@ func (p *Provider) deployComponent(ctx context.Context, rc *engine.Context, s *c
 	}
 	if m.Stage == engine.ComponentImported {
 		desired := rc.Cluster.Spec.Components.Extra[m.Component]
-		if op, changed, e := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, runtime, desired.Resources, m.Resources); changed || e != nil {
+		initial := m.RuntimePort == 0 && (!m.RuntimeRecovery.Deployed && !m.RuntimeRecovery.Initialized || m.RuntimeRecovery.InitialResourceRearm(rc, m.Name))
+		if op, changed, e := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, runtime, initial, desired.Resources, m.Resources); changed || e != nil {
 			if e == nil {
 				s.Pending = &componentPending{Op: op, Component: m.Component, Action: "resize", Resources: desired.Resources, Target: desired}
 			}

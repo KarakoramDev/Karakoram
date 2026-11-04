@@ -123,6 +123,8 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 		}
 		m.Stage = "imported"
 		m.ImportBatch = nil
+	case "initial-resources":
+		m.Resources = *q.Resources
 	case "delete-runtime":
 		m.ServiceID = ""
 		m.Public = false
@@ -436,6 +438,16 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if engine.DeploymentBlocked(rc, m.Name, spec) {
 			continue
 		}
+		desired := desiredComponent(rc, m).Resources
+		// Persistent-volume growth is observed separately before this path.
+		desired.MinDisk, desired.MaxDisk = m.Resources.MinDisk, m.Resources.MaxDisk
+		initial := !m.Initialized && !m.RuntimeRecovery.Deployed && !m.RuntimeRecovery.Initialized
+		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, initial, desired, m.Resources); changed || err != nil {
+			if err == nil {
+				s.Pending = &pending{Op: op, Action: "initial-resources", Member: m.Name, Resources: &desired}
+			}
+			return result, err
+		}
 		runtimeHash := ""
 		if m.Role == "proxy" {
 			runtimeHash, e = proxyRuntimeHash(rc, spec)
@@ -500,6 +512,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			return result, fmt.Errorf("deployment failed for %s", m.Name)
 		}
 		m.Stage = "deployed"
+		m.RuntimeRecovery.Deployed = true
 	}
 	if deploymentsBusy {
 		return result, nil

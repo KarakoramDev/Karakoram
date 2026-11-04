@@ -195,9 +195,12 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *st
 		return false, nil
 	}
 	var resizeErr error
-	if m := s.find(v.Member); v.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && m.Stage != stageJoined {
+	if m := s.find(v.Member); v.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && !m.RuntimeRecovery.Deployed && m.Stage != stageJoined {
 		var changed bool
 		changed, resizeErr = engine.ResizeUnplacedDeployment(ctx, rc, m.Name, runtimeResources(m, component(rc.Cluster.Spec, m).Resources), &m.Resources, &v.Op)
+		if changed || resizeErr != nil {
+			m.RuntimeRecovery.InitialResources = true
+		}
 		if changed {
 			return true, nil
 		}
@@ -269,6 +272,8 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *st
 		case "deploy", "upgrade":
 			m.Stage = stageDeployed
 			m.Version = v.Version
+			m.RuntimeRecovery.Deployed = true
+			m.RuntimeRecovery.InitialResources = false
 		case "resources":
 			m.Resources = v.Resources
 		case "disk":
@@ -433,7 +438,8 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *state, m *
 	}
 	if action == "deploy" && m.Stage == stageImported {
 		desired := runtimeResources(m, component(rc.Cluster.Spec, m).Resources)
-		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, desired, m.Resources); changed || err != nil {
+		initial := m.Version == "" && (!m.RuntimeRecovery.Deployed && !m.RuntimeRecovery.Initialized || m.RuntimeRecovery.InitialResourceRearm(rc, m.Name))
+		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, initial, desired, m.Resources); changed || err != nil {
 			if err == nil {
 				s.Pending = &pending{Op: op, Action: "resources", Member: m.Name, Resources: desired, Version: version}
 			}

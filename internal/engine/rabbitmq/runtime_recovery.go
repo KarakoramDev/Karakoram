@@ -15,6 +15,9 @@ func (p *Provider) recoverRuntimes(ctx context.Context, rc *engine.Context, s *i
 		if m.Removing || m.ResumeDeploy != nil || (m.Stage == "planned" || m.Stage == "imported") && (!m.RuntimeRecovery.Initialized || m.Resume) {
 			continue
 		}
+		if m.Version != "" {
+			m.RuntimeRecovery.Deployed = true
+		}
 		if m.Stage == "ready" {
 			m.RuntimeRecovery.Initialized = true
 			// The durable ready stage is already a native formation checkpoint,

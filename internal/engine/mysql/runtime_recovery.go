@@ -70,6 +70,9 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 			continue
 		}
 		m.RuntimeRecovery.Initialized = m.Initialized || m.Stage == "joined"
+		if m.RuntimeRecovery.Initialized {
+			m.RuntimeRecovery.Deployed = true
+		}
 		tok, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 		if err != nil {
 			return true, err

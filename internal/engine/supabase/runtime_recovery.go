@@ -8,6 +8,7 @@ import (
 )
 
 func recoverComponentRuntime(ctx context.Context, rc *engine.Context, m *componentMember) (bool, error) {
+	m.RuntimeRecovery.Deployed = true
 	tok, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 	if err != nil {
 		return true, err

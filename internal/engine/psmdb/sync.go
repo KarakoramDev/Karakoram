@@ -84,10 +84,13 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 		return false, nil
 	}
 	var resizeErr error
-	if m := s.find(v.Member); v.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && m.Stage != "active" {
+	if m := s.find(v.Member); v.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && !m.RuntimeRecovery.Deployed && m.Stage != "active" {
 		desired := runtimeResources(component(rc.Cluster.Spec, m).Resources)
 		var changed bool
 		changed, resizeErr = engine.ResizeUnplacedDeployment(ctx, rc, m.Name, desired, &m.Resources, &v.Op)
+		if changed || resizeErr != nil {
+			m.RuntimeRecovery.InitialResources = true
+		}
 		if changed {
 			m.CacheGB = max(0.25, 0.5*(desired.MaxRAM-0.5))
 			return true, nil
@@ -147,6 +150,8 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 		case "deploy":
 			m.Stage = "deployed"
 			m.Version = v.Version
+			m.RuntimeRecovery.Deployed = true
+			m.RuntimeRecovery.InitialResources = false
 		case "upgrade", "agent":
 			m.Stage = "upgrade-wait"
 			m.Version = v.Version
@@ -184,7 +189,8 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *internalSt
 	}
 	if action == "deploy" && m.Stage == "imported" {
 		desired := runtimeResources(component(rc.Cluster.Spec, m).Resources)
-		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, p.runtimeSpec(rc, m, version), desired, m.Resources); changed || err != nil {
+		initial := m.Version == "" && (!m.RuntimeRecovery.Deployed && !m.RuntimeRecovery.Initialized || m.RuntimeRecovery.InitialResourceRearm(rc, m.Name))
+		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, p.runtimeSpec(rc, m, version), initial, desired, m.Resources); changed || err != nil {
 			if err == nil {
 				m.CacheGB = min(m.CacheGB, max(0.25, 0.5*(desired.MaxRAM-0.5)))
 				s.ConfigVersion = max(s.ConfigVersion, m.ConfigVersion) + 1

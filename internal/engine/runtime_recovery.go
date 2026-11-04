@@ -27,7 +27,13 @@ type RuntimeRecovery struct {
 	ImportPlan  *ImportPlan `json:"importPlan,omitempty"`
 	RetryAt     time.Time   `json:"retryAt,omitempty"`
 	Initialized bool        `json:"initialized,omitempty"`
-	VolumeLost  bool        `json:"volumeLost,omitempty"`
+	// Deployed survives recovery imports of previously deployed runtimes,
+	// including stateless services that never reached application readiness.
+	Deployed bool `json:"deployed,omitempty"`
+	// InitialResources retains authority from a never-deployed conditional resize
+	// if native initialization raced its fence. Only explicit re-arm may use it.
+	InitialResources bool `json:"initialResources,omitempty"`
+	VolumeLost       bool `json:"volumeLost,omitempty"`
 }
 
 // RuntimeMember supplies persisted identity, not hostname-based adoption.

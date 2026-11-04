@@ -61,10 +61,11 @@ type member struct {
 // pending is the single infrastructure mutation owner. Retry provenance is durable.
 type pending struct {
 	engine.RetrySchedule
-	Op      *infra.Op `json:"op,omitempty"`
-	Action  string    `json:"action"`
-	Member  string    `json:"member"`
-	RetryAt time.Time `json:"retryAt,omitempty"`
+	Op        *infra.Op         `json:"op,omitempty"`
+	Action    string            `json:"action"`
+	Member    string            `json:"member"`
+	RetryAt   time.Time         `json:"retryAt,omitempty"`
+	Resources *domain.Resources `json:"resources,omitempty"`
 }
 
 // rolling freezes order and target configs before any disruption. Targets are

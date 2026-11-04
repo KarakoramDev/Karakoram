@@ -58,6 +58,9 @@ func (p *Provider) recoverRuntimes(ctx context.Context, rc *engine.Context, s *i
 		if m.Removing || m.ResumeDeploy != nil || (m.Stage == "planned" || m.Stage == "imported") && (!m.RuntimeRecovery.Initialized || m.Resume) {
 			continue
 		}
+		if m.Stage == "ready" || m.Stage == "deployed" || m.Stage == "configured" || m.Initialized {
+			m.RuntimeRecovery.Deployed = true
+		}
 		if m.Stage == "ready" {
 			m.RuntimeRecovery.Initialized = true
 		}

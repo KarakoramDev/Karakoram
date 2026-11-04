@@ -24,6 +24,9 @@ func (p *Provider) recoverRuntimes(ctx context.Context, rc *engine.Context, s *s
 		if component(rc.Cluster.Spec, m).Replicas == 0 {
 			continue
 		}
+		if m.Version != "" {
+			m.RuntimeRecovery.Deployed = true
+		}
 		if m.Stage == stageJoined && m.Volume != "" {
 			m.RuntimeRecovery.Initialized = true
 		}

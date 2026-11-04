@@ -89,6 +89,16 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *internalSt
 	if err != nil {
 		return err
 	}
+	if m.Stage == "imported" {
+		desired := runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)
+		initial := !m.Resume && m.Change == nil && !m.Initialized && !m.RuntimeRecovery.Deployed && !m.RuntimeRecovery.Initialized
+		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, initial, desired, m.Resources); changed || err != nil {
+			if err == nil {
+				s.Pending = &pending{Op: op, Action: "resources", Member: m.Name, Resources: desired}
+			}
+			return err
+		}
+	}
 	op, err := engine.Deploy(ctx, rc, m.Name, spec)
 	v := &pending{Op: op, Action: "deploy", Member: m.Name, Version: version}
 	if err != nil {
@@ -220,6 +230,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			s.Phase = "deploy"
 			if err = p.deploy(ctx, rc, s, m, rc.Cluster.Spec.Version); err != nil {
 				return result, err
+			}
+			if s.Pending != nil {
+				return result, nil
 			}
 			inFlight++
 		}
