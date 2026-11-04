@@ -171,7 +171,7 @@ func TestGaleraRestoreFenceQuiescesManagedWriters(t *testing.T) {
 	if cancelled != 1 || runner.archiveCancel != nil {
 		t.Fatal("restore fence did not cancel archival or restarted its privileged loop")
 	}
-	if err := runner.archiveBinlogs(t.Context()); err != nil {
+	if err := runner.archiveBinlogs(t.Context()); !errors.Is(err, errArchiveSkipped) {
 		t.Fatalf("fenced direct archive trigger reached SQL: %v", err)
 	}
 	for _, rekey := range []bool{true, false} {

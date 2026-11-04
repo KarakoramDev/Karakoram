@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -214,10 +215,14 @@ func TestBinlogArchiveConditionRequiresArchivedTransaction(t *testing.T) {
 		{name: "disabled", fail: true, want: "Unknown", reason: "ObservationUnavailable"},
 		{name: "healthy", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0)}, want: "True", reason: "ArchiveObservation"},
 		{name: "gap", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Gap: true}, want: "False", reason: "ArchiveObservation"},
+		{name: "failed-before-upload", archive: myspec.BinlogArchiveStatus{Error: "binlog_decode_failed"}, want: "False", reason: "ArchiveFailed"},
+		{name: "failed-after-upload", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Error: "binlog_decode_failed"}, want: "False", reason: "ArchiveFailed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, rc, b := backupFixture(t, "single")
 			rc.Cluster.Spec.Backup.PITR.Enabled = true
+			events := &gtidEvents{}
+			rc.Events = events
 			b.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
 				if r.URL.Path != "/v1/mysql/archive-status" {
 					return false
@@ -237,6 +242,19 @@ func TestBinlogArchiveConditionRequiresArchivedTransaction(t *testing.T) {
 				if condition.Type == "BinlogArchive" {
 					if condition.Status != tc.want || condition.Reason != tc.reason {
 						t.Fatal(condition)
+					}
+					if tc.reason == "ArchiveFailed" {
+						if !strings.Contains(condition.Message, tc.archive.Error) || len(events.events) != 1 || events.events[0].Type != "Warning" || events.events[0].Reason != "ArchiveFailed" {
+							t.Fatalf("missing failure diagnostic/event: %+v %+v", condition, events.events)
+						}
+						rc.Cluster.Status = status
+						var repeated domain.ClusterStatus
+						if err := p.backupStatus(t.Context(), rc, &repeated); err != nil {
+							t.Fatal(err)
+						}
+						if len(events.events) != 1 {
+							t.Fatal("repeated observation duplicated warning")
+						}
 					}
 					return
 				}
@@ -491,6 +509,101 @@ func TestBackupStatusWriterChangeAndFreshFull(t *testing.T) {
 				if condition.Type == "PITR" && condition.Reason == "WindowFrozenWriterChanged" {
 					t.Fatal("unavailable observation diagnosed a writer change", condition)
 				}
+			}
+		})
+	}
+}
+
+type archiveStatusAttempts struct {
+	engine.Provider
+	calls int
+}
+
+func (p *archiveStatusAttempts) Status(ctx context.Context, rc *engine.Context) (domain.ClusterStatus, error) {
+	p.calls++
+	return p.Provider.Status(ctx, rc)
+}
+
+func TestArchiveWarningObservationRetry(t *testing.T) {
+	for _, scenario := range []string{"duplicate", "first-observed-on-retry", "recorder-retry"} {
+		t.Run(scenario, func(t *testing.T) {
+			p, rc, b := backupFixture(t, "single")
+			rc.Cluster.Spec.Backup.PITR.Enabled = true
+			inventoryBackup(t, rc, "base", "full", "", 10, time.Unix(10, 0))
+			var archiveReads atomic.Int32
+			failing := true
+			b.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
+				switch r.URL.Path {
+				case "/v1/mysql/pitr-coverage":
+					// PITR=Unknown forces ObserveStatus to retry even when
+					// the database itself remains Ready, as during an S3 fault.
+					http.Error(w, "coverage unavailable", http.StatusServiceUnavailable)
+				case "/v1/mysql/archive-status":
+					if archiveReads.Add(1) == 1 && scenario == "first-observed-on-retry" {
+						http.Error(w, "observation unavailable", http.StatusServiceUnavailable)
+						return true
+					}
+					archive := myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0)}
+					if failing {
+						archive.Error = "archive_upload_failed"
+					}
+					json.NewEncoder(w).Encode(archive)
+				default:
+					return false
+				}
+				return true
+			}
+			var warnings []domain.Event
+			recordCalls := 0
+			rc.Events = gtidEventFunc(func(_ context.Context, event domain.Event) error {
+				if event.Reason == "ArchiveFailed" {
+					recordCalls++
+					if recordCalls == 1 && scenario == "recorder-retry" {
+						return context.Canceled
+					}
+					warnings = append(warnings, event)
+				}
+				return nil
+			})
+			observer := &archiveStatusAttempts{Provider: p}
+			observe := func() domain.ClusterStatus {
+				t.Helper()
+				observer.calls = 0
+				status, err := engine.ObserveStatus(engine.WithObservationPass(t.Context()), observer, rc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if observer.calls != 2 {
+					t.Fatalf("expected two provider Status attempts, got %d", observer.calls)
+				}
+				return status
+			}
+			// Neither retry has published its output to rc.Cluster.Status.
+			status := observe()
+			if len(warnings) != 1 {
+				t.Fatalf("two observation attempts emitted %d successful warnings, want one", len(warnings))
+			}
+			if scenario == "recorder-retry" && recordCalls != 2 {
+				t.Fatal("failed recording was not retried")
+			}
+			found := false
+			for _, condition := range status.Conditions {
+				found = found || condition.Type == "BinlogArchive" && condition.Reason == "ArchiveFailed"
+			}
+			if !found {
+				t.Fatal("missing failed archive condition")
+			}
+			rc.Cluster.Status = status
+			observe()
+			if len(warnings) != 1 {
+				t.Fatal("published condition failed to deduplicate a later pass")
+			}
+			failing = false
+			rc.Cluster.Status = observe()
+			failing = true
+			rc.Cluster.Status = observe()
+			if len(warnings) != 2 {
+				t.Fatal("a new failure after recovery did not emit a new warning")
 			}
 		})
 	}

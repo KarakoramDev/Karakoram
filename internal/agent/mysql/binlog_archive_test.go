@@ -7,9 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -124,9 +126,10 @@ func TestArchiveGapFreezesContiguousEnd(t *testing.T) {
 
 func TestArchiveLoopSurvivesConfigurationRefresh(t *testing.T) {
 	e := New()
+	e.dir = t.TempDir()
 	e.current.Backup = &myspec.Backup{Binlog: myspec.Binlog{Enabled: true, RotateIntervalSeconds: 1}}
 	fired := make(chan struct{}, 10)
-	archive := func(context.Context) error { fired <- struct{}{}; return nil }
+	archive := func(context.Context) error { fired <- struct{}{}; return errArchiveSkipped }
 	e.configureArchiveLoop(true, archive)
 	defer e.resetArchiveLoop(false)
 	refresh := time.NewTicker(100 * time.Millisecond)
@@ -154,9 +157,10 @@ func TestArchiveLoopSurvivesConfigurationRefresh(t *testing.T) {
 
 func TestArchiveLoopIntervalChangeReschedules(t *testing.T) {
 	e := New()
+	e.dir = t.TempDir()
 	e.current.Backup = &myspec.Backup{Binlog: myspec.Binlog{Enabled: true, RotateIntervalSeconds: 86400}}
 	fired := make(chan struct{}, 10)
-	archive := func(context.Context) error { fired <- struct{}{}; return nil }
+	archive := func(context.Context) error { fired <- struct{}{}; return errArchiveSkipped }
 	e.configureArchiveLoop(true, archive)
 	defer e.resetArchiveLoop(false)
 	e.mu.Lock()
@@ -174,6 +178,7 @@ func TestArchiveLoopIntervalChangeReschedules(t *testing.T) {
 
 func TestArchiveLoopRepositoryChangeCancelsAttempt(t *testing.T) {
 	e := New()
+	e.dir = t.TempDir()
 	e.current.Backup = &myspec.Backup{Repository: testBackupRepository(), Binlog: myspec.Binlog{Enabled: true, RotateIntervalSeconds: 1}}
 	started := make(chan struct{})
 	canceled := make(chan struct{})
@@ -195,7 +200,7 @@ func TestArchiveLoopRepositoryChangeCancelsAttempt(t *testing.T) {
 	e.current.Backup = &next
 	e.mu.Unlock()
 	fired := make(chan struct{}, 10)
-	e.configureArchiveLoop(true, func(context.Context) error { fired <- struct{}{}; return nil })
+	e.configureArchiveLoop(true, func(context.Context) error { fired <- struct{}{}; return errArchiveSkipped })
 	select {
 	case <-canceled:
 	case <-time.After(time.Second):
@@ -222,5 +227,211 @@ func TestArchiveStatusDisabledAndEmpty(t *testing.T) {
 	status, err := e.archiveStatus()
 	if err != nil || status.LastArchivedFile != "" || !status.LastEventTime.IsZero() {
 		t.Fatalf("empty archive must remain distinguishable from healthy coverage: %+v %v", status, err)
+	}
+}
+
+func TestArchiveLoopReportsFailureAndRecovery(t *testing.T) {
+	e := New()
+	e.dir = t.TempDir()
+	e.current.Backup = &myspec.Backup{Repository: testBackupRepository(), Binlog: myspec.Binlog{Enabled: true, RotateIntervalSeconds: 1}}
+	var attempts atomic.Int32
+	e.configureArchiveLoop(true, func(context.Context) error {
+		if attempts.Add(1) == 1 {
+			return errors.New("binlog_decode_failed: private native diagnostics")
+		}
+		return nil
+	})
+	defer e.resetArchiveLoop(false)
+	wait := func(want string) {
+		t.Helper()
+		deadline := time.After(1800 * time.Millisecond)
+		tick := time.NewTicker(10 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			status, err := e.archiveStatus()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status.Error == want {
+				return
+			}
+			select {
+			case <-tick.C:
+			case <-deadline:
+				t.Fatalf("archive error = %q, want %q", status.Error, want)
+			}
+		}
+	}
+	wait("binlog_decode_failed")
+	wait("")
+}
+
+func TestArchiveFailureDoesNotAdvanceCoverage(t *testing.T) {
+	dir := t.TempDir()
+	p := dataPaths(dir)
+	if err := privateDir(p.root); err != nil {
+		t.Fatal(err)
+	}
+	repo := testBackupRepository()
+	index, _ := readArchiveIndex(archiveIndexPath(p, repo))
+	index.Status.LastArchivedFile = "binlog.000001"
+	index.Status.LastEventTime = time.Unix(100, 0).UTC()
+	index.Status.ContiguousEndTime = index.Status.LastEventTime
+	index.Status.GTIDSet = recoverySID + ":1-4"
+	index.Status.ContiguousGTIDSet = index.Status.GTIDSet
+	if err := durableJSON(archiveIndexPath(p, repo), index); err != nil {
+		t.Fatal(err)
+	}
+	e := New()
+	e.dir = dir
+	e.current.Backup = &myspec.Backup{Repository: repo, Binlog: myspec.Binlog{Enabled: true}}
+	e.recordArchiveResult(p, repo, errors.New("binlog_decode_failed: private native diagnostics"))
+	status, err := e.archiveStatus()
+	if err != nil || status.Error != "binlog_decode_failed" || status.LastArchivedFile != index.Status.LastArchivedFile || !status.LastEventTime.Equal(index.Status.LastEventTime) || !status.ContiguousEndTime.Equal(index.Status.ContiguousEndTime) || status.GTIDSet != index.Status.GTIDSet || status.ContiguousGTIDSet != index.Status.ContiguousGTIDSet {
+		t.Fatalf("failure changed archived coverage: %+v %v", status, err)
+	}
+	restarted := New()
+	restarted.dir = dir
+	restarted.current = e.current
+	status, err = restarted.archiveStatus()
+	if err != nil || status.Error != "binlog_decode_failed" || status.LastArchivedFile != index.Status.LastArchivedFile || !status.LastEventTime.Equal(index.Status.LastEventTime) || !status.ContiguousEndTime.Equal(index.Status.ContiguousEndTime) || status.GTIDSet != index.Status.GTIDSet || status.ContiguousGTIDSet != index.Status.ContiguousGTIDSet {
+		t.Fatalf("restart forgot failure or changed archived coverage: %+v %v", status, err)
+	}
+	restarted.recordArchiveResult(p, repo, nil)
+	healthy := New()
+	healthy.dir = dir
+	healthy.current = e.current
+	status, err = healthy.archiveStatus()
+	if err != nil || status.Error != "" || !status.LastEventTime.Equal(index.Status.LastEventTime) || status.GTIDSet != index.Status.GTIDSet {
+		t.Fatalf("successful pass did not durably clear attempt failure: %+v %v", status, err)
+	}
+}
+
+func TestArchiveAttemptResultIsRepositoryScoped(t *testing.T) {
+	e := New()
+	e.dir = t.TempDir()
+	original := testBackupRepository()
+	replacement := original
+	replacement.Path += "/replacement"
+	e.current.Backup = &myspec.Backup{Repository: replacement, Binlog: myspec.Binlog{Enabled: true}}
+	_, p := e.state()
+	// An old attempt must not write its result into a replacement repository.
+	e.recordArchiveResult(p, original, errors.New("binlog_decode_failed: private native diagnostics"))
+	status, err := e.archiveStatus()
+	if err != nil || status.Error != "" {
+		t.Fatalf("replacement inherited old attempt: %+v %v", status, err)
+	}
+	restarted := New()
+	restarted.dir = e.dir
+	restarted.current.Backup = &myspec.Backup{Repository: original, Binlog: myspec.Binlog{Enabled: true}}
+	status, err = restarted.archiveStatus()
+	if err != nil || status.Error != "binlog_decode_failed" {
+		t.Fatalf("original lost its failed attempt: %+v %v", status, err)
+	}
+	name := archiveIndexPath(p, original) + ".attempt"
+	raw, err := os.ReadFile(name)
+	if err != nil || string(raw) != `"binlog_decode_failed"` {
+		t.Fatalf("attempt did not persist only its safe category: %q %v", raw, err)
+	}
+	info, err := os.Stat(name)
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatal("attempt result is not private", err)
+	}
+}
+
+func TestArchiveCancelledAttemptRetainsFailure(t *testing.T) {
+	e := New()
+	e.dir = t.TempDir()
+	repo := testBackupRepository()
+	e.current.Backup = &myspec.Backup{Repository: repo, Binlog: myspec.Binlog{Enabled: true, RotateIntervalSeconds: 1}}
+	_, p := e.state()
+	e.recordArchiveResult(p, repo, errors.New("binlog_decode_failed"))
+	started, finished := make(chan struct{}), make(chan struct{})
+	e.configureArchiveLoop(true, func(ctx context.Context) error {
+		close(started)
+		<-ctx.Done()
+		close(finished)
+		return nil
+	})
+	defer e.resetArchiveLoop(false)
+	select {
+	case <-started:
+	case <-time.After(1800 * time.Millisecond):
+		t.Fatal("archive attempt did not start")
+	}
+	e.resetArchiveLoop(false)
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("archive attempt did not cancel")
+	}
+	// Cancellation must not clear the durable failure, even when the callback
+	// returns nil rather than context.Canceled.
+	restarted := New()
+	restarted.dir = e.dir
+	restarted.current = e.current
+	status, err := restarted.archiveStatus()
+	if err != nil || status.Error != "binlog_decode_failed" {
+		t.Fatalf("cancellation cleared failure: %+v %v", status, err)
+	}
+}
+
+func TestArchiveAttemptPersistenceFailureIsNotHealthy(t *testing.T) {
+	e := New()
+	e.dir = t.TempDir()
+	repo := testBackupRepository()
+	e.current.Backup = &myspec.Backup{Repository: repo, Binlog: myspec.Binlog{Enabled: true}}
+	_, p := e.state()
+	e.recordArchiveResult(p, repo, errors.New("binlog_decode_failed"))
+	name := archiveIndexPath(p, repo) + ".attempt"
+	if err := os.Remove(name); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(name, 0700); err != nil {
+		t.Fatal(err)
+	}
+	e.recordArchiveResult(p, repo, nil)
+	status, err := e.archiveStatus()
+	if err != nil || status.Error != "archive_attempt_write_failed" {
+		t.Fatalf("failed persistence appeared healthy: %+v %v", status, err)
+	}
+	restarted := New()
+	restarted.dir = e.dir
+	restarted.current = e.current
+	status, err = restarted.archiveStatus()
+	if err != nil || status.Error != "archive_attempt_unavailable" {
+		t.Fatalf("unreadable durable result appeared healthy: %+v %v", status, err)
+	}
+	if err := os.Remove(name); err != nil {
+		t.Fatal(err)
+	}
+	e.recordArchiveResult(p, repo, nil)
+	status, err = e.archiveStatus()
+	if err != nil || status.Error != "" {
+		t.Fatalf("repaired persistence did not clear failure: %+v %v", status, err)
+	}
+}
+
+func TestArchiveRejectsUnboundStateDirectory(t *testing.T) {
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	for _, dir := range []string{"", "relative"} {
+		e := New()
+		e.dir = dir
+		e.current.Role = myspec.RoleData
+		e.current.Backup = &myspec.Backup{Repository: testBackupRepository(), Binlog: myspec.Binlog{Enabled: true}}
+		_, p := e.state()
+		e.recordArchiveResult(p, e.current.Backup.Repository, errors.New("binlog_decode_failed"))
+		status, err := e.archiveStatus()
+		if err != nil || status.Error != "archive_state_directory_invalid" {
+			t.Fatalf("unbound state directory appeared healthy: %+v %v", status, err)
+		}
+		if err := e.archiveBinlogs(t.Context()); !errors.Is(err, errArchiveStateDir) {
+			t.Fatalf("unbound state directory reached native SQL: %v", err)
+		}
+	}
+	entries, err := os.ReadDir(cwd)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("unbound state directory wrote relative artifacts: count=%d error=%v", len(entries), err)
 	}
 }

@@ -109,6 +109,16 @@ Do not disable TLS or blindly rotate the shared monitor credential as a workarou
 
 Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy provider state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
 
+For MySQL/PXC PITR, check **BinlogArchive** as well as the recovery-window end.
+`False/ArchiveFailed` and its Warning event mean the writer's last archive pass
+failed; the agent log contains the native diagnostic. Fix the reported cause
+and retain native binlogs while the next scheduled pass retries the backlog.
+The recovery window must advance after uploads, not merely after application
+writes. For a parser stall after DDL, install corrected member agents and follow
+the [archive upgrade/recovery guidance](backups.md#upgrading-an-archive-stalled-after-ddl).
+If unarchived logs were purged, the existing window remains bounded; a new full
+backup establishes a new baseline, not a repair of the missing interval.
+
 ### PXC GTID history safety
 
 `GTIDHistorySafe=True` means a freshly observed healthy, same-Galera-history

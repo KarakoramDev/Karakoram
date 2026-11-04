@@ -136,6 +136,28 @@ var binlogGTID = regexp.MustCompile(`GTID_NEXT\s*=\s*'([^']+)'`)
 var binlogCommit = regexp.MustCompile(`original_commit_timestamp(?:=|\s+)\s*([0-9]+)`)
 var binlogPosition = regexp.MustCompile(`end_log_pos\s+([0-9]+)`)
 
+// Event headers use tabs in native mysqlbinlog output, with spaces in some
+// versions/formatters. Match whole header tokens, never SQL or row contents.
+func binlogHeader(line, event string) bool {
+	if !strings.HasPrefix(line, "#") {
+		return false
+	}
+	for offset := 0; offset < len(line); {
+		i := strings.Index(line[offset:], event)
+		if i < 0 {
+			return false
+		}
+		i += offset
+		end := i + len(event)
+		if i > 0 && (line[i-1] == ' ' || line[i-1] == '\t') &&
+			(end == len(line) || line[end] == ' ' || line[end] == '\t' || line[end] == '=') {
+			return true
+		}
+		offset = end
+	}
+	return false
+}
+
 func parseBinlogOutput(data []byte) (binlogSidecar, error) {
 	return parseBinlogStream(bytes.NewReader(data), nil)
 }
@@ -183,7 +205,6 @@ func parseBinlogStream(r io.Reader, emit func(binlogTransaction) error) (binlogS
 		if tx.OriginalCommitTimestamp == 0 {
 			return errors.New("missing_commit_timestamp")
 		}
-		tx.EndPosition = position
 		if err := record(); err != nil {
 			return err
 		}
@@ -211,7 +232,7 @@ func parseBinlogStream(r io.Reader, emit func(binlogTransaction) error) (binlogS
 		line := scan.Text()
 		// DDL commits do not have an Xid event. Seal their previous Query
 		// boundary before consuming the next transaction or rotation header.
-		if strings.Contains(line, "GTID\t") || strings.Contains(line, "Rotate to ") {
+		if binlogHeader(line, "GTID") || binlogHeader(line, "Anonymous_GTID") || binlogHeader(line, "Rotate to") {
 			if err := finish(); err != nil {
 				return out, err
 			}
@@ -226,10 +247,11 @@ func parseBinlogStream(r io.Reader, emit func(binlogTransaction) error) (binlogS
 				out.DecodePosition = position
 			}
 		}
-		if tx.GTID != "" && strings.HasPrefix(line, "#") && strings.Contains(line, " Query") {
+		if tx.GTID != "" && binlogHeader(line, "Query") {
+			tx.EndPosition = position
 			queryBoundary = true
 		}
-		if strings.Contains(line, "Previous-GTIDs") {
+		if binlogHeader(line, "Previous-GTIDs") {
 			previous = true
 			continue
 		}
@@ -269,10 +291,12 @@ func parseBinlogStream(r io.Reader, emit func(binlogTransaction) error) (binlogS
 			}
 			tx.GTID = m[1]
 		}
-		if tx.GTID != "" && strings.HasPrefix(line, "BEGIN") {
+		if tx.GTID != "" && (line == "BEGIN" || strings.HasPrefix(line, "XA START ")) {
 			inTransaction = true
 		}
-		if tx.GTID != "" && (strings.Contains(line, "Xid =") || strings.HasPrefix(line, "COMMIT") || strings.Contains(line, "COMMIT/*!*/")) {
+		// XA PREPARE is a durable GTID boundary (also used for ONE PHASE).
+		// Its later COMMIT/ROLLBACK, if any, has a separate GTID Query.
+		if tx.GTID != "" && (binlogHeader(line, "Xid") || binlogHeader(line, "XA PREPARE") || strings.HasPrefix(line, "COMMIT")) {
 			if tx.OriginalCommitTimestamp == 0 {
 				return out, errors.New("missing_commit_timestamp")
 			}
