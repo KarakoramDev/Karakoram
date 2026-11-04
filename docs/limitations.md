@@ -78,7 +78,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   control-plane backup/restore steps; it can wait for those steps even when
   their target clusters differ. This does not lock asynchronous agent uploads
   or external storage clients. See [recovery coordination](mysql/operations.md#full-outage-recovery).
-- **PostgreSQL administrator rotation requires upgraded agents.** v0.4.4 supports
+- **PostgreSQL administrator rotation requires upgraded agents.** v0.4.5 supports
   in-place `postgres` rotation after `upgrade-agents`; existing sessions are not
   revoked, and other engine-owned identities remain unsupported. See
   [administrator rotation and containment](postgres/access-and-tls.md#administrator-credential-containment).
@@ -115,7 +115,7 @@ These cross-engine constraints define the operating model; engine-specific limit
 - **PITR does not bridge archive-writer changes.** A different physical writer
   freezes the old MySQL/PXC baseline at its last proven endpoint; newer-writer
   uploads alone cannot extend it. `WindowFrozenWriterChanged` identifies foreign
-  uploads beyond that endpoint. In v0.4.4, automatic full re-anchoring is enabled
+  uploads beyond that endpoint. In v0.4.5, automatic full re-anchoring is enabled
   by default: with PITR/storage configured, the writer must remain stable for
   five minutes, with no non-backup operation active and five minutes since the
   last finished. Pending backups and a one-hour cooldown defer the full.
@@ -128,7 +128,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   Automatic backups follow count retention with chain, newest-full anchor and
   in-use protection. Older recovery ranges expire with their retained fulls;
   see [automatic writer re-anchoring](mysql/backups.md#automatic-writer-re-anchoring).
-- **Agent deployment is not necessarily zero-downtime.** v0.4.4 supports
+- **Agent deployment is not necessarily zero-downtime.** v0.4.5 supports
   `upgrade-agents` for every member-agent engine, including MySQL/PXC and
   ProxySQL; a control-plane-only upgrade or native process restart still does
   not replace deployed agents. Singleton databases/components have downtime.
@@ -195,24 +195,26 @@ not current v0.4.3 limitations. Existing history latches are not silently cleare
 
 ## Known issues in v0.4.3
 
-The following issues are fixed in the next release.
+The archive stall is fixed in v0.4.4; the false PXC history incident and
+blocked-change recovery are fixed in v0.4.5, not by the hotfix.
 
-- **MySQL point-in-time recovery silently stops archiving after the first schema
-  or account change** (v0.4.3 only; single, Group Replication and PXC). After a
-  full backup, the first statement such as `CREATE DATABASE`, `CREATE TABLE`,
-  `ALTER`, `CREATE USER` or `GRANT` — including databases and users created
-  through Karakoram itself — stops binlog archiving: no further binlogs are
-  uploaded, the `BinlogArchive` condition can still report healthy, and
-  point-in-time restore cannot go past that point. Full backups are not
-  affected. To check a cluster, compare the end of its point-in-time window
-  (`karactl backups pitr-window CLUSTER`) with the current time: if it stops
-  advancing while the archive lag grows, the cluster is affected. A new full
-  backup, disabling and re-enabling point-in-time recovery, or restarting the
-  cluster does not restart archiving. Until the fix: rely on full backups
-  (schedule them as often as your recovery point requires) and don't lower
-  binlog retention, so the fix can still archive retained binlogs; binlogs that
-  MySQL purges before then leave a permanent gap in point-in-time coverage.
-  A fix is planned for the next release.
+- **MySQL PITR archiving can silently stop after a schema or account change
+  — fixed in v0.4.4** (v0.4.3 only; single, Group Replication and PXC).
+  Native `mysqlbinlog` Query headers use a tab; the old parser expected a
+  space. A standalone Query event without Xid, including a no-op schema or
+  account statement, can stop uploads while `BinlogArchive` still looks healthy.
+  Statements such as `CREATE DATABASE`, `CREATE TABLE`, `ALTER`, `CREATE USER`
+  and `GRANT`, including Karakoram-managed changes, can encounter this path;
+  successful changes alone do not prove archive health. Full backups are
+  unaffected. Compare the endpoint from `karactl backups pitr-window CLUSTER`
+  with current time and check that it advances after writes. A new full,
+  toggling PITR or restarting native processes does not repair the old parser.
+  Install the corrected data-member agents using the
+  [v0.4.4 upgrade procedure](upgrade.md#upgrading-to-v044). Retained unarchived
+  binlogs are retried automatically; purged unarchived logs leave a permanent gap.
+  On Group Replication and PXC the relaunch moves the writer, so point-in-time
+  recovery into the stalled period itself is not available.
+
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or
@@ -235,8 +237,8 @@ The following issues are fixed in the next release.
   If the change was still rolling through members when the flag appeared, the
   scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
   serving reads and writes, so leave it as it is and upgrade once the fix is
-  released. This needs configured backup storage and healthy members. A fix is
-  planned for the next release.
+  released. This needs configured backup storage and healthy members.
+  **Fixed in v0.4.5**; not fixed by v0.4.4.
 
 ## Engine limits
 
