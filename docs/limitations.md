@@ -156,13 +156,15 @@ The continuing limitations above still apply. The following PXC issue is not
 fixed by the hotfix; its fix is planned for v0.4.5.
 
 - **MySQL point-in-time recovery can silently stop extending after the writer
-  changes** (also present in v0.4.3). If the writer moves — automatic failover,
-  switchover, or rolling maintenance — to a member whose data was copied in
-  rather than replayed from its own binlogs (a member added or rebuilt by Group
-  Replication clone or PXC state transfer, or any member of a cluster created
-  from a backup, cloned, or restored in place), binlogs keep uploading and
-  `BinlogArchive` stays healthy, but the end of the point-in-time window stops
-  advancing. Restores to points before the freeze still work, and full backups
+  changes in Group Replication and PXC clusters** (also present in
+  v0.4.0–v0.4.3). When the writer moves — automatic failover, switchover, or
+  rolling maintenance — to a member whose data was copied in rather than
+  replayed from its own binlogs, binlogs keep uploading and `BinlogArchive`
+  stays healthy, but the end of the point-in-time window stops advancing.
+  This applies to most Group Replication and PXC clusters, because members that
+  join when the cluster forms are copied by Group Replication clone or PXC state
+  transfer, and to any cluster created from a backup, cloned or restored in
+  place. Restores to points before the freeze still work, and full backups
   are not affected. A new full backup does not restart coverage. To check,
   compare the window end from `karactl backups pitr-window CLUSTER` with the
   current time. Until the fix, rely on full backups and schedule them as often
