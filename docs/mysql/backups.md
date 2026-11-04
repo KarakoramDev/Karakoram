@@ -107,6 +107,8 @@ last-attempt result is stored durably per repository and survives agent restarts
 only a completed successful pass clears it. Writer-ineligible/fenced skips retain
 the prior result, and status probe failures report `binlog_status_failed`.
 Failure to read or persist the attempt result is itself unhealthy.
+Repeated status probes within one observation pass do not duplicate a successfully
+recorded Warning; a failed event recording remains retryable.
 Neither a failed attempt nor the writer's current position extends the recovery
 window: only successfully uploaded, contiguous transaction metadata does.
 

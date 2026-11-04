@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -460,7 +461,7 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 						}
 					}
 					if !known && rc.Events != nil {
-						if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Resource: writer, Type: "Warning", Reason: condition.Reason, Message: condition.Message, CreatedAt: now(rc)}); err != nil {
+						if err := recordArchiveWarning(ctx, rc, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Resource: writer, Type: "Warning", Reason: condition.Reason, Message: condition.Message, CreatedAt: now(rc)}); err != nil {
 							return err
 						}
 					}
@@ -470,6 +471,36 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 		}
 	}
 	return nil
+}
+
+type archiveWarningKey struct {
+	namespace, cluster, resource, reason, message string
+}
+
+type archiveWarningResult struct {
+	once sync.Once
+	err  error
+}
+
+// ObserveStatus retries before publishing conditions. Deduplicate successful
+// appends within that pass, without losing warnings first seen on the retry or
+// suppressing a retry after the recorder failed.
+func recordArchiveWarning(ctx context.Context, rc *engine.Context, event domain.Event) error {
+	cache := engine.ObservationPassCache(ctx)
+	if cache == nil {
+		return rc.Events.Record(ctx, event)
+	}
+	key := archiveWarningKey{domain.NormalizedNamespace(event.Namespace), event.Cluster, event.Resource, event.Reason, event.Message}
+	value, found := cache.Load(key)
+	if !found {
+		value, _ = cache.LoadOrStore(key, &archiveWarningResult{})
+	}
+	result := value.(*archiveWarningResult)
+	result.once.Do(func() { result.err = rc.Events.Record(ctx, event) })
+	if result.err != nil {
+		cache.CompareAndDelete(key, result)
+	}
+	return result.err
 }
 
 var _ engine.PITRRestoreValidator = (*Core)(nil)
