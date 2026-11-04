@@ -21,5 +21,7 @@ single peak, with room for future engines and backends.
 
 Percona Server for MongoDB and Percona Backup for MongoDB are Percona products
 and trademarks; OpenEverest, MongoDB and Zerops names and marks belong to their
-respective owners, and Karakoram is independent and is not affiliated with or
-endorsed by any of them.
+respective owners. Karakoram is independent of Percona, OpenEverest and MongoDB
+and is not affiliated with or endorsed by them. Zerops does not endorse
+Karakoram. Zerops provides infrastructure for developing and testing Karakoram
+free of charge, and Karakoram's maintainer is employed by Zerops.
