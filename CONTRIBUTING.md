@@ -16,11 +16,20 @@ Follow the [Code of Conduct](CODE_OF_CONDUCT.md): be respectful, critique ideas 
 4. Update affected code, callers, tests and documentation together; remove obsolete paths and run the applicable [checks](#checks).
 5. Sign off every commit. Maintainers review pull requests and decide acceptance.
 
-Every commit requires a `Signed-off-by: Your Name <you@example.com>` line under the [Developer Certificate of Origin 1.1](https://developercertificate.org/). `git commit -s` adds it. This certifies your right to contribute under Apache-2.0; use your real name, not anonymous/bot sign-offs.
+Every commit requires a `Signed-off-by: Your Name <you@example.com>` line under the [Developer Certificate of Origin 1.1](https://developercertificate.org/). `git commit -s` adds it. This certifies your right to contribute under Apache-2.0. Sign off with a known identity, a name or handle you are consistently reachable under; anonymous and bot sign-offs are not accepted.
 
 ## AI/LLM-assisted contributions
 
-AI assistance is allowed, but a human must submit, understand and take responsibility for every line, including correctness, security and licensing. Automated/bot-driven pull requests and unreviewed generated output are not accepted. Large/complex reconciliation, data-safety, backup/restore and security logic must be authored and fully understood by the contributor.
+AI assistance is allowed. A person submits each pull request and takes responsibility for every line in it, including correctness, security and licensing, whether they typed it or a coding agent did. Automated or bot-driven pull requests and generated output that nobody reviewed are not accepted.
+
+Reconciliation, data-safety, backup/restore and security changes carry a higher bar, because a mistake there loses or exposes data. For these, the pull request must:
+
+- explain in your own words which failure cases the change handles and which it leaves alone;
+- include tests for the failure and recovery paths, not just the path where everything works;
+- say which providers and engines it was run on live and which were only tested offline ("not run live" is an acceptable answer; leaving it out is not);
+- come from someone who can answer review questions about it without going back to the tool.
+
+The maintainer may ask for a run on a disposable installation and may decline a change that can't be verified. Karakoram itself is built this way: coding agents write much of the code, their changes are tested live and reviewed by separate review agents, and I decide what ships. Release notes say which fixes were proven against live providers and which only in tests.
 
 Disclose meaningful AI use in the pull request: tool and purpose. Check generated material for incompatible licenses, secrets and private data. Private AI self-review is allowed; do not post AI review bots into human review threads. Maintainers may request clarification or decline contributions. This policy is adapted from [Cloud Hypervisor's guidelines](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/CONTRIBUTING.md#aillm-assistance--generated-code).
 
