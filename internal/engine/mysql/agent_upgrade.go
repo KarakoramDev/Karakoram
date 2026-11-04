@@ -18,18 +18,19 @@ import (
 )
 
 type agentUpgradeCheckpoint struct {
-	Target        engine.AgentUpgradePayload `json:"target"`
-	Order         []string                   `json:"order"`
-	Done          []string                   `json:"done,omitempty"`
-	Index         int                        `json:"index"`
-	Member        string                     `json:"member,omitempty"`
-	Stage         string                     `json:"stage,omitempty"`
-	Started       bool                       `json:"started,omitempty"`
-	BeforeBuilds  map[string]string          `json:"beforeBuilds,omitempty"`
-	HandoffTarget string                     `json:"handoffTarget,omitempty"`
-	Deploy        *infra.Op                  `json:"deploy,omitempty"`
-	StopReason    string                     `json:"stopReason,omitempty"`
-	ProxyServing  *bool                      `json:"proxyServing,omitempty"`
+	Target           engine.AgentUpgradePayload `json:"target"`
+	Order            []string                   `json:"order"`
+	Done             []string                   `json:"done,omitempty"`
+	Index            int                        `json:"index"`
+	Member           string                     `json:"member,omitempty"`
+	Stage            string                     `json:"stage,omitempty"`
+	Started          bool                       `json:"started,omitempty"`
+	BeforeBuilds     map[string]string          `json:"beforeBuilds,omitempty"`
+	HandoffTarget    string                     `json:"handoffTarget,omitempty"`
+	HandoffStartedAt time.Time                  `json:"handoffStartedAt,omitempty"`
+	Deploy           *infra.Op                  `json:"deploy,omitempty"`
+	StopReason       string                     `json:"stopReason,omitempty"`
+	ProxyServing     *bool                      `json:"proxyServing,omitempty"`
 }
 
 func agentUpgradeResult(cp *agentUpgradeCheckpoint, message string) (engine.OpResult, error) {
@@ -194,6 +195,16 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 	if cp.Member != m.Name {
 		return result, engine.Invalid("agent rollout in-flight member does not match immutable order")
 	}
+	if (cp.Stage == "handoff" || cp.Stage == "deploy") && s.Topology == "cluster" && m.ProxyDraining {
+		if cp.HandoffStartedAt.IsZero() {
+			// Older in-flight checkpoints also receive a durable deadline.
+			cp.HandoffStartedAt = time.Now()
+			return agentUpgradeResult(&cp, "Observing PXC proxy writer handoff")
+		}
+		if time.Since(cp.HandoffStartedAt) >= 3*time.Minute {
+			return result, engine.Invalid("PXC writer handoff for %s timed out after 3 minutes: no qualified common writer acknowledged by every proxy; inspect ProxySQL hostgroup 10, applied configuration and member GTIDs, then re-run upgrade-agents after routing recovery", m.Name)
+		}
+	}
 	switch cp.Stage {
 	case "handoff":
 		if !cp.Started {
@@ -232,30 +243,14 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			if s.Topology == "cluster" && routedWriter && !m.ProxyDraining {
 				// Use the retirement routing exclusion, without retiring the data identity.
 				// Select a caught-up, admitted peer before withdrawing the old writer.
-				for _, peer := range s.data() {
-					if peer.Name == m.Name {
-						continue
-					}
-					candidate, e := live(ctx, rc, peer.Name)
-					if e != nil || candidate.MemberState != "ONLINE" {
-						continue
-					}
-					contains, e := myspec.GTIDContains(candidate.GTIDExecuted, st.GTIDExecuted)
-					if e != nil || !contains {
-						continue
-					}
-					if e = proxyAdmission(ctx, rc, s, peer.Name, myspec.ProxyReaderGroup, myspec.ProxyBackupWriterGroup); e != nil {
-						continue
-					}
-					cp.HandoffTarget = peer.Name
-					break
-				}
+				cp.HandoffTarget, err = agentUpgradePXCSuccessor(ctx, rc, s, m.Name, st.GTIDExecuted, myspec.ProxyReaderGroup, myspec.ProxyBackupWriterGroup)
 				if cp.HandoffTarget == "" {
 					return result, fmt.Errorf("no caught-up proxy-eligible PXC writer successor for %s: %w", m.Name, engine.ErrUnavailable)
 				}
 				m.ProxyDraining = true
 				m.ProxyDrainOperation = op.ID
 				cp.Started = true
+				cp.HandoffStartedAt = time.Now()
 				publishRevision(s)
 				return agentUpgradeResult(&cp, fmt.Sprintf("handoff writer %s→%s", m.Name, cp.HandoffTarget))
 			}
@@ -269,6 +264,19 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 						if e != nil || !ok {
 							return agentUpgradeWait(&cp, "Waiting for proxy writer handoff", e)
 						}
+					}
+				}
+				if s.Topology == "cluster" {
+					// Galera monitors choose the writer, not backend order. Adopt
+					// only a qualified peer covering the incumbent's GTIDs and
+					// ONLINE in HG10 on every pinned proxy instance.
+					target, e := agentUpgradePXCSuccessor(ctx, rc, s, m.Name, st.GTIDExecuted, myspec.ProxyWriterGroup)
+					if e != nil {
+						return agentUpgradeWait(&cp, "Waiting for a GTID-containing common PXC writer on every proxy", e)
+					}
+					if cp.HandoffTarget != target {
+						cp.HandoffTarget = target
+						return agentUpgradeResult(&cp, "Checkpointing proxy-elected PXC writer "+target)
 					}
 				}
 				if err = proxyAdmission(ctx, rc, s, cp.HandoffTarget, myspec.ProxyWriterGroup); err != nil {
@@ -360,8 +368,10 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 						}
 					}
 				}
-				if err = proxyAdmission(ctx, rc, s, cp.HandoffTarget, myspec.ProxyWriterGroup); err != nil {
-					return result, err
+				target, observeErr := agentUpgradePXCSuccessor(ctx, rc, s, m.Name, native.GTIDExecuted, myspec.ProxyWriterGroup)
+				if observeErr != nil || target != cp.HandoffTarget {
+					cp.Stage = "handoff"
+					return agentUpgradeResult(&cp, "Proxy writer changed; rechecking qualified PXC handoff before deployment")
 				}
 			}
 		}
@@ -464,6 +474,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		cp.Index++
 		cp.Member = ""
 		cp.HandoffTarget = ""
+		cp.HandoffStartedAt = time.Time{}
 		cp.Deploy = nil
 		cp.Started = false
 		cp.ProxyServing = nil
@@ -472,6 +483,32 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 	default:
 		return result, engine.Invalid("unknown MySQL agent rollout checkpoint %s", cp.Stage)
 	}
+}
+
+// A proxy-elected successor must meet the same native and GTID gates as the
+// pre-withdrawal candidate. A healthy writer row alone cannot authorize restart.
+func agentUpgradePXCSuccessor(ctx context.Context, rc *engine.Context, s *state, old, requiredGTIDs string, groups ...int) (string, error) {
+	for _, peer := range s.data() {
+		if peer.Name == old || peer.Stage != "joined" || peer.Removing || peer.Offline || peer.Retirement != "" || peer.ConfirmedVolumeLost || peer.ProxyDraining || pxcJoinRoutingFenced(s, peer) {
+			continue
+		}
+		candidate, err := live(ctx, rc, peer.Name)
+		if err != nil || candidate.MemberState != "ONLINE" {
+			continue
+		}
+		contains, err := myspec.GTIDContains(candidate.GTIDExecuted, requiredGTIDs)
+		if err != nil || !contains {
+			continue
+		}
+		native, err := galeraStatus(ctx, rc, peer.Name)
+		if err != nil || !native.Eligible() || native.ClusterSize != len(s.data()) {
+			continue
+		}
+		if err := proxyAdmission(ctx, rc, s, peer.Name, groups...); err == nil {
+			return peer.Name, nil
+		}
+	}
+	return "", engine.ErrUnavailable
 }
 
 func proxyAgentDeploymentPreservesServing(ctx context.Context, rc *engine.Context, m *member) (bool, error) {

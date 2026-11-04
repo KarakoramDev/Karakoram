@@ -1018,6 +1018,111 @@ func TestAgentUpgradePXCDetectsWriterOnAnyProxyInstance(t *testing.T) {
 	}
 }
 
+func TestAgentUpgradePXCAdoptsQualifiedRoutedWriter(t *testing.T) {
+	_, rc, b := setupAgentRollout(t, "cluster")
+	b.leader = "demom2"
+	writers := agentRolloutTwoProxyInstances(t, rc, b, new([2]bool))
+	op := mysqlAgentRolloutOperation(true)
+	var cp agentUpgradeCheckpoint
+	for range 100 {
+		agentRolloutTick(t, rc, b, op, false)
+		json.Unmarshal(op.Checkpoint, &cp)
+		s, _ := load(rc.Cluster)
+		if s.find("demom2").ProxyDraining {
+			break
+		}
+	}
+	if cp.Member != "demom2" || cp.HandoffTarget != "demom0" {
+		t.Fatalf("expected first eligible successor before exclusion: %+v", cp)
+	}
+	before := len(b.names)
+	// Galera monitors need not choose the first configured backend. Until
+	// every pinned proxy agrees, neither successor is sufficient.
+	b.leader = "demom1"
+	writers[0], writers[1] = "demom0", "demom1"
+	for range 3 {
+		result, err := New(Options{Provider: rc.Cluster.Spec.Provider}).RunOperation(t.Context(), rc, op)
+		if !errors.Is(err, engine.ErrUnavailable) {
+			t.Fatalf("expected split-writer wait, got %v", err)
+		}
+		if len(result.Checkpoint) > 0 {
+			op.Checkpoint = result.Checkpoint
+		}
+		b.apply(t, New(Options{Provider: rc.Cluster.Spec.Provider}), rc)
+	}
+	if len(b.names) != before {
+		t.Fatal("split proxy writers admitted incumbent deployment")
+	}
+	writers[0] = "demom1"
+	for range 10 {
+		agentRolloutTick(t, rc, b, op, false)
+		json.Unmarshal(op.Checkpoint, &cp)
+		if len(b.names) > before {
+			break
+		}
+	}
+	if len(b.names) != before+1 || b.names[before] != "demom2" || cp.HandoffTarget != "demom1" {
+		t.Fatalf("rollout did not adopt common qualified writer: deployments=%v checkpoint=%+v", b.names, cp)
+	}
+	finishAgentRollout(t, rc, b, op, false)
+}
+
+func TestAgentUpgradePXCWriterHandoffDeadline(t *testing.T) {
+	p, rc, b := setupAgentRollout(t, "cluster")
+	op := mysqlAgentRolloutOperation(false)
+	for name := range b.builds {
+		b.builds[name] = engine.CurrentAgentBuild().Build
+	}
+	b.builds[b.leader] = "old"
+	var cp agentUpgradeCheckpoint
+	for range 100 {
+		agentRolloutTick(t, rc, b, op, false)
+		json.Unmarshal(op.Checkpoint, &cp)
+		s, _ := load(rc.Cluster)
+		if s.find(cp.Member) != nil && s.find(cp.Member).ProxyDraining {
+			break
+		}
+	}
+	if cp.HandoffStartedAt.IsZero() {
+		t.Fatal("routing withdrawal did not persist handoff deadline")
+	}
+	cp.HandoffStartedAt = time.Now().Add(-4 * time.Minute)
+	op.Checkpoint, _ = json.Marshal(cp)
+	_, err := p.RunOperation(t.Context(), rc, op)
+	if err == nil || !strings.Contains(err.Error(), "timed out") || !strings.Contains(err.Error(), "hostgroup 10") || len(b.names) != 0 {
+		t.Fatalf("handoff did not fail safely with routing guidance: deployments=%v err=%v", b.names, err)
+	}
+	// Cancellation/failed-operation cleanup still restores routing without
+	// submitting an executable after a deadline.
+	finishAgentRollout(t, rc, b, op, true)
+	s, _ := load(rc.Cluster)
+	if s.find(cp.Member).ProxyDraining || len(b.names) != 0 {
+		t.Fatal("deadline cleanup stranded withdrawal or deployed incumbent")
+	}
+}
+
+func TestAgentUpgradePXCSuccessorRequiresGTIDsAndQualification(t *testing.T) {
+	_, rc, b := setupAgentRollout(t, "cluster")
+	b.leader = "demom1"
+	s, _ := load(rc.Cluster)
+	gtids := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-10"
+	native := b.native["demom1"]
+	native.GTIDExecuted = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-9"
+	b.native["demom1"] = native
+	if target, err := agentUpgradePXCSuccessor(t.Context(), rc, s, "demom2", gtids, myspec.ProxyWriterGroup); err == nil || target != "" {
+		t.Fatal("adopted routed peer missing required GTIDs", target, err)
+	}
+	native.GTIDExecuted = gtids
+	b.native["demom1"] = native
+	if target, err := agentUpgradePXCSuccessor(t.Context(), rc, s, "demom2", gtids, myspec.ProxyWriterGroup); err != nil || target != "demom1" {
+		t.Fatal("rejected caught-up routed peer", target, err)
+	}
+	s.find("demom1").Offline = true
+	if target, err := agentUpgradePXCSuccessor(t.Context(), rc, s, "demom2", gtids, myspec.ProxyWriterGroup); err == nil || target != "" {
+		t.Fatal("adopted unqualified routed peer", target, err)
+	}
+}
+
 type servingAgentRolloutBackend struct {
 	*agentRolloutBackend
 	capable       bool
