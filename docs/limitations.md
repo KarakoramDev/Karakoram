@@ -211,10 +211,16 @@ The following issue is fixed in the next release.
   cancelling the change are both refused. To recover, add an enabled
   full-backup schedule a few minutes ahead next to your existing schedules
   (`spec.backup.schedules`: name, cron, `type: full`, `retainCount`,
-  `enabled: true`) with `karactl clusters patch CLUSTER -f change.yaml`; the
-  scheduled full clears the flag and the pending change completes. Afterwards
-  restore your original schedules. This needs configured backup storage and
-  healthy members. A fix is planned for the next release.
+  `enabled: true`) with `karactl clusters patch CLUSTER -f change.yaml`; change
+  nothing else in that patch; this works when the change itself had already
+  been applied and the cluster was only waiting to report healthy (for example
+  a finished proxy count change): the scheduled full clears the flag and the
+  pending change completes. Afterwards restore your original schedules.
+  If the change was still rolling through members when the flag appeared, the
+  scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
+  serving reads and writes, so leave it as it is and upgrade once the fix is
+  released. This needs configured backup storage and healthy members. A fix is
+  planned for the next release.
 
 ## Engine limits
 
