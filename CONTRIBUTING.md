@@ -66,6 +66,14 @@ Default Zerops deploy/run configuration must remain compatible with the binary p
 - Signing key: `~/.config/karakoram/release-signing-ed25519`, overridden by `KARAKORAM_RELEASE_SIGNING_KEY`. Authorize its public key in [`deploy/allowed_signers`](deploy/allowed_signers) for `release@karakoram.dev`; never commit the private key.
 - Write `NOTES` outside the checkout (or commit before preparation): changes, security fixes, upgrade steps, state-schema/rollback compatibility. Notes are not generated. Review changes and run applicable [checks](#checks); release targets do not replace them.
 
+### Tidy unreleased history
+
+Before `release-prepare`, squash the commits made since the previous release tag so each change lands as one reviewable commit: a fix, a feature, or a coherent docs change, with its review follow-ups, test-only fix-ups and lint clean-ups folded in. Keep separate commits for unrelated changes and for merge commits that record a released tag (for example a hotfix merged back into `main`).
+
+- Only rewrite commits after the latest release tag. Never rewrite a tagged commit or anything a published release points to.
+- Rewrite on a branch, compare the tree with the original (`git diff ORIGINAL TIDIED` must be empty), then update `main` with `git push --force-with-lease=main:ORIGINAL origin TIDIED:main`.
+- Announce the rewrite to anyone with work based on `main` so they rebase; keep author and `Signed-off-by` lines.
+
 ### Prepare, build, and publish
 
 ```sh
