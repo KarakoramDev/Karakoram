@@ -328,7 +328,7 @@ func (g *Gateway) access(ctx context.Context, ref domain.ClusterRef, caller Call
 	}
 	return c, a, m, nil
 }
-func (g *Gateway) upstream(ctx context.Context, ref domain.ClusterRef, c *domain.Cluster, l engine.DataAccessLevel) (Upstream, func(), error) {
+func (g *Gateway) upstream(ctx context.Context, ref domain.ClusterRef, c *domain.Cluster, l engine.DataAccessLevel) (*cachedUpstream, func(), error) {
 	key := ref.Namespace + "/" + ref.Name + ":" + string(l)
 	for {
 		fp, err := g.o.Upstreams.Fingerprint(ctx, c, l)
@@ -345,7 +345,7 @@ func (g *Gateway) upstream(ctx context.Context, ref domain.ClusterRef, c *domain
 			entry.active++
 			entry.used = g.o.Now()
 			g.mu.Unlock()
-			return entry.upstream, func() { g.releaseUpstream(key, entry) }, nil
+			return entry, func() { g.releaseUpstream(key, entry) }, nil
 		}
 		if pending := g.opening[key]; pending != nil {
 			g.mu.Unlock()
@@ -409,8 +409,29 @@ func (g *Gateway) upstream(ctx context.Context, ref domain.ClusterRef, c *domain
 			}
 			return nil, nil, pending.err
 		}
-		return entry.upstream, func() { g.releaseUpstream(key, entry) }, nil
+		return entry, func() { g.releaseUpstream(key, entry) }, nil
 	}
+}
+
+// invalidateUpstream retires only the failed lease, never its replacement.
+// The caller still holds a lease; releaseUpstream closes it after its last user.
+func (g *Gateway) invalidateUpstream(ref domain.ClusterRef, level engine.DataAccessLevel, entry *cachedUpstream, err error) bool {
+	if err == nil {
+		return false
+	}
+	// Reuse the diagnostic budget: arbitrary upstream unwrap chains may cycle.
+	failure := classifyListToolsFailure(err)
+	if !failure.connectionClosed && !failure.sessionMissing {
+		return false
+	}
+	key := ref.Namespace + "/" + ref.Name + ":" + string(level)
+	g.mu.Lock()
+	if g.upstreams[key] == entry {
+		delete(g.upstreams, key)
+		g.retired[entry] = true
+	}
+	g.mu.Unlock()
+	return true
 }
 
 func (g *Gateway) releaseUpstream(key string, entry *cachedUpstream) {

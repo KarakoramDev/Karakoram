@@ -128,7 +128,7 @@ func TestOpeningWaitersShareResult(t *testing.T) {
 	x.g.o.Upstreams = f
 	ref := domain.ClusterRef{Namespace: "team", Name: "aa"}
 	c := &domain.Cluster{Name: "aa"}
-	done := make(chan Upstream, 2)
+	done := make(chan *cachedUpstream, 2)
 	open := func() {
 		u, release, e := x.g.upstream(context.Background(), ref, c, engine.DataAccessRead)
 		if e != nil {

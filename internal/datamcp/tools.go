@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"slices"
 	"sort"
 	"strings"
@@ -35,9 +36,28 @@ func (g *Gateway) tools(ctx context.Context, ref domain.ClusterRef, c *domain.Cl
 		if e != nil {
 			return nil, e
 		}
-		tools, e := u.ListTools(ctx)
-		release()
+		var tools []*mcp.Tool
+		for attempt := range 2 {
+			tools, e = u.upstream.ListTools(ctx)
+			invalid := g.invalidateUpstream(ref, level, u, e)
+			release()
+			if e == nil || !invalid || attempt == 1 {
+				break
+			}
+			// Listing is read-only. Reconnect once, within the request timeout;
+			// tool calls themselves must never be replayed.
+			var openErr error
+			u, release, openErr = g.upstream(ctx, ref, c, level)
+			if openErr != nil {
+				break
+			}
+		}
 		if e != nil {
+			if g.o.Logger != nil && g.o.Logger.Enabled(ctx, slog.LevelError) {
+				attrs := classifyListToolsFailure(e).attrs()
+				attrs = append(attrs, slog.String("namespace", ref.Namespace), slog.String("cluster", ref.Name), slog.String("accessLevel", string(level)))
+				g.o.Logger.LogAttrs(ctx, slog.LevelError, "Data MCP upstream tool listing failed", attrs...)
+			}
 			return nil, errors.New("tool listing unavailable")
 		}
 		for _, t := range tools {
@@ -199,7 +219,8 @@ func (g *Gateway) call(ctx context.Context, ref domain.ClusterRef, req *mcp.Call
 		return nil, e
 	}
 	defer release()
-	raw, e := u.CallTool(ctx, t.upstream, args)
+	raw, e := u.upstream.CallTool(ctx, t.upstream, args)
+	g.invalidateUpstream(ref, t.level, u, e)
 	if e != nil || raw == nil {
 		outcome = "error"
 		return nil, errors.New("upstream tool call failed")

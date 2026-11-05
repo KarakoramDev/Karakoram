@@ -10,11 +10,9 @@ import (
 )
 
 type mcpUpstream struct {
-	mu        sync.Mutex
-	client    *mcp.Client
-	transport mcp.Transport
-	session   *mcp.ClientSession
-	closed    bool
+	mu      sync.Mutex
+	session *mcp.ClientSession
+	closed  bool
 }
 
 // Companions use initialize-based MCP independently of the downstream protocol.
@@ -35,8 +33,8 @@ func NewMCPUpstream(ctx context.Context, t mcp.Transport) (Upstream, error) {
 	if t == nil {
 		return nil, errors.New("nil MCP transport")
 	}
-	u := &mcpUpstream{client: mcp.NewClient(&mcp.Implementation{Name: "karakoram-data-gateway", Version: "1"}, &mcp.ClientOptions{Capabilities: &mcp.ClientCapabilities{}, MultiRoundTrip: &mcp.MultiRoundTripOptions{Disabled: true}}), transport: t}
-	u.client.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+	client := mcp.NewClient(&mcp.Implementation{Name: "karakoram-data-gateway", Version: "1"}, &mcp.ClientOptions{Capabilities: &mcp.ClientCapabilities{}, MultiRoundTrip: &mcp.MultiRoundTripOptions{Disabled: true}})
+	client.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			switch method {
 			case "roots/list", "sampling/createMessage", "elicitation/create":
@@ -45,29 +43,11 @@ func NewMCPUpstream(ctx context.Context, t mcp.Transport) (Upstream, error) {
 			return next(ctx, method, req)
 		}
 	})
-	s, e := u.client.Connect(upstreamConnectContext{ctx}, t, &mcp.ClientSessionOptions{ProtocolVersion: companionProtocolVersion})
+	s, e := client.Connect(upstreamConnectContext{ctx}, t, &mcp.ClientSessionOptions{ProtocolVersion: companionProtocolVersion})
 	if e != nil {
 		return nil, e
 	}
-	u.session = s
-	return u, nil
-}
-func (u *mcpUpstream) reconnect(ctx context.Context, old *mcp.ClientSession) (*mcp.ClientSession, error) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	if u.closed {
-		return nil, errors.New("upstream closed")
-	}
-	if old != u.session {
-		return u.session, nil
-	}
-	_ = old.Close()
-	s, e := u.client.Connect(upstreamConnectContext{ctx}, u.transport, &mcp.ClientSessionOptions{ProtocolVersion: companionProtocolVersion})
-	if e != nil {
-		return nil, e
-	}
-	u.session = s
-	return s, nil
+	return &mcpUpstream{session: s}, nil
 }
 func (u *mcpUpstream) current() (*mcp.ClientSession, error) {
 	u.mu.Lock()
@@ -82,28 +62,14 @@ func (u *mcpUpstream) ListTools(ctx context.Context) ([]*mcp.Tool, error) {
 	if e != nil {
 		return nil, e
 	}
-	for attempt := range 2 {
-		var tools []*mcp.Tool
-		for t, err := range s.Tools(ctx, nil) {
-			if err != nil {
-				e = err
-				break
-			}
-			tools = append(tools, t)
+	var tools []*mcp.Tool
+	for t, err := range s.Tools(ctx, nil) {
+		if err != nil {
+			return nil, err
 		}
-		if e == nil {
-			return tools, nil
-		}
-		if attempt == 0 && errors.Is(e, mcp.ErrSessionMissing) {
-			s, e = u.reconnect(ctx, s)
-			if e != nil {
-				return nil, e
-			}
-			continue
-		}
-		return nil, e
+		tools = append(tools, t)
 	}
-	return nil, e
+	return tools, nil
 }
 func (u *mcpUpstream) CallTool(ctx context.Context, name string, args map[string]any) (*mcp.CallToolResult, error) {
 	s, e := u.current()
@@ -111,13 +77,6 @@ func (u *mcpUpstream) CallTool(ctx context.Context, name string, args map[string
 		return nil, e
 	}
 	r, e := s.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-	if errors.Is(e, mcp.ErrSessionMissing) {
-		s, e = u.reconnect(ctx, s)
-		if e != nil {
-			return nil, e
-		}
-		r, e = s.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-	}
 	if r != nil && r.InputRequests != nil {
 		return nil, errors.New("upstream client input is disabled")
 	}
