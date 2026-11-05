@@ -648,3 +648,26 @@ func TestPrepareRealOpenBaoArchives(t *testing.T) {
 		})
 	}
 }
+
+func TestMongoDBPluginVersionsHaveDistinctMirrorNames(t *testing.T) {
+	old, err := Get("openbao-plugin-database-mongodb-0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := Get("openbao-plugin-database-mongodb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old.Version != "0.0.1" || current.Version != "0.0.2" || old.File == current.File || old.SHA256 == current.SHA256 {
+		t.Fatal("dual plugin releases must retain independent bytes and mirror identities")
+	}
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "https://mirror.example.test")
+	oldURL, err := ResolveURL(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentURL, err := ResolveURL(current)
+	if err != nil || oldURL == currentURL {
+		t.Fatal("flat mirror conflates MongoDB plugin versions")
+	}
+}

@@ -336,7 +336,7 @@ func nativePlugin(t *testing.T, binary string) string {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if e = os.WriteFile(filepath.Join(dir, memberPlugins(Options{})[0].Command), b, 0755); e != nil {
+		if e = os.WriteFile(filepath.Join(dir, memberPlugins(Options{}, pluginRevision)[0].Command), b, 0755); e != nil {
 			t.Fatal(e)
 		}
 		return dir
@@ -367,7 +367,7 @@ func nativePlugin(t *testing.T, binary string) string {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if e = os.WriteFile(filepath.Join(dir, memberPlugins(Options{})[0].Command), b, 0755); e != nil {
+		if e = os.WriteFile(filepath.Join(dir, memberPlugins(Options{}, pluginRevision)[0].Command), b, 0755); e != nil {
 			t.Fatal(e)
 		}
 		return dir

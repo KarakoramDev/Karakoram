@@ -58,7 +58,7 @@ func (p *Provider) connectionTrustReady(ctx context.Context, rc *engine.Context)
 		return false, err
 	}
 	for _, m := range s.Members {
-		if m.RestartFingerprint != fp || m.Change != nil || m.Stage != "ready" || m.AppliedConfigVersion < m.ConfigVersion {
+		if m.PluginRevision != pluginRevision || m.RestartFingerprint != fp || m.Change != nil || m.Stage != "ready" || m.AppliedConfigVersion < m.ConfigVersion {
 			return false, nil
 		}
 	}
@@ -118,7 +118,7 @@ func (p *Provider) lifecycleStep(ctx context.Context, rc *engine.Context, s *int
 				continue
 			}
 			kind := ""
-			if m.DesiredVersion != rc.Cluster.Spec.Version {
+			if m.DesiredVersion != rc.Cluster.Spec.Version || m.PluginRevision != pluginRevision {
 				kind = "deploy"
 			} else if !reflect.DeepEqual(m.Resources, runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)) || m.Disk.MinDisk != rc.Cluster.Spec.Components.Engine.Resources.MinDisk || m.Disk.MaxDisk != rc.Cluster.Spec.Components.Engine.Resources.MaxDisk {
 				kind = "resources"

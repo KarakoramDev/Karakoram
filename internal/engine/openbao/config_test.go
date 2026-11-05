@@ -63,7 +63,7 @@ func edgeFixture(t *testing.T) (*Provider, *engine.Context, *internalState) {
 	c := &domain.Cluster{Name: "bao"}
 	p.ApplyDefaults(&c.Spec)
 	c.Spec.Version = "2.7.1"
-	s := &internalState{UID: "uid", ConfigVersion: 1, Members: []*member{{Name: "baom0", Volume: "baom0v", VolumeID: "baom0v", Stage: "ready", ProcessGeneration: 7}, {Name: "baom1", Volume: "baom1v", VolumeID: "baom1v", Stage: "planned"}}}
+	s := &internalState{UID: "uid", ConfigVersion: 1, Members: []*member{{Name: "baom0", Volume: "baom0v", VolumeID: "baom0v", Stage: "ready", Version: "2.7.1", ProcessGeneration: 7}, {Name: "baom1", Volume: "baom1v", VolumeID: "baom1v", Stage: "planned"}}}
 	rc := &engine.Context{Cluster: c, Backend: edgeBackend{}, Secrets: &edgeSecrets{values: map[string][]byte{}, tokens: map[string]*domain.AgentToken{}}}
 	if err := p.ensureSecrets(t.Context(), rc, s); err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestEdgeRuntimeVerifiedArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := nativeartifacts.Get("openbao")
+	a, err := nativeartifacts.Get("openbao-2.7.1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestEdgeRuntimeVerifiedArtifact(t *testing.T) {
 		t.Fatalf("archive validation dependencies must be installed first: %s", v.Prepare[0])
 	}
 	for _, command := range v.Prepare[1:] {
-		if !strings.Contains(command, "python3 -c") {
+		if !strings.Contains(command, "python3 -c") && command != "sudo -u 'runtime' install -m 0755 "+pluginDirectory+"/mongodb-0.0.2/openbao-plugin-database-mongodb_linux_amd64_v1 "+pluginDirectory+"/"+mongodbPluginCommand {
 			t.Fatal("expected verified archive preparation after dependency installation")
 		}
 	}

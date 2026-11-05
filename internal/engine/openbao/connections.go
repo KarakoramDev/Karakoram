@@ -409,6 +409,15 @@ func (p *Provider) reconcileConnections(ctx context.Context, rc *engine.Context)
 	}
 	for i := range records {
 		c := &records[i]
+		if c.Phase == ConnectionReady && c.TargetProvider == "psmdb" {
+			changed, err := p.migrateMongoDBConnection(ctx, rc, *c)
+			if err != nil {
+				return true, fmt.Errorf("connection %s plugin migration: %w", c.Name, err)
+			}
+			if changed {
+				return true, nil
+			}
+		}
 		if c.Phase != ConnectionPending && c.Phase != ConnectionDeleting {
 			continue
 		}
@@ -494,6 +503,7 @@ func (p *Provider) configureConnection(ctx context.Context, rc *engine.Context, 
 			members[i] = connectionHost(h, "27017")
 		}
 		body["plugin_name"] = "mongodb-database-plugin"
+		body["plugin_version"] = mongodbPluginVersion
 		body["allowed_roles"] = []string{c.Name + "_*"}
 		body["connection_url"] = "mongodb://{{username}}:{{password}}@" + strings.Join(members, ",") + "/admin?replicaSet=rs0&tls=true"
 		body["tls_ca"] = ca

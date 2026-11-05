@@ -44,53 +44,61 @@ type internalState struct {
 	CloneRestoreStep     string `json:"cloneRestoreStep,omitempty"`
 }
 type member struct {
-	Name                 string                     `json:"name"`
-	Volume               string                     `json:"volume"`
-	Index                int                        `json:"index"`
-	Stage                string                     `json:"stage"`
-	ServiceID            string                     `json:"serviceId,omitempty"`
-	VolumeID             string                     `json:"volumeId,omitempty"`
-	VolumeOrphaned       bool                       `json:"volumeOrphaned,omitempty"`
-	RuntimeRecovery      engine.RuntimeRecovery     `json:"runtimeRecovery,omitempty"`
-	UnplacedRetirement   *engine.UnplacedRetirement `json:"unplacedRetirement,omitempty"`
-	ImportPlan           *engine.ImportPlan         `json:"importPlan,omitempty"`
-	ResumeDeploy         *pending                   `json:"resumeDeploy,omitempty"`
-	Resume               bool                       `json:"resume,omitempty"`
-	Version              string                     `json:"version"`
-	DesiredVersion       string                     `json:"desiredVersion"`
-	ConfigVersion        int64                      `json:"configVersion"`
-	AppliedConfigVersion int64                      `json:"appliedConfigVersion,omitempty"`
-	ProcessGeneration    int64                      `json:"processGeneration"`
-	RestartFingerprint   string                     `json:"restartFingerprint,omitempty"`
-	Change               *memberChange              `json:"change,omitempty"`
-	EngineOptions        json.RawMessage            `json:"engineOptions,omitempty"`
-	EngineConfig         string                     `json:"engineConfig,omitempty"`
-	TLSMode              string                     `json:"tlsMode,omitempty"`
-	Resources            domain.Resources           `json:"resources"`
-	Disk                 domain.Resources           `json:"disk"`
-	ConfigResources      domain.Resources           `json:"configResources"`
-	ConfigDisk           domain.Resources           `json:"configDisk"`
-	PublicPort           int                        `json:"publicPort,omitempty"`
-	PublicHash           string                     `json:"publicHash,omitempty"`
-	Removing             bool                       `json:"removing,omitempty"`
-	RemoveStep           string                     `json:"removeStep,omitempty"`
-	CleanupStopReason    string                     `json:"cleanupStopReason,omitempty"`
-	Held                 bool                       `json:"held,omitempty"`
-	Initialized          bool                       `json:"initialized"`
-	Observed             bool                       `json:"observed"`
-	Sealed               bool                       `json:"sealed"`
-	Active               bool                       `json:"active"`
-	Standby              bool                       `json:"standby"`
-	Voter                bool                       `json:"voter"`
-	Healthy              bool                       `json:"healthy"`
-	LeaderAddress        string                     `json:"leaderAddress,omitempty"`
+	Name               string                     `json:"name"`
+	Volume             string                     `json:"volume"`
+	Index              int                        `json:"index"`
+	Stage              string                     `json:"stage"`
+	ServiceID          string                     `json:"serviceId,omitempty"`
+	VolumeID           string                     `json:"volumeId,omitempty"`
+	VolumeOrphaned     bool                       `json:"volumeOrphaned,omitempty"`
+	RuntimeRecovery    engine.RuntimeRecovery     `json:"runtimeRecovery,omitempty"`
+	UnplacedRetirement *engine.UnplacedRetirement `json:"unplacedRetirement,omitempty"`
+	ImportPlan         *engine.ImportPlan         `json:"importPlan,omitempty"`
+	ResumeDeploy       *pending                   `json:"resumeDeploy,omitempty"`
+	Resume             bool                       `json:"resume,omitempty"`
+	Version            string                     `json:"version"`
+	DesiredVersion     string                     `json:"desiredVersion"`
+	// InstalledVersion pins executable selection until a deployment completes.
+	// Version is only a native observation; DesiredVersion may already name an
+	// admitted rollout that has not prepared this member.
+	InstalledVersion string `json:"installedVersion,omitempty"`
+	// PluginRevision identifies artifacts installed by a completed deployment;
+	// empty legacy state must retain its original plugin declarations.
+	PluginRevision       string           `json:"pluginRevision,omitempty"`
+	ConfigVersion        int64            `json:"configVersion"`
+	AppliedConfigVersion int64            `json:"appliedConfigVersion,omitempty"`
+	ProcessGeneration    int64            `json:"processGeneration"`
+	RestartFingerprint   string           `json:"restartFingerprint,omitempty"`
+	Change               *memberChange    `json:"change,omitempty"`
+	EngineOptions        json.RawMessage  `json:"engineOptions,omitempty"`
+	EngineConfig         string           `json:"engineConfig,omitempty"`
+	TLSMode              string           `json:"tlsMode,omitempty"`
+	Resources            domain.Resources `json:"resources"`
+	Disk                 domain.Resources `json:"disk"`
+	ConfigResources      domain.Resources `json:"configResources"`
+	ConfigDisk           domain.Resources `json:"configDisk"`
+	PublicPort           int              `json:"publicPort,omitempty"`
+	PublicHash           string           `json:"publicHash,omitempty"`
+	Removing             bool             `json:"removing,omitempty"`
+	RemoveStep           string           `json:"removeStep,omitempty"`
+	CleanupStopReason    string           `json:"cleanupStopReason,omitempty"`
+	Held                 bool             `json:"held,omitempty"`
+	Initialized          bool             `json:"initialized"`
+	Observed             bool             `json:"observed"`
+	Sealed               bool             `json:"sealed"`
+	Active               bool             `json:"active"`
+	Standby              bool             `json:"standby"`
+	Voter                bool             `json:"voter"`
+	Healthy              bool             `json:"healthy"`
+	LeaderAddress        string           `json:"leaderAddress,omitempty"`
 }
 type pending struct {
-	Op        infra.Op         `json:"op"`
-	Action    string           `json:"action"`
-	Member    string           `json:"member"`
-	Version   string           `json:"version,omitempty"`
-	Resources domain.Resources `json:"resources"`
+	Op             infra.Op         `json:"op"`
+	Action         string           `json:"action"`
+	Member         string           `json:"member"`
+	Version        string           `json:"version,omitempty"`
+	PluginRevision string           `json:"pluginRevision,omitempty"`
+	Resources      domain.Resources `json:"resources"`
 }
 type platformRetry struct {
 	engine.RetrySchedule
@@ -109,6 +117,12 @@ func loadState(c *domain.Cluster) (*internalState, error) {
 	if len(c.Internal) > 0 {
 		if err := json.Unmarshal(c.Internal, s); err != nil {
 			return nil, fmt.Errorf("decode OpenBao state: %w", err)
+		}
+	}
+	for _, m := range s.Members {
+		if m.InstalledVersion == "" && m.Version != "" {
+			// Released state already records the incumbent's native version.
+			m.InstalledVersion = m.Version
 		}
 	}
 	if s.ConfigVersion == 0 {

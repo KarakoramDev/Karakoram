@@ -100,7 +100,7 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *internalSt
 		}
 	}
 	op, err := engine.Deploy(ctx, rc, m.Name, spec)
-	v := &pending{Op: op, Action: "deploy", Member: m.Name, Version: version}
+	v := &pending{Op: op, Action: "deploy", Member: m.Name, Version: version, PluginRevision: pluginRevision}
 	if err != nil {
 		s.Pending = v
 		return s.failPendingCause(rc, err)

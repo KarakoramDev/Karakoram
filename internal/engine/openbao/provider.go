@@ -51,7 +51,10 @@ func (*Provider) Name() string { return "openbao" }
 var clusterName = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}$`)
 
 // Catalog entries are ordered from oldest to newest; updates move forward only.
-var catalog = []domain.VersionInfo{{Version: "2.7.1", Major: "2.7", Status: "supported", Default: true}}
+var catalog = []domain.VersionInfo{
+	{Version: "2.7.1", Major: "2.7", Status: "deprecated"},
+	{Version: "2.7.2", Major: "2.7", Status: "supported", Default: true},
+}
 
 func defaultResources() domain.Resources {
 	return domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 5, MaxDisk: 5}
@@ -83,7 +86,7 @@ func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 		s.Provider = "openbao"
 	}
 	if s.Version == "" {
-		s.Version = "2.7.1"
+		s.Version = "2.7.2"
 	}
 	if s.Topology.Type == "" {
 		s.Topology.Type = "cluster"

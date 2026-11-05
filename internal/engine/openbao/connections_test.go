@@ -201,8 +201,8 @@ func TestConnectionRolePayloads(t *testing.T) {
 }
 
 func TestConnectionPluginArtifacts(t *testing.T) {
-	for _, p := range memberPlugins(Options{}) {
-		if p.Version == "" || !strings.Contains(p.Command, "_linux_amd64_v1") {
+	for _, p := range memberPlugins(Options{}, pluginRevision) {
+		if p.Version == "" || p.Command != mongodbPluginCommand && !strings.Contains(p.Command, "_linux_amd64_v1") {
 			t.Fatalf("invalid declarative plugin: %+v", p)
 		}
 	}

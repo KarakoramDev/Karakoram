@@ -228,6 +228,14 @@ func (p *Provider) observeReceipt(ctx context.Context, rc *engine.Context, s *in
 		}
 	case "deploy":
 		m.Stage = "deployed"
+		if m.InstalledVersion != v.Version {
+			// The incumbent may already have acknowledged the pre-prepare
+			// configuration. Make receipt activation require a fresh reload.
+			s.ConfigVersion++
+			m.ConfigVersion = s.ConfigVersion
+		}
+		m.InstalledVersion = v.Version
+		m.PluginRevision = v.PluginRevision
 		m.RuntimeRecovery.Deployed = true
 		if m.Resume {
 			m.Stage = "resume-deployed"

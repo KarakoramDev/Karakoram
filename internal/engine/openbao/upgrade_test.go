@@ -8,27 +8,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KarakoramDev/Karakoram/internal/domain"
-	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/openbao/baospec"
 )
 
 func TestVersionUpgradeRollsStandbysFirst(t *testing.T) {
 	p, rc, f, a := setup(t)
+	rc.Cluster.Spec.Version = "2.7.1"
 	ready(t, p, rc)
 	const newer = "2.7.2"
-	originalCatalog, originalLookup := catalog, lookupRuntimeArtifact
-	t.Cleanup(func() { catalog = originalCatalog; lookupRuntimeArtifact = originalLookup })
-	catalog = append(slices.Clone(catalog), domain.VersionInfo{Version: newer, Major: "2.7", Status: "supported"})
-	lookupRuntimeArtifact = func(name string) (nativeartifacts.Artifact, error) {
-		artifact, err := originalLookup(name)
-		if name == "openbao" {
-			artifact.Version = newer
-			artifact.File = "openbao_" + newer + "_linux_amd64.tar.gz"
-			artifact.UpstreamURL = "https://artifacts.example.test/" + artifact.File
-		}
-		return artifact, err
-	}
 	old := *rc.Cluster
 	upgraded := *rc.Cluster
 	upgraded.Spec.Version = newer
@@ -91,6 +78,9 @@ func TestVersionUpgradeRollsStandbysFirst(t *testing.T) {
 		if !strings.Contains(preparation, "/opt/karakoram/openbao-"+newer) || !strings.Contains(preparation, "openbao_"+newer+"_linux_amd64.tar.gz") {
 			t.Fatalf("upgrade did not prepare the target binary: %s", preparation)
 		}
+		if !strings.Contains(preparation, "225c89a188052067d896395a344fc40ba951808cb145ddfa6b07b0be296e632d") || !strings.Contains(preparation, "2b33fa43f0e89dab29f1c4646b49039672285f3d3585f83d74785c24cddd44ca") {
+			t.Fatal("member upgrade did not install both locked MongoDB binaries")
+		}
 	}
 	if len(f.deployments)-initialDeployments != 3 {
 		t.Fatal("upgrade did not redeploy exactly once per member")
@@ -107,8 +97,45 @@ func TestVersionUpgradeRollsStandbysFirst(t *testing.T) {
 		if spec.BinaryPath != "/opt/karakoram/openbao-"+newer+"/bao" || spec.Version != newer {
 			t.Fatalf("incorrect upgraded member binary: %+v", spec)
 		}
+		if len(spec.Plugins) != 2 || spec.Plugins[0].Version != "v0.0.1" || spec.Plugins[1].Version != mongodbPluginVersion || m.PluginRevision != pluginRevision {
+			t.Fatalf("member upgrade lost plugin registrations or deployment receipt: %+v", spec.Plugins)
+		}
 		if a.member(m.Name).unseals != 6 || m.Sealed || !m.Healthy {
 			t.Fatalf("upgraded member not re-unsealed and healthy: %+v", m)
 		}
 	}
+}
+
+func TestPluginRevisionRolloutResumesAfterControllerRestart(t *testing.T) {
+	p, rc, f, _ := setup(t)
+	ready(t, p, rc)
+	s := state(t, rc)
+	for _, m := range s.Members {
+		m.PluginRevision = ""
+	}
+	if err := s.save(rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	initialDeployments := len(f.deployments)
+	// Persist the member change before recreating the controller.
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	p = New(p.options)
+	for range 250 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+		allInstalled := true
+		for _, m := range state(t, rc).Members {
+			allInstalled = allInstalled && m.PluginRevision == pluginRevision && m.Change == nil && m.Healthy
+		}
+		if allInstalled {
+			if len(f.deployments)-initialDeployments != 3 {
+				t.Fatal("plugin-only rollout did not redeploy exactly once per member")
+			}
+			return
+		}
+	}
+	t.Fatal("plugin-only rollout failed to recover after controller restart")
 }

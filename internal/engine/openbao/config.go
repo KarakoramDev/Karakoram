@@ -20,6 +20,9 @@ var lookupRuntimeArtifact = nativeartifacts.Get
 
 func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) (infra.RuntimeSpec, error) {
 	a, err := lookupRuntimeArtifact("openbao")
+	if err == nil && a.Version != version {
+		a, err = lookupRuntimeArtifact("openbao-" + version)
+	}
 	if err != nil {
 		return infra.RuntimeSpec{}, err
 	}
@@ -72,9 +75,17 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	if m == nil {
 		return agentapi.MemberConfig{}, engine.ErrNotFound
 	}
-	version := m.DesiredVersion
+	version := m.InstalledVersion
 	if version == "" {
-		version = rc.Cluster.Spec.Version
+		if m.Initialized || m.RuntimeRecovery.Initialized || m.Stage == "ready" {
+			return agentapi.MemberConfig{}, engine.Invalid("OpenBao installed version is unavailable")
+		}
+		// A new member has no incumbent executable. Its first runtime prepares
+		// the desired version before starting the agent.
+		version = m.DesiredVersion
+		if version == "" {
+			version = rc.Cluster.Spec.Version
+		}
 	}
 	v := agentapi.MemberConfig{Engine: baospec.Engine, Cluster: rc.Cluster.Name, Member: name, Role: "openbao", EngineVersion: version, ConfigVersion: m.ConfigVersion, Port: 8200, TLS: agentapi.TLSConfig{Mode: "requireTLS"}, DesiredProcesses: []string{baospec.Process}}
 	if m.Held {
@@ -116,7 +127,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	}
 	spec.RecoveryCAPEM = recoveryCA.CertPEM
 	spec.PluginDirectory = pluginDirectory
-	spec.Plugins = memberPlugins(options)
+	spec.Plugins = memberPlugins(options, m.PluginRevision)
 	spec.TrustCAPEMs, err = p.trustCAs(ctx, rc)
 	if err != nil {
 		return v, err
