@@ -95,7 +95,7 @@ func TestProfileAndCitusPreparationRetainsExactServerCandidate(t *testing.T) {
 				t.Fatalf("%s %s profiles bypass the exact server preference", version, topology)
 			}
 			extras := strings.Join(runtime.Prepare[len(base):], "\n")
-			for _, name := range []string{"postgis-3=", "pgvector=", "timescaledb-pg" + strconv.Itoa(major(version))} {
+			for _, name := range []string{"postgis-3=", "pgvector-pg" + strconv.Itoa(major(version)), "timescaledb-pg" + strconv.Itoa(major(version))} {
 				if !strings.Contains(extras, name) {
 					t.Fatalf("%s %s does not exercise %s preparation", version, topology, name)
 				}

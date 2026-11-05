@@ -12,6 +12,7 @@ import (
 )
 
 func TestPinnedPackagesAndPlans(t *testing.T) {
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "https://artifacts.example.invalid")
 	for _, major := range []int{16, 17, 18} {
 		for _, id := range []string{"postgis", "pgvector"} {
 			d, err := Get(id)
@@ -22,8 +23,19 @@ func TestPinnedPackagesAndPlans(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(commands) != 1 || !strings.Contains(commands[0], "percona-postgresql-") {
+			if id == "postgis" && (len(commands) != 1 || !strings.Contains(commands[0], "percona-postgresql-")) {
 				t.Fatal(commands)
+			}
+			if id == "pgvector" {
+				prepare := strings.Join(commands, "\n")
+				if len(d.Packages(major)) != 0 || !strings.Contains(prepare, "dpkg-divert") ||
+					!strings.Contains(prepare, "pgvector-pg") || !strings.Contains(prepare, "0.8.7") ||
+					strings.Contains(prepare, "DROP EXTENSION") || strings.Contains(prepare, "apt-get remove") {
+					t.Fatal("vector package-to-bundle transition is incomplete", prepare)
+				}
+				if strings.Index(prepare, "sha256sum -c -") > strings.Index(prepare, "dpkg-divert") {
+					t.Fatal("package diversion precedes bundle verification")
+				}
 			}
 			for _, pkg := range d.Packages(major) {
 				if !strings.Contains(pkg, "='") || !strings.HasSuffix(pkg, ".noble'") {
@@ -118,6 +130,33 @@ func TestProfileExtensionSchemaTargets(t *testing.T) {
 					t.Fatalf("%s PG%d has no extension schema target: %q", id, major, step.SQL)
 				}
 			}
+		}
+	}
+}
+
+func TestSupabaseVectorBundleReplacesOnlyOldPackagePayload(t *testing.T) {
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "https://artifacts.example.invalid")
+	d, _ := Get("supabase")
+	if !reflect.DeepEqual(d.Artifacts(17), []string{"supabase-pg17-extensions", "pgvector-pg17"}) {
+		t.Fatal("Supabase omitted the standalone vector bundle")
+	}
+	for _, pkg := range d.Packages(17) {
+		if strings.Contains(pkg, "pgvector") {
+			t.Fatal("Supabase still installs the vulnerable vector package", pkg)
+		}
+	}
+	commands, err := d.PrepareCommands(infra.Layout{User: "app"}, 17)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepare := strings.Join(commands, "\n")
+	bundle := strings.Index(prepare, "https://artifacts.example.invalid/pgvector-pg17-0.8.7")
+	if bundle < 0 || !strings.Contains(prepare, "dpkg-divert") || strings.Contains(prepare, "apt-get remove") || strings.Contains(prepare, "DROP EXTENSION") {
+		t.Fatal("unsafe or missing APT-to-bundle cutover", prepare)
+	}
+	for _, extension := range d.Extensions(17) {
+		if extension.Name == "vector" && (extension.Source != "pgvector-pg17" || extension.Preload) {
+			t.Fatal("wrong Supabase vector provenance/preload", extension)
 		}
 	}
 }

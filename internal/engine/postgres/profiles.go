@@ -208,6 +208,12 @@ func (p *Core) postReadyProfiles(ctx context.Context, rc *engine.Context) error 
 			if err != nil {
 				return fmt.Errorf("bootstrapping PostgreSQL profiles: %w", err)
 			}
+			// Restored catalogs can retain older extension SQL even when the
+			// server release is unchanged. Publish the digest only after every
+			// installed profile extension has been updated in its database.
+			if err = p.UpdateProfileExtensions(ctx, rc); err != nil {
+				return err
+			}
 			return rc.Secrets.SetClusterSecret(ctx, rc.Cluster.Ref(), "postgres/profile-bootstrap-digest", []byte(hash))
 		}
 		client.Close()

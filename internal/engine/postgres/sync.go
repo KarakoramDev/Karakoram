@@ -1113,7 +1113,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 	}
 	if s.ExtensionsPending {
-		if err = p.updateProfileExtensions(ctx, rc); err != nil {
+		if err = p.UpdateProfileExtensions(ctx, rc); err != nil {
 			return result, err
 		}
 		s.ExtensionsPending = false

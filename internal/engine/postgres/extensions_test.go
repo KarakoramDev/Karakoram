@@ -39,7 +39,7 @@ func TestAvailableExtensionValidation(t *testing.T) {
 	if err := p.CreateDatabase(t.Context(), nil, Database{Name: "app", Owner: "app", Extensions: []string{"pgcrypto"}}); err == nil {
 		t.Fatal("accepted extensions on disabled database")
 	}
-	if err := p.updateProfileExtensions(t.Context(), nil); err != nil {
+	if err := p.UpdateProfileExtensions(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
 }

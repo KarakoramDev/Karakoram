@@ -54,6 +54,8 @@ func TestCreateHAWithDeploymentAdmission(t *testing.T) {
 							json.NewEncoder(w).Encode(status)
 						case "/v1/supabase/status":
 							json.NewEncoder(w).Encode(sbspec.Status{Ready: true, GatewayUpstreamHosts: b.gatewayHosts})
+						case "/v1/postgres/" + pgspec.ActionUpdateExtensions:
+							json.NewEncoder(w).Encode([]pgspec.ExtensionUpdateResult{})
 						default:
 							json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
 						}

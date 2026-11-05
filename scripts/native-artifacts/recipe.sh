@@ -11,7 +11,7 @@ fi
 stage=/stage/$name
 rm -rf "$stage"
 case "$name" in
-    timescaledb-pg16|timescaledb-pg17|timescaledb-pg18|citus-pg16|citus-pg17|citus-pg18)
+    timescaledb-pg16|timescaledb-pg17|timescaledb-pg18|citus-pg16|citus-pg17|citus-pg18|pgvector-pg16|pgvector-pg17|pgvector-pg18)
         cd "$source"
         exec python3 /root/pgextension.py
         ;;

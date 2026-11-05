@@ -131,11 +131,11 @@ iAIaJqbqp0310Zg0Dw==
 			}
 			request := pgspec.SQLBootstrapRequest{Components: stackComponents.Enabled(rc.Cluster.Spec.Components), Extensions: tc.extensions, Passwords: credentials.Roles}
 			out.Plan = initsql.Plan(request.Components, request.Extensions)
-			out.BootstrapDigest = configDigest(struct {
-				Request    pgspec.SQLBootstrapRequest
-				Generation int
-				Plan       []initsql.Step
-			}{request, tc.generation, out.Plan})
+			bundles, err := bootstrapBundles()
+			if err != nil {
+				t.Fatal(err)
+			}
+			out.BootstrapDigest = bootstrapDigest(request, tc.generation, bundles)
 			for _, component := range stackComponents.Enabled(rc.Cluster.Spec.Components) {
 				sp, err := p.desiredSpec(t.Context(), rc, &componentMember{Component: component})
 				if err != nil {

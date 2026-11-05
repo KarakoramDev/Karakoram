@@ -210,6 +210,12 @@ func PrepareCommands(a Artifact, resolvedURL, destDir, owner string) []string {
 	case isExtension:
 		// Never extract into / or copy the archive's ancestor directories.
 		script += "umask 022\nmkdir unpacked\ntar --no-same-owner --no-same-permissions --keep-old-files --delay-directory-restore -xf \"$file\" -C unpacked\n"
+		if a.Name == fmt.Sprintf("pgvector-pg%d", major) {
+			// Preserve the package identity/dependents while insulating the native
+			// payload from later APT operations. Never unlink a serving library.
+			script += "python3 -c " + quote(pgvectorPublisher) + " " + quote(destDir) + "\n"
+			break
+		}
 		for _, dir := range []string{fmt.Sprintf("usr/lib/postgresql/%d", major), fmt.Sprintf("usr/share/postgresql/%d", major)} {
 			dest := path.Join(destDir, dir)
 			script += "test -d unpacked/" + dir + " && test ! -L unpacked/" + dir + "\nmkdir -p " + quote(dest) + "\ncp -a --no-preserve=ownership unpacked/" + dir + "/. " + quote(dest+"/") + "\n"
@@ -233,3 +239,10 @@ func PrepareCommands(a Artifact, resolvedURL, destDir, owner string) []string {
 	}
 	return []string{"sudo sh -c " + quote(script)}
 }
+
+// pgvectorPublisher runs only after archive validation and locked SHA verification.
+// Diversions also cover fresh hosts, so a subsequent APT install cannot clobber
+// the source-built extension. Existing package files remain available as .distrib.
+//
+//go:embed pgvector_publish.py
+var pgvectorPublisher string

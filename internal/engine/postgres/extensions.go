@@ -50,7 +50,9 @@ func (p *Core) updateExtensions(ctx context.Context, rc *engine.Context, names [
 	return nil
 }
 
-func (p *Core) updateProfileExtensions(ctx context.Context, rc *engine.Context) error {
+// UpdateProfileExtensions updates installed profile extensions in every database.
+// Flavours must call it before acknowledging a restored bootstrap generation.
+func (p *Core) UpdateProfileExtensions(ctx context.Context, rc *engine.Context) error {
 	if p.options.ProfileExtensions == nil {
 		return nil
 	}

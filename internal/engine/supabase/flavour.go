@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agent/supabase/initsql"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgprofile"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
@@ -99,13 +100,13 @@ func (f supabaseFlavour) PostReady(ctx context.Context, rc *engine.Context) erro
 	if postgresSpec.Bootstrap != nil {
 		generation = postgresSpec.Bootstrap.Generation
 	}
-	// Restore epochs and release migration additions must reapply the current
-	// plan even when component selections and credentials are unchanged.
-	hash := configDigest(struct {
-		Request    pgspec.SQLBootstrapRequest
-		Generation int
-		Plan       []initsql.Step
-	}{Request: request, Generation: generation, Plan: supabaseProfile.Plan(request.Components, request.Extensions, 17)})
+	// Restore epochs, migration additions, bundle bytes and APT pins all
+	// invalidate the receipt: CREATE-only ledgers do not describe SQL upgrades.
+	bundles, err := bootstrapBundles()
+	if err != nil {
+		return err
+	}
+	hash := bootstrapDigest(request, generation, bundles)
 	applied, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "supabase/bootstrap-digest")
 	if err == nil && string(applied) == hash {
 		return nil
@@ -134,11 +135,38 @@ func (f supabaseFlavour) PostReady(ctx context.Context, rc *engine.Context) erro
 			if err != nil {
 				return fmt.Errorf("bootstrapping Supabase database: %w", err)
 			}
+			// Restored catalogs may retain old extension SQL on current binaries.
+			// Keep bootstrap incomplete until the per-database update succeeds.
+			if err = f.core.UpdateProfileExtensions(ctx, rc); err != nil {
+				return err
+			}
 			return rc.Secrets.SetClusterSecret(ctx, rc.Cluster.Ref(), "supabase/bootstrap-digest", []byte(hash))
 		}
 		client.Close()
 	}
 	return engine.ErrUnavailable
+}
+
+func bootstrapBundles() ([]nativeartifacts.Artifact, error) {
+	var bundles []nativeartifacts.Artifact
+	for _, name := range supabaseProfile.Artifacts(17) {
+		bundle, err := nativeartifacts.Get(name)
+		if err != nil {
+			return nil, err
+		}
+		bundles = append(bundles, bundle)
+	}
+	return bundles, nil
+}
+
+func bootstrapDigest(request pgspec.SQLBootstrapRequest, generation int, bundles []nativeartifacts.Artifact) string {
+	return configDigest(struct {
+		Request    pgspec.SQLBootstrapRequest
+		Generation int
+		Plan       []initsql.Step
+		Bundles    []nativeartifacts.Artifact
+		Packages   []string
+	}{request, generation, supabaseProfile.Plan(request.Components, request.Extensions, 17), bundles, supabaseProfile.Packages(17)})
 }
 func (supabaseFlavour) RelayTargets(c *domain.Cluster) []string {
 	var out []string

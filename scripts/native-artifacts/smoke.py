@@ -26,6 +26,82 @@ def jwt(role, secret):
     message = encode({'alg':'HS256','typ':'JWT'})+b'.'+encode({'role':role,'iss':'supabase','exp':int(time.time())+3600})
     return (message+b'.'+base64.urlsafe_b64encode(hmac.new(secret.encode(),message,hashlib.sha256).digest()).rstrip(b'=')).decode()
 
+def realtime_admin_smoke(env):
+    for role in ('anon', 'service_role'):
+        request = urllib.request.Request(
+            'http://127.0.0.1:4000/api/tenants/realtime-dev',
+            headers={'Authorization': 'Bearer '+jwt(role, env['JWT_SECRET'])})
+        try:
+            urllib.request.urlopen(request, timeout=5).close()
+        except urllib.error.HTTPError as error:
+            with error:
+                assert error.code == 403, 'Unexpected tenant credential rejection status'
+        else:
+            raise AssertionError('Tenant credential authenticated the administration API')
+    print('NATIVE_REALTIME_ADMIN_ISOLATION_OK')
+    # Exercise the patched application code without creating extra tenants.
+    validation = """
+    for id <- ["native-private", "native:other"] do
+      changeset = Realtime.Api.Tenant.changeset(%Realtime.Api.Tenant{}, %{external_id: id})
+      unless Keyword.has_key?(changeset.errors, :external_id),
+        do: raise("Unsafe tenant identifier accepted")
+    end
+    IO.puts("NATIVE_REALTIME_TENANT_IDENTIFIER_REJECTED")
+    tenant = Realtime.Tenants.get_tenant_by_external_id("realtime-dev")
+    unless Realtime.Tenants.Migrations.run_migrations(tenant) in [:ok, :noop],
+      do: raise("Tenant migrations failed")
+    IO.puts("NATIVE_REALTIME_TENANT_MIGRATIONS_OK")
+    """
+    subprocess.run(['/opt/artifact/app/bin/realtime', 'rpc', validation],
+                   env=env, check=True, timeout=40)
+
+def realtime_traffic_smoke(pg, env):
+    import websocket
+    sql = "CREATE TABLE public.native_realtime(id integer PRIMARY KEY, body text); ALTER PUBLICATION supabase_realtime ADD TABLE public.native_realtime; GRANT SELECT ON public.native_realtime TO anon, authenticated, service_role;"
+    psql = ['runuser', '-u', 'postgres', '--', pg+'psql', '-v', 'ON_ERROR_STOP=1', '-d', 'smoke']
+    subprocess.run(psql, input=sql, text=True, check=True)
+    token = jwt('service_role', env['JWT_SECRET'])
+    ws = websocket.create_connection(
+        'ws://127.0.0.1:4000/socket/websocket?vsn=1.0.0&apikey='+token,
+        host='realtime-dev.supabase-realtime', timeout=60)
+    topic = 'realtime:public:native_realtime'
+    def send(event, ref, payload):
+        ws.send(json.dumps({'topic': topic, 'event': event, 'ref': ref, 'payload': payload}))
+    try:
+        send('phx_join', '1', {'access_token': token, 'config': {
+            'broadcast': {'ack': True, 'self': True},
+            'postgres_changes': [{'event': 'INSERT', 'schema': 'public', 'table': 'native_realtime'}]}})
+        subscribed = False
+        deadline = time.monotonic()+90
+        while time.monotonic() < deadline:
+            message = json.loads(ws.recv())
+            if message['event'] == 'phx_reply' and message.get('ref') == '1':
+                assert message['payload']['status'] == 'ok', message
+                assert message['payload']['response']['postgres_changes'], message
+                print('NATIVE_REALTIME_WEBSOCKET_JOIN_OK', flush=True)
+            if message['event'] == 'system':
+                assert message['payload']['status'] == 'ok', message
+                subscribed = True
+                break
+        assert subscribed, 'PostgreSQL subscription was not established'
+        send('broadcast', '2', {'type': 'broadcast', 'event': 'native-broadcast', 'payload': {'probe': 'native-broadcast'}})
+        subprocess.run(psql, input="INSERT INTO public.native_realtime VALUES(1,'native-insert')", text=True, check=True)
+        broadcast = insert = False
+        while time.monotonic() < deadline and not (broadcast and insert):
+            message = json.loads(ws.recv())
+            if message['event'] == 'broadcast':
+                assert message['payload']['payload']['probe'] == 'native-broadcast', message
+                broadcast = True
+            if message['event'] == 'postgres_changes':
+                record = message['payload']['data']['record']
+                assert record == {'id': 1, 'body': 'native-insert'}, message
+                insert = True
+        assert broadcast and insert, 'Missing real broadcast or PostgreSQL INSERT'
+        print('NATIVE_REALTIME_BROADCAST_POSTGRES_CHANGES_OK', flush=True)
+    finally:
+        ws.close()
+
+
 def supavisor_sql_smoke(pg, env):
     # Preserve the transaction IPv4 proof and additionally exercise both SQL
     # listeners in inet6 mode. HTTP health alone cannot prove the Ranch patch.
@@ -81,6 +157,11 @@ if name not in ('supabase-imgproxy','supabase-edge-runtime'):
     server_packages = [f'percona-postgresql-{major}={server_version}']
     if not extension_recipe:
         server_packages.append('percona-postgresql-contrib')
+    if name.startswith('pgvector-pg'):
+        # Exercise the real APT-to-bundle transition, retaining database objects.
+        server_packages.append(f'percona-postgresql-{major}-pgvector=1:0.8.6-1.noble')
+    if name == 'supabase-realtime':
+        server_packages.append('percona-postgresql-17-wal2json=1:2.6-4.noble')
     subprocess.run(['apt-get','install','-y',*server_packages],check=True)
     if os.environ.get('NATIVE_ARTIFACT_ROOTLESS') == '1':
         # Package downloads need egress; the actual database probe does not.
@@ -98,10 +179,13 @@ if name not in ('supabase-imgproxy','supabase-edge-runtime'):
         if libraries:
             preload = ' -c shared_preload_libraries='+','.join(libraries)
     elif extension_recipe:
-        subprocess.run(['cp','-a','/opt/artifact/usr/.','/usr/'],check=True)
+        if not name.startswith('pgvector-pg'):
+            subprocess.run(['cp','-a','/opt/artifact/usr/.','/usr/'],check=True)
         preload = ' -c shared_preload_libraries='+','.join(extension for extension, flags in extension_recipe['extensions'].items() if flags['preload'])
         if name.startswith('citus-'):
             preload += ' -c max_worker_processes=16 -c max_wal_senders=16 -c max_replication_slots=16'
+    if name == 'supabase-realtime':
+        preload += ' -c output_plugin_libraries=pgoutput,test_decoding,wal2json'
     subprocess.run(['install','-d','-o','postgres','-g','postgres','/var/lib/postgresql/smoke'],check=True)
     pg = f'/usr/lib/postgresql/{major}/bin/'
     subprocess.run(['runuser','-u','postgres','--',pg+'initdb','-D','/var/lib/postgresql/smoke','--auth=trust'],check=True,stdout=subprocess.DEVNULL)
@@ -158,6 +242,38 @@ if extension_recipe:
             sql("CREATE TABLE metrics(ts timestamptz NOT NULL, value integer); SELECT create_hypertable('metrics','ts'); INSERT INTO metrics VALUES ('2026-01-01',42);")
             if sql('SELECT sum(value) FROM metrics;') != '42':
                 raise RuntimeError('hypertable query returned wrong result')
+        elif name.startswith('pgvector-pg'):
+            sql("CREATE EXTENSION vector VERSION '0.8.6';")
+            for method in ('ivfflat', 'hnsw'):
+                options = ' WITH (lists=1)' if method == 'ivfflat' else ''
+                sql(f"CREATE TABLE vectors_{method}(id integer PRIMARY KEY, embedding vector(3)); INSERT INTO vectors_{method} SELECT i, ARRAY[i::real,0,0]::vector FROM generate_series(1,100) i;")
+                sql(f'CREATE INDEX vectors_{method}_idx ON vectors_{method} USING {method} (embedding vector_l2_ops){options};')
+            # Use exactly the publisher embedded by the agent, twice to prove
+            # idempotence. The old server remains live during atomic publication.
+            subprocess.run(['ln', '-s', '/opt/artifact', '/root/unpacked'], check=True)
+            for _ in range(2):
+                subprocess.run(['python3', '/root/pgvector_publish.py', '/'], cwd='/root', check=True)
+            subprocess.run(['runuser', '-u', 'postgres', '--', pg+'pg_ctl', '-D', '/var/lib/postgresql/smoke', '-m', 'fast', '-w', 'restart'], check=True)
+            sql('ALTER EXTENSION vector UPDATE;')
+            if sql("SELECT extversion FROM pg_catalog.pg_extension WHERE extname='vector';") != '0.8.7':
+                raise RuntimeError('vector SQL upgrade did not reach 0.8.7')
+            if sql("SELECT count(*) FROM pg_index WHERE indexrelid IN ('vectors_ivfflat_idx'::regclass,'vectors_hnsw_idx'::regclass) AND indisvalid;") != '2':
+                raise RuntimeError('pre-upgrade vector indexes became invalid')
+            for method in ('ivfflat', 'hnsw'):
+                index = 'vectors_'+method+'_idx'
+                for sample in (1, 23, 51, 97):
+                    query = f"SELECT id FROM vectors_{method} ORDER BY embedding <-> '[{sample}.1,0,0]' LIMIT 5;"
+                    exact = sql('SET enable_indexscan=off; SET enable_bitmapscan=off; '+query).splitlines()[-5:]
+                    plan = sql('SET enable_seqscan=off; EXPLAIN '+query)
+                    if index not in plan:
+                        raise RuntimeError('vector query did not use '+index)
+                    indexed = sql('SET enable_seqscan=off; SET hnsw.ef_search=100; '+query).splitlines()[-5:]
+                    if indexed != exact:
+                        raise RuntimeError('vector indexed query differs from exact search')
+            sql('REINDEX INDEX vectors_ivfflat_idx;')
+            sql('DROP EXTENSION vector CASCADE; CREATE EXTENSION vector;')
+            if sql("SELECT extversion FROM pg_catalog.pg_extension WHERE extname='vector';") != '0.8.7':
+                raise RuntimeError('fresh vector creation did not use 0.8.7')
         else:
             sql('CREATE EXTENSION citus;')
             sql("SELECT citus_set_coordinator_host('127.0.0.1',5432);")
@@ -186,20 +302,75 @@ if extension_recipe:
 if name == 'supabase-pg17-extensions':
     extensions = json.loads(Path('/opt/artifact/usr/share/postgresql/17/karakoram-native-artifacts/extensions.json').read_text())
     results = {}
-    for extension, entry in extensions.items():
-        if entry.get('build') != 'passed':
-            continue
-        result = subprocess.run(['runuser','-u','postgres','--',pg+'psql','-v','ON_ERROR_STOP=1','-d','smoke','-c','CREATE EXTENSION \"'+extension+'\" CASCADE;'],capture_output=True,text=True)
-        results[extension] = {'passed':result.returncode == 0,'stdout':result.stdout,'stderr':result.stderr}
-        print(('CREATE_EXTENSION_OK ' if result.returncode == 0 else 'CREATE_EXTENSION_FAILED ')+extension)
-    Path('/tmp/native-smoke.log').write_text(json.dumps(results,indent=2)+'\n')
-    raise SystemExit(0 if all(result['passed'] for result in results.values()) and results else 1)
+
+    def extension_sql(database, statement):
+        result = subprocess.run(['runuser','-u','postgres','--',pg+'psql','-v','ON_ERROR_STOP=1','-At','-d',database,'-c',statement],capture_output=True,text=True)
+        results.setdefault(database, []).append({'sql':statement,'passed':result.returncode == 0,'stdout':result.stdout,'stderr':result.stderr})
+        result.check_returncode()
+        return result.stdout.strip()
+
+    try:
+        extension_sql('postgres', 'CREATE DATABASE smoke_fresh;')
+        extension_sql('postgres', 'CREATE ROLE native_extension_probe;')
+        for database in ('smoke_fresh', 'smoke'):
+            for extension, entry in extensions.items():
+                if entry.get('build') != 'passed':
+                    raise RuntimeError('required extension did not build: '+extension)
+                version = entry.get('previousVersion') if database == 'smoke' else None
+                selection = " VERSION '"+version+"'" if version else ''
+                extension_sql(database, 'CREATE EXTENSION "'+extension+'"'+selection+' CASCADE;')
+                if version:
+                    if extension == 'pg_graphql':
+                        extension_sql(database, """CREATE VIEW public.graphql_upgrade_dependency AS SELECT graphql.resolve('{ __typename }') AS result;
+REVOKE EXECUTE ON FUNCTION graphql.resolve(text,jsonb,text,jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION graphql.resolve(text,jsonb,text,jsonb) TO native_extension_probe;
+ALTER EVENT TRIGGER graphql_watch_drop DISABLE;""")
+                    elif extension == 'pg_jsonschema':
+                        extension_sql(database, """CREATE VIEW public.jsonschema_upgrade_dependency AS SELECT public.json_matches_schema('{"type":"object"}', '{}') AS result;
+REVOKE EXECUTE ON FUNCTION public.json_matches_schema(json,json) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.json_matches_schema(json,json) TO native_extension_probe;""")
+                    # Separate commands: enum additions in upstream upgrades
+                    # must commit before a subsequent upgrade uses new labels.
+                    extension_sql(database, 'ALTER EXTENSION "'+extension+'" UPDATE;')
+                    if extension == 'pg_graphql':
+                        preserved = extension_sql(database, """SELECT has_function_privilege('native_extension_probe', 'graphql.resolve(text,jsonb,text,jsonb)', 'EXECUTE');
+SELECT evtenabled = 'D' FROM pg_event_trigger WHERE evtname='graphql_watch_drop';
+SELECT result->'errors' IS NULL FROM public.graphql_upgrade_dependency;""")
+                        if preserved.splitlines() != ['t', 't', 't']:
+                            raise RuntimeError('GraphQL upgrade lost grants, triggers or dependencies')
+                    elif extension == 'pg_jsonschema':
+                        preserved = extension_sql(database, """SELECT has_function_privilege('native_extension_probe', 'public.json_matches_schema(json,json)', 'EXECUTE');
+SELECT result FROM public.jsonschema_upgrade_dependency;""")
+                        if preserved.splitlines() != ['t', 't']:
+                            raise RuntimeError('JSON Schema upgrade lost grants or dependencies')
+                actual = extension_sql(database, "SELECT extversion FROM pg_extension WHERE extname='"+extension+"';")
+                if actual != entry.get('sqlVersion', entry['version']):
+                    raise RuntimeError('extension default mismatch: '+extension)
+                print(('UPDATE_EXTENSION_OK ' if version else 'CREATE_EXTENSION_OK ')+extension)
+            proof = extension_sql(database, """
+WITH key AS (SELECT pgsodium.crypto_ipcrypt_keygen() AS k)
+SELECT pgsodium.crypto_ipcrypt_decrypt(
+ pgsodium.crypto_ipcrypt_encrypt('192.0.2.42'::inet, k), k) = '192.0.2.42'::inet FROM key;
+SELECT encode(pgsodium.crypto_hash_sha256('native-smoke'::bytea), 'hex')
+ = encode(sha256('native-smoke'::bytea), 'hex');
+SELECT position('pgsodium' IN current_setting('shared_preload_libraries')) = 0;
+""")
+            if proof.splitlines() != ['t', 't', 't']:
+                raise RuntimeError('crypto-only sodium proof failed')
+            print('NATIVE_PGSODIUM_CRYPTO_OK '+database)
+    finally:
+        Path('/tmp/native-smoke.log').write_text(json.dumps(results,indent=2)+'\n')
+    raise SystemExit(0)
 if name in ('supabase-storage','supabase-realtime'):
-    sql = 'CREATE ROLE supabase_admin LOGIN SUPERUSER;'
-    for filename in ('00000000000000-initial-schema.sql','00000000000001-auth-schema.sql'):
-        url = 'https://raw.githubusercontent.com/supabase/postgres/d156ba65c14694c12cc5e782bc15b9b8ed2d1376/migrations/db/init-scripts/'+filename
-        with urllib.request.urlopen(url,timeout=30) as response:
-            sql += response.read().decode()
+    sql = ''
+    if name == 'supabase-realtime':
+        sql = fixture['realtime']['bootstrap']
+    else:
+        sql = 'CREATE ROLE supabase_admin LOGIN SUPERUSER;'
+        for filename in ('00000000000000-initial-schema.sql','00000000000001-auth-schema.sql'):
+            url = 'https://raw.githubusercontent.com/supabase/postgres/d156ba65c14694c12cc5e782bc15b9b8ed2d1376/migrations/db/init-scripts/'+filename
+            with urllib.request.urlopen(url,timeout=30) as response:
+                sql += response.read().decode()
     if name == 'supabase-storage':
         sql += 'CREATE ROLE supabase_storage_admin LOGIN NOINHERIT; GRANT anon, authenticated, service_role TO supabase_storage_admin; CREATE SCHEMA storage AUTHORIZATION supabase_storage_admin; GRANT USAGE ON SCHEMA auth TO supabase_storage_admin; GRANT SELECT ON auth.users TO supabase_storage_admin;'
         # Match the product storage bootstrap's schema/default-privilege block.
@@ -213,7 +384,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_storage_admin IN SCHEMA storage REVOK
 ALTER DEFAULT PRIVILEGES FOR ROLE supabase_storage_admin IN SCHEMA storage GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 '''
     else:
-        sql += 'CREATE SCHEMA _realtime; CREATE SCHEMA realtime;'
+        sql += 'ALTER ROLE supabase_admin SUPERUSER;'
     subprocess.run(['runuser','-u','postgres','--',pg+'psql','-v','ON_ERROR_STOP=1','-d','smoke'],input=sql,text=True,check=True,stdout=subprocess.DEVNULL)
 if name == 'supabase-storage':
     secret = env['JWT_SECRET']
@@ -232,7 +403,11 @@ if name == 'supabase-edge-runtime':
     (imported/'index.ts').write_text('import isNumber from "npm:is-number@7.0.0";\nDeno.serve(() => new Response(isNumber(17) ? "native npm import healthy" : "import failed"));\n')
     env |= {'FUNCTIONS_ROOT':str(function.parent),'VERIFY_JWT':'false'}
 if name == 'supabase-realtime':
-    env |= {'PORT':'4000','APP_NAME':'realtime','SEED_SELF_HOST':'true','DB_AFTER_CONNECT_QUERY':'SET search_path TO _realtime','API_JWT_SECRET':env['JWT_SECRET'],'METRICS_JWT_SECRET':env['JWT_SECRET'],'DB_IP_VERSION':'ipv4','DNS_NODES':'','ERL_AFLAGS':'-proto_dist inet_tcp'}
+    subprocess.run(['apt-get', 'install', '-y', 'python3-websocket'], check=True)
+    env.update(fixture['realtime']['environment'])
+    env['JWT_SECRET'] = fixture['realtime']['tenantJWTSecret']
+    env['KARAKORAM_REALTIME_TENANT_JWT_SECRET'] = env['JWT_SECRET']
+    Path(env['HOME']).mkdir(parents=True, exist_ok=True)
     version = json.loads(Path('/opt/artifact/manifest.json').read_text())['version']
     native_root = Path('/opt/karakoram')/(name+'-'+version)
     native_root.parent.mkdir(parents=True,exist_ok=True)
@@ -276,7 +451,7 @@ if name == 'supabase-storage':
     subprocess.run(['apt-get','install','-y','libvips42t64','fonts-dejavu-core'],check=True)
     Path('/opt/imgproxy').mkdir()
     subprocess.run(['tar','-xf','/root/imgproxy.tar.gz','-C','/opt/imgproxy'],check=True)
-    image_env = env | {'IMGPROXY_BIND':':5001','IMGPROXY_USE_ETAG':'true','IMGPROXY_AUTO_WEBP':'true','IMGPROXY_MAX_SRC_RESOLUTION':'16.8','IMGPROXY_USE_LAST_MODIFIED':'false'}
+    image_env = os.environ | {'LANG':'C.UTF-8'} | fixture['imgproxyEnv']
     image_process = subprocess.Popen(['/opt/imgproxy/bin/start'],env=image_env,stdout=log,stderr=log)
     print('NATIVE_STORAGE_IMGPROXY_FIXTURE_SHA256 '+fixture['imgproxySHA256'],flush=True)
 if name == 'supabase-studio':
@@ -286,7 +461,7 @@ if name == 'supabase-studio':
     subprocess.run(['tar','-xf','/root/meta.tar.gz','-C','/opt/meta'],check=True)
     meta_process = subprocess.Popen(['/opt/meta/bin/start'],env=env,stdout=log,stderr=log)
 for command in {
-    'supabase-realtime':[['/opt/artifact/app/bin/migrate'],['/opt/artifact/app/bin/realtime','eval','Realtime.Release.seeds(Realtime.Repo)']],
+    'supabase-realtime':[['/opt/artifact/app/bin/migrate'],['/opt/artifact/app/bin/realtime','eval',fixture.get('realtime', {}).get('seed', '')]],
     'supabase-supavisor':[['/opt/artifact/app/bin/migrate']],
     'supabase-logflare':[['/opt/artifact/app/bin/logflare','eval','Logflare.Release.migrate']],
 }.get(name,[]):
@@ -324,12 +499,17 @@ try:
                 with urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=2) as meta:
                     if meta.status != 200:
                         raise OSError('postgres-meta fixture health did not return HTTP 200')
-            headers = {'Authorization':'Bearer '+jwt('anon',env['JWT_SECRET'])} if name=='supabase-realtime' else {}
-            request = urllib.request.Request(health,headers=headers,method='HEAD' if name=='supabase-realtime' else 'GET')
+            headers = {'Authorization':'Bearer '+jwt('service_role',env['API_JWT_SECRET'])} if name=='supabase-realtime' else {}
+            request = urllib.request.Request(health,headers=headers)
             with urllib.request.urlopen(request,timeout=2) as response:
                 if response.status == (204 if name == 'supabase-supavisor' else 200):
+                    if name == 'supabase-realtime' and not json.load(response).get('data', {}).get('healthy'):
+                        raise OSError('Realtime tenant health payload is unhealthy')
                     healthy = True
                     print('NATIVE_SMOKE_OK '+name)
+                    if name == 'supabase-realtime':
+                        realtime_admin_smoke(env)
+                        realtime_traffic_smoke(pg, env)
                     if name == 'supabase-edge-runtime':
                         assert response.read() == b'native runtime healthy', 'Hello function response differs'
                         with urllib.request.urlopen('http://127.0.0.1:9000/imports',timeout=60) as imported:

@@ -53,9 +53,16 @@ func TestNativeBootstrap(t *testing.T) {
 		}
 		passwords[role] = base64.RawURLEncoding.EncodeToString(raw) + "'\\quoted"
 	}
+	if _, err := conn.Exec(ctx, "CREATE EXTENSION pgcrypto VERSION '1.2'"); err != nil {
+		t.Fatal("installing historical pgcrypto for SQL upgrade regression", err)
+	}
 	minimal := Plan([]string{"gateway", "auth", "rest"}, nil)
 	if err := Apply(ctx, conn, minimal, passwords); err != nil {
 		t.Fatal(err)
+	}
+	var updated bool
+	if err := conn.QueryRow(ctx, "SELECT e.extversion = a.default_version FROM pg_extension e JOIN pg_available_extensions a ON a.name=e.extname WHERE e.extname='pgcrypto'").Scan(&updated); err != nil || !updated {
+		t.Fatal("project database extension was not updated", err)
 	}
 	var exists bool
 	if err := conn.QueryRow(ctx, "SELECT EXISTS(SELECT FROM pg_database WHERE datname='_supabase')").Scan(&exists); err != nil || exists {
@@ -122,6 +129,16 @@ func TestNativeBootstrap(t *testing.T) {
 		t.Fatal("private service database unavailable")
 	}
 	defer private.Close(ctx)
+	if _, err := private.Exec(ctx, "CREATE EXTENSION pgcrypto VERSION '1.2'"); err != nil {
+		t.Fatal("installing private historical extension", err)
+	}
+	// The metadata DB still needs SQL updates with its components deselected.
+	if err := Apply(ctx, conn, minimal, passwords); err != nil {
+		t.Fatal("updating existing unselected metadata database", err)
+	}
+	if err := private.QueryRow(ctx, "SELECT e.extversion = a.default_version FROM pg_extension e JOIN pg_available_extensions a ON a.name=e.extname WHERE e.extname='pgcrypto'").Scan(&updated); err != nil || !updated {
+		t.Fatal("private database extension was not updated", err)
+	}
 	for _, schema := range []string{"_analytics", "_supavisor"} {
 		if err := private.QueryRow(ctx, "SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname=$1", schema).Scan(&owner); err != nil || owner != "supabase_admin" {
 			t.Fatal("private service schema ownership")

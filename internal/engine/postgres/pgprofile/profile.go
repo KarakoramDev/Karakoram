@@ -49,9 +49,11 @@ func (d Descriptor) UpgradeRules() UpgradeRules { return UpgradeRules{true, true
 func (d Descriptor) Artifacts(major int) []string {
 	switch d.id {
 	case "supabase":
-		return []string{"supabase-pg17-extensions"}
+		return []string{"supabase-pg17-extensions", fmt.Sprintf("pgvector-pg%d", major)}
 	case "timescaledb":
 		return []string{fmt.Sprintf("timescaledb-pg%d", major)}
+	case "pgvector":
+		return []string{fmt.Sprintf("pgvector-pg%d", major)}
 	}
 	return nil
 }
@@ -61,9 +63,7 @@ func (d Descriptor) Artifacts(major int) []string {
 func (d Descriptor) Packages(major int) []string {
 	switch d.id {
 	case "supabase":
-		return []string{"ca-certificates", "curl", "xz-utils", "percona-postgresql-17-cron='1:1.6.8-1.noble'", "percona-postgresql-17-pgaudit='1:17.1-4.noble'", "percona-postgresql-17-pgvector='1:0.8.6-1.noble'", "percona-postgresql-17-postgis-3='2:3.5.7-2.noble'", "percona-postgresql-17-repack='1:1.5.3-5.noble'", "percona-pg-stat-monitor17='1:2.4.0-1.noble'", "percona-pgaudit17-set-user='1:4.2.0-6.noble'", "percona-postgresql-17-wal2json='1:2.6-4.noble'"}
-	case "pgvector":
-		return []string{fmt.Sprintf("percona-postgresql-%d-pgvector='1:0.8.6-1.noble'", major)}
+		return []string{"ca-certificates", "curl", "xz-utils", "percona-postgresql-17-cron='1:1.6.8-1.noble'", "percona-postgresql-17-pgaudit='1:17.1-4.noble'", "percona-postgresql-17-postgis-3='2:3.5.7-2.noble'", "percona-postgresql-17-repack='1:1.5.3-5.noble'", "percona-pg-stat-monitor17='1:2.4.0-1.noble'", "percona-pgaudit17-set-user='1:4.2.0-6.noble'", "percona-postgresql-17-wal2json='1:2.6-4.noble'"}
 	case "postgis":
 		pin := "2:3.5.7-2.noble"
 		if major == 18 {
@@ -129,13 +129,18 @@ func (d Descriptor) Extensions(major int) []Extension {
 		names = []string{"postgis", "postgis_topology", "postgis_raster"}
 	case "pgvector":
 		names = []string{"vector"}
+		source = fmt.Sprintf("pgvector-pg%d", major)
 	case "timescaledb":
 		names = []string{"timescaledb"}
 		source = fmt.Sprintf("timescaledb-pg%d", major)
 	}
 	out := make([]Extension, 0, len(names))
 	for _, name := range names {
-		out = append(out, Extension{name, source, name == "timescaledb" || name == "pg_cron" || name == "pgaudit" || name == "pg_stat_monitor", len(out)})
+		extensionSource := source
+		if name == "vector" && d.id == "supabase" {
+			extensionSource = fmt.Sprintf("pgvector-pg%d", major)
+		}
+		out = append(out, Extension{name, extensionSource, name == "timescaledb" || name == "pg_cron" || name == "pgaudit" || name == "pg_stat_monitor", len(out)})
 	}
 	if d.id == "supabase" {
 		if a, err := nativeartifacts.Get("supabase-pg17-extensions"); err == nil {
@@ -196,7 +201,7 @@ func (d Descriptor) PrepareCommands(layout infra.Layout, major int) ([]string, e
 		if err != nil {
 			return nil, err
 		}
-		if d.id == "supabase" {
+		if name == "supabase-pg17-extensions" {
 			commands = append(commands, "sudo apt-get install -y libcurl4t64 libsodium23 libssl3t64")
 		} else if len(a.RuntimeDeps) > 0 {
 			commands = append(commands, "sudo apt-get install -y "+strings.Join(a.RuntimeDeps, " "))
@@ -212,6 +217,9 @@ func (d Descriptor) PrepareCommands(layout infra.Layout, major int) ([]string, e
 func (d Descriptor) artifact(name string, major int) (nativeartifacts.Artifact, error) {
 	if d.id == "timescaledb" {
 		return nativeartifacts.ExtensionArtifact("timescaledb", major)
+	}
+	if name == fmt.Sprintf("pgvector-pg%d", major) {
+		return nativeartifacts.ExtensionArtifact("pgvector", major)
 	}
 	return nativeartifacts.Get(name)
 }

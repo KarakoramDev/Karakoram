@@ -26,7 +26,7 @@ pg_spec.loader.exec_module(pgextension)
 
 class OtpGuest:
     """Execute the real archive verification/cache/build shell in a local guest."""
-    version = '27.3.4.6'
+    version = build.RECIPES['supabase-supavisor']['otp']
 
     def __init__(self, root):
         self.root = root
@@ -184,6 +184,52 @@ class NativeBuilder(unittest.TestCase):
             with self.assertRaises(subprocess.TimeoutExpired):
                 build.run('incus', 'exec', 'builder', '--', 'true', timeout=5)
             self.assertEqual(run.call_count, 1)
+
+    def test_realtime_smoke_rejects_tenant_credentials_for_admin_api(self):
+        import urllib.error
+        import urllib.request
+        tree = ast.parse((build.HERE/'smoke.py').read_text())
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == 'realtime_admin_smoke')
+        roles = []
+        namespace = {'urllib': __import__('urllib'), 'print': MagicMock(), 'subprocess': MagicMock(),
+                     'jwt': lambda role, secret: roles.append((role, secret)) or role}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), 'smoke.py', 'exec'), namespace)
+        for status in (403, 401, 404, 200):
+            with self.subTest(status=status):
+                roles.clear()
+                with patch('urllib.request.urlopen') as opened:
+                    if status != 200:
+                        opened.side_effect = [
+                            urllib.error.HTTPError('http://fixture', status, '', {}, None)
+                            for _ in range(2 if status == 403 else 1)]
+                    if status == 403:
+                        namespace['realtime_admin_smoke']({'JWT_SECRET': 'tenant-secret'})
+                        self.assertEqual(roles, [('anon', 'tenant-secret'), ('service_role', 'tenant-secret')])
+                        self.assertEqual(opened.call_count, 2)
+                        command = namespace['subprocess'].run.call_args.args[0]
+                        self.assertEqual(command[:2], ['/opt/artifact/app/bin/realtime', 'rpc'])
+                        self.assertIn('"native-private", "native:other"', command[2])
+                        self.assertIn('Keyword.has_key?(changeset.errors, :external_id)', command[2])
+                    else:
+                        with self.assertRaises(AssertionError):
+                            namespace['realtime_admin_smoke']({'JWT_SECRET': 'tenant-secret'})
+
+    def test_realtime_smoke_checks_tenant_health_payload(self):
+        tree = ast.parse((build.HERE/'smoke.py').read_text())
+        condition = next(node for node in ast.walk(tree) if isinstance(node, ast.If)
+                         and isinstance(node.test, ast.BoolOp)
+                         and 'json.load(response)' in ast.unparse(node.test))
+        check = compile(ast.Module(body=[condition], type_ignores=[]), 'smoke.py', 'exec')
+        for payload in ({'data': {'healthy': True}}, {'data': {'healthy': False}}, {}):
+            with self.subTest(payload=payload):
+                namespace = {'name': 'supabase-realtime', 'json': json,
+                             'response': io.StringIO(json.dumps(payload))}
+                if payload.get('data', {}).get('healthy'):
+                    exec(check, namespace)
+                else:
+                    with self.assertRaisesRegex(OSError, 'tenant health payload is unhealthy'):
+                        exec(check, namespace)
 
     def test_supavisor_smoke_checks_both_ipv6_sql_listeners(self):
         tree = ast.parse((build.HERE/'smoke.py').read_text())
@@ -557,8 +603,8 @@ class NativeBuilder(unittest.TestCase):
 
     def test_extension_rust_toolchains(self):
         with patch.object(build,'install_toolchain') as install:
-            build.toolchains({'name':'supabase-pg17-extensions','rust':'1.81.0'})
-        self.assertEqual([call.args[0] for call in install.call_args_list],['rust-1.81.0','rust-1.80.0'])
+            build.toolchains({'name':'supabase-pg17-extensions','rust':'1.98.0'})
+        self.assertEqual([call.args[0] for call in install.call_args_list],['rust-1.98.0','libsodium-1.0.22','supabase-pg17-extensions-previous'])
 
     def test_precompiled_toolchains_replace_existing_trees(self):
         with patch.object(build,'install_toolchain') as install, patch.object(build,'guest'), patch.object(build,'wait_for_host'):
@@ -573,10 +619,10 @@ class NativeBuilder(unittest.TestCase):
         extensions = importlib.util.module_from_spec(spec)
         with patch.object(Path,'read_text',return_value='{}'):
             spec.loader.exec_module(extensions)
-        with patch.object(extensions,'PINS',{'pg_graphql':{'repo':'example/graphql','commit':'a'*40}}), patch.object(Path,'mkdir'), patch.object(Path,'write_text'), patch.object(Path,'iterdir',return_value=[]), patch.object(Path,'exists',return_value=False), patch.object(extensions.subprocess,'check_output',return_value='fixture'), patch.object(extensions,'run') as run:
+        with patch.object(extensions,'PINS',{'pg_graphql':{'repo':'example/graphql','commit':'a'*40}}), patch.object(Path,'mkdir'), patch.object(Path,'write_text'), patch.object(Path,'iterdir',return_value=[]), patch.object(Path,'exists',return_value=False), patch.object(extensions.subprocess,'check_output',return_value='fixture'), patch.object(extensions,'build_sodium'), patch.object(extensions,'install_pgrx_upgrade'), patch.object(extensions.shutil,'rmtree'), patch.object(extensions,'run') as run:
             extensions.main()
         calls = [call.args for call in run.call_args_list]
-        cleanup = ('rm','-rf','/opt/pgrx-cli-1.81.0','/opt/pgrx-1.81.0')
+        cleanup = ('rm','-rf','/opt/pgrx-cli-1.98.0','/opt/pgrx-1.98.0')
         cargo = next(call for call in calls if call[:2]==('cargo','install'))
         self.assertLess(calls.index(cleanup),calls.index(cargo))
 
@@ -690,11 +736,13 @@ class NativeBuilder(unittest.TestCase):
             run.assert_any_call('incus','delete',build.RUNNER,'--force')
 
     def test_standalone_extension_recipe_parity(self):
-        names = {f'{product}-pg{major}' for product in ('timescaledb','citus') for major in (16,17,18)}
+        names = {f'{product}-pg{major}' for product in ('timescaledb','citus','pgvector') for major in (16,17,18)}
         self.assertEqual({name for name, recipe in build.RECIPES.items() if recipe.get('kind') == 'pg-extension'},names)
         self.assertEqual(set(build.ALL_ORDER),set(build.RECIPES))
         self.assertEqual(len(build.ALL_ORDER),len(build.RECIPES))
-        self.assertEqual(build.ALL_ORDER[5:11],['timescaledb-pg16','timescaledb-pg17','timescaledb-pg18','citus-pg16','citus-pg17','citus-pg18'])
+        self.assertLess(build.ALL_ORDER.index('supabase-imgproxy'),build.ALL_ORDER.index('supabase-storage'))
+        self.assertLess(build.ALL_ORDER.index('supabase-postgres-meta'),build.ALL_ORDER.index('supabase-studio'))
+        self.assertEqual(build.ALL_ORDER[6:12],['timescaledb-pg16','timescaledb-pg17','timescaledb-pg18','citus-pg16','citus-pg17','citus-pg18'])
         pins = {16:'2:16.15-1.noble',17:'2:17.11-1.noble',18:'3:18.6-1.noble'}
         for name in sorted(names):
             with self.subTest(name=name):
@@ -708,8 +756,9 @@ class NativeBuilder(unittest.TestCase):
                 self.assertEqual(pgextension.packages(recipe),[
                     f'percona-postgresql-{major}={pins[major]}',
                     f'percona-postgresql-server-dev-{major}={pins[major]}'])
-                self.assertEqual(set(recipe['extensions']),{product})
-                self.assertTrue(recipe['extensions'][product]['preload'])
+                extension = 'vector' if product == 'pgvector' else product
+                self.assertEqual(set(recipe['extensions']),{extension})
+                self.assertEqual(recipe['extensions'][extension]['preload'],product != 'pgvector')
                 metadata = f'usr/share/postgresql/{major}/karakoram-native-artifacts/{name}'
                 self.assertEqual(build.metadata_path(name),metadata)
                 self.assertEqual(pgextension.metadata_path(recipe),metadata)
@@ -723,6 +772,14 @@ class NativeBuilder(unittest.TestCase):
                         self.assertIn(flag,commands[0])
                     self.assertEqual(commands[-1],('cmake','--install','build'))
                     self.assertEqual(recipe['extensions'][product]['unavailableFeatures'],['tsl'])
+                elif product == 'pgvector':
+                    self.assertEqual(recipe['license'],'PostgreSQL')
+                    self.assertEqual(recipe['buildSystem'],'pgxs')
+                    self.assertEqual(recipe['version'],'0.8.7')
+                    self.assertEqual(commands[0][0],'make')
+                    self.assertIn('OPTFLAGS=',commands[0])
+                    self.assertIn('OPTFLAGS=',commands[-1])
+                    self.assertIn('DESTDIR=/output',commands[-1])
                 else:
                     self.assertEqual(recipe['license'],'AGPL-3.0-only')
                     self.assertEqual(recipe['buildSystem'],'autoconf')
@@ -732,6 +789,7 @@ class NativeBuilder(unittest.TestCase):
                     self.assertNotIn('--without-zstd',commands[0])
                     self.assertEqual(commands[-1],('make','install','DESTDIR=/output'))
                     self.assertEqual('libcurl4t64' in recipe['runtimeDeps'], major == 18)
+
 
     def test_extension_helper_transport_and_metadata_validation(self):
         with patch.object(build,'run') as run:

@@ -53,6 +53,8 @@ func TestBootstrapWriterDiscoveryBudget(t *testing.T) {
 					}
 					mutations.Add(1)
 					_ = json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+				case "/v1/postgres/" + pgspec.ActionUpdateExtensions:
+					_ = json.NewEncoder(w).Encode([]pgspec.ExtensionUpdateResult{})
 				default:
 					http.NotFound(w, r)
 				}

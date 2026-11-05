@@ -39,6 +39,10 @@ def build_commands(recipe, output):
         curl = '--with-libcurl' if recipe['pgMajor'] == 18 else '--without-libcurl'
         return [('./configure', 'PG_CONFIG='+pg_config, curl),
                 ('make', '-j4'), ('make', 'install', 'DESTDIR='+str(output))]
+    if recipe['buildSystem'] == 'pgxs':
+        # Upstream defaults to -march=native; release bundles must be portable.
+        return [('make', '-j4', 'PG_CONFIG='+pg_config, 'OPTFLAGS='),
+                ('make', 'install', 'PG_CONFIG='+pg_config, 'OPTFLAGS=', 'DESTDIR='+str(output))]
     raise ValueError('unsupported extension build system')
 
 
@@ -71,6 +75,13 @@ def main():
     for file in source.iterdir():
         if file.is_file() and file.name.lower().startswith(('license', 'copying', 'notice')):
             shutil.copyfile(file, licenses/file.name)
+    if recipe['buildSystem'] == 'pgxs':
+        (metadata/'SOURCE.txt').write_text(
+            'Unmodified pgvector '+recipe['version']+'.\n'
+            'Source: https://github.com/'+recipe['repo']+'/tree/'+recipe['commit']+'\n'
+            'Download: https://github.com/'+recipe['repo']+'/archive/'+recipe['commit']+'.tar.gz\n'
+            'Build configuration: manifest.json and build-environment.json.\n'
+            'OPTFLAGS is empty for portable amd64 code, not -march=native.\n')
     if recipe['buildSystem'] == 'autoconf':
         if 'GNU AFFERO GENERAL PUBLIC LICENSE' not in (licenses/'LICENSE').read_text():
             raise RuntimeError('Citus AGPL license text missing')

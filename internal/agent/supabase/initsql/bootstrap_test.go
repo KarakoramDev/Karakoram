@@ -122,6 +122,8 @@ type fakeConn struct {
 	failure         error
 	recovery        bool
 	rolledBack      int
+	extensions      map[string][2]string
+	privateExists   bool
 }
 
 func newFake() *fakeConn {
@@ -132,6 +134,11 @@ func (f *fakeConn) Exec(_ context.Context, sql string, args ...any) (pgconn.Comm
 	f.calls = append(f.calls, call{sql, args})
 	if sql == f.failSQL {
 		return pgconn.CommandTag{}, f.failure
+	}
+	if strings.HasPrefix(sql, "ALTER EXTENSION ") {
+		name := strings.TrimSuffix(strings.TrimPrefix(sql, "ALTER EXTENSION \""), "\" UPDATE")
+		versions := f.extensions[name]
+		f.extensions[name] = [2]string{versions[1], versions[1]}
 	}
 	switch {
 	case sql == "BEGIN":
@@ -153,6 +160,14 @@ func (f *fakeConn) QueryRow(_ context.Context, sql string, args ...any) pgx.Row 
 	switch {
 	case sql == "SELECT pg_catalog.pg_is_in_recovery()":
 		return fakeRow{value: f.recovery}
+	case strings.Contains(sql, "pg_available_extensions"):
+		versions, ok := f.extensions[args[0].(string)]
+		if !ok {
+			return fakeRow{err: pgx.ErrNoRows}
+		}
+		return fakeRow{value: versions}
+	case strings.Contains(sql, "pg_database"):
+		return fakeRow{value: f.privateExists}
 	case strings.HasPrefix(sql, "SELECT checksum FROM"):
 		value, ok := f.ledger[args[0].(string)]
 		if !ok {
@@ -179,7 +194,13 @@ func (r fakeRow) Scan(values ...any) error {
 	case *bool:
 		*target = r.value.(bool)
 	case *string:
-		*target = r.value.(string)
+		if len(values) == 2 {
+			versions := r.value.([2]string)
+			*target = versions[0]
+			*values[1].(*string) = versions[1]
+		} else {
+			*target = r.value.(string)
+		}
 	default:
 		return errors.New("unexpected scan destination")
 	}
@@ -305,6 +326,78 @@ func TestPlanChecksums(t *testing.T) {
 		sum := sha256.Sum256([]byte(step.SQL))
 		if len(hex.EncodeToString(sum[:])) != 64 || step.SQL == "" {
 			t.Fatal("empty migration")
+		}
+	}
+}
+
+func TestInstalledExtensionUpdatesOutsideLedger(t *testing.T) {
+	conn := newFake()
+	conn.extensions = map[string][2]string{
+		"vector":         {"0.8.6", "0.8.7"},
+		"set_user":       {"4.2.0", "4.3.0"},
+		"pg_net":         {"0.20.3", "0.20.5"},
+		"hypopg":         {"1.4.1", "1.4.5"},
+		"index_advisor":  {"0.2.0", "0.2.1"},
+		"pgsodium":       {"3.1.8", "3.1.11"},
+		"supabase_vault": {"0.3.1", "0.3.2"},
+	}
+	// None are currently selected; previously installed extensions still update.
+	steps := Plan(nil, nil)
+	if err := Apply(t.Context(), conn, steps, nil); err != nil {
+		t.Fatal(err)
+	}
+	updates := []string{}
+	for _, call := range conn.calls {
+		if strings.HasPrefix(call.sql, "ALTER EXTENSION") {
+			updates = append(updates, call.sql)
+			if strings.Contains(call.sql, "SCHEMA") || strings.Contains(call.sql, "CASCADE") {
+				t.Fatal("update must preserve schemas and dependent objects")
+			}
+		}
+	}
+	if len(updates) != len(conn.extensions) || updates[0] != "ALTER EXTENSION \"pgsodium\" UPDATE" || updates[1] != "ALTER EXTENSION \"hypopg\" UPDATE" {
+		t.Fatal("missing managed extension updates or dependency ordering", updates)
+	}
+	before := len(conn.calls)
+	if err := Apply(t.Context(), conn, steps, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range conn.calls[before:] {
+		if strings.HasPrefix(call.sql, "ALTER EXTENSION") {
+			t.Fatal("up-to-date extension was updated again")
+		}
+	}
+}
+
+func TestExtensionUpdateFailureAndResume(t *testing.T) {
+	conn := newFake()
+	conn.extensions = map[string][2]string{"vector": {"0.8.6", "0.8.7"}}
+	conn.failSQL = "ALTER EXTENSION \"vector\" UPDATE"
+	conn.failure = &pgconn.PgError{Code: "42501", Message: "private SQL detail"}
+	err := Apply(t.Context(), conn, Plan(nil, nil), nil)
+	if err == nil || !strings.Contains(err.Error(), "vector failed (SQLSTATE 42501)") || strings.Contains(err.Error(), "private SQL") {
+		t.Fatal("extension update failure is not safely reported", err)
+	}
+	conn.failSQL = ""
+	if err := Apply(t.Context(), conn, Plan(nil, nil), nil); err != nil {
+		t.Fatal("committed migration ledger prevented upgrade retry", err)
+	}
+	conn.extensions["vector"] = [2]string{"0.8.7", ""}
+	if err := updateExtensions(t.Context(), conn); err == nil || !strings.Contains(err.Error(), "no installed default") {
+		t.Fatal("missing installed binaries silently accepted", err)
+	}
+}
+
+func TestExistingPrivateDatabaseRequiresUpdateConnection(t *testing.T) {
+	conn := newFake()
+	conn.privateExists = true
+	err := Apply(t.Context(), conn, Plan(nil, nil), nil)
+	if err == nil || !strings.Contains(err.Error(), "connection config") {
+		t.Fatal("existing private database was skipped when component deselected", err)
+	}
+	for _, call := range conn.calls {
+		if strings.HasPrefix(call.sql, "CREATE DATABASE") {
+			t.Fatal("deselected private component must not create a database")
 		}
 	}
 }

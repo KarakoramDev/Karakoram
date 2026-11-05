@@ -50,6 +50,7 @@ func TestProfileAdmission(t *testing.T) {
 	}
 }
 func TestAddingProfileRepreparesAndBootstraps(t *testing.T) {
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "https://artifacts.example.invalid")
 	p, rc, b := setup(t, "single")
 	converge(t, p, rc)
 	b.actions = nil
@@ -67,7 +68,7 @@ func TestAddingProfileRepreparesAndBootstraps(t *testing.T) {
 		t.Fatal(err)
 	}
 	prepare := strings.Join(runtime.Prepare, "\n")
-	if strings.Count(prepare, "percona-postgresql-17-postgis-3='") != 1 || !strings.Contains(prepare, "percona-postgresql-17-pgvector='1:0.8.6-1.noble'") {
+	if strings.Count(prepare, "percona-postgresql-17-postgis-3='") != 1 || !strings.Contains(prepare, "pgvector-pg17-0.8.7") || strings.Contains(prepare, "pgvector='") {
 		t.Fatal("packages missing or duplicated", prepare)
 	}
 	config, err := p.MemberConfig(t.Context(), rc, "demop0")
@@ -108,7 +109,7 @@ func TestAddingProfileRepreparesAndBootstraps(t *testing.T) {
 	if err = p.postReadyProfiles(t.Context(), rc); err != nil {
 		t.Fatal(err)
 	}
-	if len(b.actions) != before+1 {
+	if len(b.actions) != before+2 {
 		t.Fatal("restore generation did not reapply bootstrap")
 	}
 	if p.profilesAdded(json.RawMessage(`{"profiles":["postgis","pgvector"]}`), rc.Cluster.Spec.EngineOptions) {
@@ -159,5 +160,34 @@ func TestDescribeProfilesPerMajor(t *testing.T) {
 				t.Fatal("profile availability differs from qualified catalog", entry["id"], major, capability)
 			}
 		}
+	}
+}
+
+func TestRestoredProfileSQLFailureDoesNotPublishBootstrapDigest(t *testing.T) {
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "https://artifacts.example.invalid")
+	p, rc, b := setup(t, "single")
+	rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"profiles":["pgvector"]}`)
+	s := converge(t, p, rc)
+	s.BootstrapGeneration++
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	b.actions = nil
+	b.extensionFailures = 1
+	if err := p.postReadyProfiles(t.Context(), rc); err == nil {
+		t.Fatal("restored profile accepted failed extension SQL")
+	}
+	if applied, err := p.profileBootstrapApplied(t.Context(), rc, s); err != nil || applied {
+		t.Fatal("failed SQL published the restored bootstrap digest", applied, err)
+	}
+	if err := p.postReadyProfiles(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	if applied, err := p.profileBootstrapApplied(t.Context(), rc, s); err != nil || !applied {
+		t.Fatal("successful SQL retry did not publish bootstrap digest", applied, err)
+	}
+	want := []string{"profile-bootstrap:demop0:pgvector", "update-extensions:demop0:vector", "profile-bootstrap:demop0:pgvector", "update-extensions:demop0:vector"}
+	if !slices.Equal(b.actions, want) {
+		t.Fatal("restored profile retry skipped SQL or redeployed members", b.actions)
 	}
 }

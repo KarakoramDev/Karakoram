@@ -157,8 +157,11 @@ func includes(items []string, item string) bool {
 // Apply serializes bootstrap with a session advisory lock, records a checksum
 // ledger in every touched database, and commits each migration together with its
 // receipt. Interrupted runs resume safely. _supabase is created only if the plan
-// contains a step for it. Role password overlays run on every invocation, outside
-// the migration ledger, so retries and later credential rotation remain correct.
+// contains a step for it. Installed managed extensions in both databases are
+// updated to their installed control-file defaults on every invocation, outside
+// the immutable ledger. Call only after installing binaries and restarting
+// PostgreSQL with the selected preload libraries (notably pg_net).
+// Role password overlays also run on every invocation.
 // Errors expose migration IDs/SQLSTATE only, never SQL, DSNs or password values.
 func Apply(ctx context.Context, conn Conn, steps []Step, passwords map[string]string) (result error) {
 	if conn == nil {
@@ -225,20 +228,10 @@ func Apply(ctx context.Context, conn Conn, steps []Step, passwords map[string]st
 					return safeError("creating private Supabase database", err)
 				}
 			}
-			config := conn.Config()
-			if config == nil {
-				return errors.New("connection config for Supabase bootstrap is unavailable")
-			}
-			config = config.Copy()
-			config.Database = "_supabase"
-			if config.RuntimeParams == nil {
-				config.RuntimeParams = map[string]string{}
-			}
-			config.RuntimeParams["search_path"] = "pg_catalog"
 			var err error
-			private, err = pgx.ConnectConfig(ctx, config)
+			private, err = connectPrivate(ctx, conn)
 			if err != nil {
-				return safeError("connecting private Supabase database", err)
+				return err
 			}
 			target = private
 			connections[step.Database] = target
@@ -266,7 +259,83 @@ func Apply(ctx context.Context, conn Conn, steps []Step, passwords map[string]st
 			return err
 		}
 	}
+	// A disabled private component can leave an existing managed database behind.
+	// Keep its installed extensions current without creating a new database.
+	if private == nil {
+		var exists bool
+		if err := conn.QueryRow(ctx, "SELECT EXISTS (SELECT FROM pg_catalog.pg_database WHERE datname = '_supabase')").Scan(&exists); err != nil {
+			return safeError("checking private Supabase database", err)
+		}
+		if exists {
+			var err error
+			private, err = connectPrivate(ctx, conn)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if err := updateExtensions(ctx, conn); err != nil {
+		return fmt.Errorf("updating Supabase project database: %w", err)
+	}
+	if private != nil {
+		if err := updateExtensions(ctx, private); err != nil {
+			return fmt.Errorf("updating Supabase _supabase database: %w", err)
+		}
+	}
 	return applyPasswords(ctx, conn, passwords)
+}
+
+func connectPrivate(ctx context.Context, conn Conn) (*pgx.Conn, error) {
+	config := conn.Config()
+	if config == nil {
+		return nil, errors.New("connection config for Supabase bootstrap is unavailable")
+	}
+	config = config.Copy()
+	config.Database = "_supabase"
+	if config.RuntimeParams == nil {
+		config.RuntimeParams = map[string]string{}
+	}
+	config.RuntimeParams["search_path"] = "pg_catalog"
+	private, err := pgx.ConnectConfig(ctx, config)
+	if err != nil {
+		return nil, safeError("connecting private Supabase database", err)
+	}
+	return private, nil
+}
+
+func updateExtensions(ctx context.Context, conn Conn) error {
+	// Prerequisites precede dependents; never CASCADE or relocate an extension.
+	// Check installed extensions, not just current selections: disabling a
+	// selection does not uninstall its SQL objects or remove its security risk.
+	order := append([]string{"pgsodium", "hypopg"}, extensionNames...)
+	seen := make(map[string]bool, len(extensionNames))
+	for _, name := range order {
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		var current, target string
+		err := conn.QueryRow(ctx, `SELECT e.extversion, COALESCE(a.default_version, '')
+FROM pg_catalog.pg_extension e
+LEFT JOIN pg_catalog.pg_available_extensions a ON a.name = e.extname
+WHERE e.extname = $1`, name).Scan(&current, &target)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return safeError("checking Supabase extension "+name, err)
+		}
+		if target == "" {
+			return fmt.Errorf("Supabase extension %s has no installed default version", name)
+		}
+		if current == target {
+			continue
+		}
+		if _, err := conn.Exec(ctx, "ALTER EXTENSION "+pgx.Identifier{name}.Sanitize()+" UPDATE"); err != nil {
+			return safeError("updating Supabase extension "+name, err)
+		}
+	}
+	return nil
 }
 func applyStep(ctx context.Context, conn Conn, step Step, checksum string) error {
 	if _, err := conn.Exec(ctx, "BEGIN"); err != nil {

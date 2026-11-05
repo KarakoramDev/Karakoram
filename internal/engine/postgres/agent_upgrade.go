@@ -63,7 +63,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 	// Retain the pending flag on failure so normal reconciliation can retry.
 	if cp.Order != nil && cp.Index >= len(cp.Order) {
 		s.ExtensionsPending = true
-		if err := p.updateProfileExtensions(ctx, rc); err != nil {
+		if err := p.UpdateProfileExtensions(ctx, rc); err != nil {
 			return result, err
 		}
 		s.ExtensionsPending = false

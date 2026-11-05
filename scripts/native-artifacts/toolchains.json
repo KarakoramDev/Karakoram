@@ -6,6 +6,23 @@
     "checksumURL": "https://go.dev/dl/?mode=json",
     "size": 70588678
   },
+  "libsodium-1.0.22": {
+    "file": "libsodium-1.0.22.tar.gz",
+    "url": "https://download.libsodium.org/libsodium/releases/libsodium-1.0.22.tar.gz",
+    "sha256": "adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349",
+    "size": 2008529,
+    "checksumURL": "https://download.libsodium.org/libsodium/releases/libsodium-1.0.22.tar.gz.minisig",
+    "sourceCommit": "77e1ce5d6dee871c49ef211222ba18ef0c486bda",
+    "checksumSource": "Minisign signature and trusted comment verified with the published libsodium key RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3"
+  },
+  "supabase-pg17-extensions-previous": {
+    "file": "supabase-pg17-extensions-17.11.1-1-ubuntu24.04-amd64.tar.gz",
+    "url": "https://github.com/KarakoramDev/Karakoram/releases/download/v0.4.5/supabase-pg17-extensions-17.11.1-1-ubuntu24.04-amd64.tar.gz",
+    "sha256": "346b262fc170192010ae39798299a38599fcf01d5e67f84c577079f0f4423b0b",
+    "size": 4080038,
+    "checksumURL": "https://github.com/KarakoramDev/Karakoram/releases/download/v0.4.5/checksums.txt",
+    "checksumSource": "Previous qualified native lock; only historical pgrx install SQL is retained for upgrade qualification"
+  },
   "npm-11.12.1": {
     "file": "npm-11.12.1.tgz",
     "url": "https://registry.npmjs.org/npm/-/npm-11.12.1.tgz",

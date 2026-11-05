@@ -260,7 +260,7 @@ func TestNativeAdditionalComponents(t *testing.T) {
 		if _, err := conn.Exec(ctx, "CREATE TABLE public.native_realtime(id integer PRIMARY KEY, body text); ALTER PUBLICATION supabase_realtime ADD TABLE public.native_realtime; GRANT SELECT ON public.native_realtime TO anon, authenticated, service_role;"); err != nil {
 			t.Fatal(err)
 		}
-		defer launch(t, "realtime", "2.143.3", realtimeDir)()
+		defer launch(t, "realtime", "2.153.3", realtimeDir)()
 		defer launch(t, "gateway", "1.39.6", gatewayDir)()
 		for _, method := range []string{"GET", "DELETE"} {
 			for _, key := range []string{keys.AnonKey, keys.ServiceRoleKey, keys.AnonJWT, keys.ServiceRoleJWT} {
@@ -284,7 +284,7 @@ func TestNativeAdditionalComponents(t *testing.T) {
 			t.Fatal("Realtime websocket upgrade failed")
 		}
 		defer ws.CloseNow()
-		join := map[string]any{"topic": "realtime:public:native_realtime", "event": "phx_join", "ref": "1", "payload": map[string]any{"access_token": keys.ServiceRoleKey, "config": map[string]any{"broadcast": map[string]any{"ack": true, "self": false}, "presence": map[string]string{"key": ""}, "postgres_changes": []map[string]string{{"event": "INSERT", "schema": "public", "table": "native_realtime"}}}}}
+		join := map[string]any{"topic": "realtime:public:native_realtime", "event": "phx_join", "ref": "1", "payload": map[string]any{"access_token": keys.ServiceRoleKey, "config": map[string]any{"broadcast": map[string]any{"ack": true, "self": true}, "presence": map[string]string{"key": "native-presence"}, "postgres_changes": []map[string]string{{"event": "INSERT", "schema": "public", "table": "native_realtime"}}}}}
 		data, _ := json.Marshal(join)
 		if err := ws.Write(wsctx, websocket.MessageText, data); err != nil {
 			t.Fatal(err)
@@ -314,20 +314,44 @@ func TestNativeAdditionalComponents(t *testing.T) {
 				}
 			}
 		}
+		for _, message := range []map[string]any{
+			{"topic": "realtime:public:native_realtime", "event": "presence", "ref": "2", "payload": map[string]any{"type": "presence", "event": "track", "payload": map[string]string{"probe": "native-presence"}}},
+			{"topic": "realtime:public:native_realtime", "event": "broadcast", "ref": "3", "payload": map[string]any{"type": "broadcast", "event": "native-broadcast", "payload": map[string]string{"probe": "native-broadcast"}}},
+		} {
+			data, err := json.Marshal(message)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := ws.Write(wsctx, websocket.MessageText, data); err != nil {
+				t.Fatal(err)
+			}
+		}
 		if _, err := conn.Exec(ctx, "INSERT INTO public.native_realtime VALUES(1,'native-insert')"); err != nil {
 			t.Fatal(err)
 		}
-		for {
+		insert, broadcast, presence := false, false, false
+		for !insert || !broadcast || !presence {
 			_, data, err := ws.Read(wsctx)
 			if err != nil {
-				t.Fatal("Realtime INSERT event unavailable")
+				t.Fatalf("Realtime workload events unavailable (insert=%v broadcast=%v presence=%v)", insert, broadcast, presence)
 			}
 			var event map[string]any
-			if json.Unmarshal(data, &event) == nil && event["event"] == "postgres_changes" && bytes.Contains(data, []byte("native-insert")) {
-				break
+			if err := json.Unmarshal(data, &event); err != nil {
+				t.Fatal(err)
+			}
+			switch event["event"] {
+			case "postgres_changes":
+				insert = insert || bytes.Contains(data, []byte("native-insert"))
+			case "broadcast":
+				broadcast = broadcast || bytes.Contains(data, []byte("native-broadcast"))
+			case "presence_diff":
+				payload, _ := event["payload"].(map[string]any)
+				joins, _ := payload["joins"].(map[string]any)
+				_, tracked := joins["native-presence"]
+				presence = presence || tracked
 			}
 		}
-		t.Log("native Realtime websocket received a PostgreSQL INSERT through gateway")
+		t.Log("native Realtime broadcast, presence and PostgreSQL INSERT received through gateway")
 	})
 	t.Run("meta-studio", func(t *testing.T) {
 		if metaDir == "" {

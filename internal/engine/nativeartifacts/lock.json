@@ -14,7 +14,7 @@
     "build": "upstream-release"
   },
   {
-    "name": "openbao",
+    "name": "openbao-2.7.1",
     "version": "2.7.1",
     "file": "openbao_2.7.1_linux_amd64.tar.gz",
     "sha256": "0e2f1ce10d124e03112b50dd2fbec6b78003783253bc3a91587938f39d1e2243",
@@ -28,7 +28,21 @@
     "build": "upstream-release"
   },
   {
-    "name": "openbao-plugin-database-mongodb",
+    "name": "openbao",
+    "version": "2.7.2",
+    "file": "openbao_2.7.2_linux_amd64.tar.gz",
+    "sha256": "582b1f3c2fdc5afd443b2d57a225ef654de75adea609fdb66731fd582a9cbc96",
+    "size": 74907645,
+    "upstreamURL": "https://github.com/openbao/openbao/releases/download/v2.7.2/openbao_2.7.2_linux_amd64.tar.gz",
+    "license": "MPL-2.0",
+    "source": {
+      "repo": "https://github.com/openbao/openbao",
+      "commit": "9e0a0d3c3504a0a00b45e61355afac5e35c78379"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "openbao-plugin-database-mongodb-0.0.1",
     "version": "0.0.1",
     "file": "openbao-plugin-database-mongodb_linux_amd64_v1.tar.gz",
     "sha256": "225c89a188052067d896395a344fc40ba951808cb145ddfa6b07b0be296e632d",
@@ -40,22 +54,43 @@
       "commit": "f9750bd6c8fb2e5447d2227f65c159a9032b4da0"
     },
     "build": "upstream-release",
-    "executableMembers": ["openbao-plugin-database-mongodb_linux_amd64_v1"]
+    "executableMembers": [
+      "openbao-plugin-database-mongodb_linux_amd64_v1"
+    ]
   },
   {
-    "name": "openbao-plugin-kms-aws",
-    "version": "0.1.0",
-    "file": "openbao-plugin-kms-aws_linux_amd64_v1.tar.gz",
-    "sha256": "cec959c8159045db34ae8ba2f58f89d4e631f9b49f9b5e5cd55e72a0058a69ad",
-    "size": 6422912,
-    "upstreamURL": "https://github.com/openbao/openbao-plugins/releases/download/kms-aws-v0.1.0/openbao-plugin-kms-aws_linux_amd64_v1.tar.gz",
+    "name": "openbao-plugin-database-mongodb",
+    "version": "0.0.2",
+    "file": "openbao-plugin-database-mongodb_0.0.2_linux_amd64_v1.tar.gz",
+    "sha256": "2b33fa43f0e89dab29f1c4646b49039672285f3d3585f83d74785c24cddd44ca",
+    "size": 7372548,
+    "upstreamURL": "https://github.com/openbao/openbao-plugins/releases/download/database-mongodb-v0.0.2/openbao-plugin-database-mongodb_linux_amd64_v1.tar.gz",
     "license": "MPL-2.0",
     "source": {
       "repo": "https://github.com/openbao/openbao-plugins",
-      "commit": "0c68457d68ae5741013ee30623525303860a8b22"
+      "commit": "229bc6b32bc58a1fe971a50edbfef534ad59efe8"
     },
     "build": "upstream-release",
-    "executableMembers": ["openbao-plugin-kms-aws_linux_amd64_v1"]
+    "executableMembers": [
+      "openbao-plugin-database-mongodb_linux_amd64_v1"
+    ]
+  },
+  {
+    "name": "openbao-plugin-kms-aws",
+    "version": "0.1.1",
+    "file": "openbao-plugin-kms-aws_linux_amd64_v1.tar.gz",
+    "sha256": "f00ebed7fa1cbec080e0fed908e167125bc14b266df7e4af845f82aa4650ed4e",
+    "size": 6862995,
+    "upstreamURL": "https://github.com/openbao/openbao-plugins/releases/download/kms-aws-v0.1.1/openbao-plugin-kms-aws_linux_amd64_v1.tar.gz",
+    "license": "MPL-2.0",
+    "source": {
+      "repo": "https://github.com/openbao/openbao-plugins",
+      "commit": "229bc6b32bc58a1fe971a50edbfef534ad59efe8"
+    },
+    "build": "upstream-release",
+    "executableMembers": [
+      "openbao-plugin-kms-aws_linux_amd64_v1"
+    ]
   },
   {
     "name": "proxysql",
@@ -68,6 +103,34 @@
     "source": {
       "repo": "https://github.com/sysown/proxysql",
       "commit": "7c91137a465454dfc1a62b56f8c188c1ce59c130"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "mongodb-mongosh-2.14.1",
+    "version": "2.14.1",
+    "file": "mongosh-2.14.1-linux-x64.tgz",
+    "sha256": "8d24940ebe3675959b518fd41ea16b4e2182d6a75c09777db09cfa64e18834a1",
+    "size": 94615134,
+    "upstreamURL": "https://downloads.mongodb.com/compass/mongosh-2.14.1-linux-x64.tgz",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/mongodb-js/mongosh",
+      "commit": "456a58b13c1d9dd83bd4e0985c10237ba83c18e1"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "rabbitmq-server",
+    "version": "4.3.7",
+    "file": "rabbitmq-server_4.3.7-1_all.deb",
+    "sha256": "d9d9ec96d9eb2ba1a9d45de5d383cf7632af5e176e49edc93660820838862b64",
+    "size": 23918436,
+    "upstreamURL": "https://github.com/rabbitmq/rabbitmq-server/releases/download/v4.3.7/rabbitmq-server_4.3.7-1_all.deb",
+    "license": "MPL-2.0",
+    "source": {
+      "repo": "https://github.com/rabbitmq/rabbitmq-server",
+      "commit": "cd87622aee0d4fd8b119d713f2e03420b0642a89"
     },
     "build": "upstream-release"
   },
@@ -101,43 +164,43 @@
   },
   {
     "name": "supabase-gateway",
-    "version": "1.39.1",
-    "file": "envoy-1.39.1-linux-x86_64",
-    "sha256": "002c6e1c69ed0fa0ea381887247cadadfaec9481375fa8d8d2b1731eeabf40b8",
-    "size": 105039832,
-    "upstreamURL": "https://github.com/envoyproxy/envoy/releases/download/v1.39.1/envoy-1.39.1-linux-x86_64",
+    "version": "1.39.6",
+    "file": "envoy-1.39.6-linux-x86_64",
+    "sha256": "116ef1d0d4e0685bbb0749134aa84ebd6d56a37c568ce6418f1242138d9d10cf",
+    "size": 105105368,
+    "upstreamURL": "https://github.com/envoyproxy/envoy/releases/download/v1.39.6/envoy-1.39.6-linux-x86_64",
     "license": "Apache-2.0",
     "source": {
       "repo": "https://github.com/envoyproxy/envoy",
-      "commit": "b579d07d3ad7ee11d32b105e91a5a39ad24718d7"
+      "commit": "aacd0340210b536e99ec44ebe59ab9d16b259552"
     },
     "build": "upstream-release"
   },
   {
     "name": "supabase-vector",
-    "version": "0.53.0",
-    "file": "vector-0.53.0-x86_64-unknown-linux-gnu.tar.gz",
-    "sha256": "5460f93310eb59cc9e7ee7717a179f1bf2ff8fbc046b7e3eb625159a5e8714bb",
-    "size": 52501342,
-    "upstreamURL": "https://github.com/vectordotdev/vector/releases/download/v0.53.0/vector-0.53.0-x86_64-unknown-linux-gnu.tar.gz",
+    "version": "0.61.0",
+    "file": "vector-0.61.0-x86_64-unknown-linux-gnu.tar.gz",
+    "sha256": "84a27c3ad6b772fdb05bb76ea01a31498bfc8f5e71f32cc78a0d96841f1aa827",
+    "size": 58860480,
+    "upstreamURL": "https://github.com/vectordotdev/vector/releases/download/v0.61.0/vector-0.61.0-x86_64-unknown-linux-gnu.tar.gz",
     "license": "MPL-2.0",
     "source": {
       "repo": "https://github.com/vectordotdev/vector",
-      "commit": "2b51b40a7a0b40996350d73cf46791c7e991fcb6"
+      "commit": "17e017e3c07bca3f2048f7cc4ec618a23d9289c5"
     },
     "build": "upstream-release"
   },
   {
     "name": "supabase-storage",
-    "version": "1.81.0",
-    "file": "supabase-storage-1.81.0-ubuntu24.04-amd64.tar.gz",
-    "sha256": "9dee07761d0bf8efaa1b23827787241824581f2b2fde831f6ad7b4c08f718986",
-    "size": 124242753,
+    "version": "1.81.5",
+    "file": "supabase-storage-1.81.5-ubuntu24.04-amd64.tar.gz",
+    "sha256": "d6398aa4ab04ab04077698b0a5684de51021f80bb6a0c31c0d8a6737c6777363",
+    "size": 124619906,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
       "repo": "https://github.com/supabase/storage",
-      "commit": "f31599e188d7c9c854b1daa76a11b41c6d179462"
+      "commit": "03a68fa7d4871ac4c87b46d003863f0bee2b5337"
     },
     "build": "native-v1",
     "runtimeDeps": [
@@ -149,8 +212,8 @@
     "name": "supabase-postgres-meta",
     "version": "0.100.0",
     "file": "supabase-postgres-meta-0.100.0-ubuntu24.04-amd64.tar.gz",
-    "sha256": "de579ec1eb2e9da6cf70e207cb23ad73a4202f4cc9241ef9f72b5c6524ebc3f7",
-    "size": 88055489,
+    "sha256": "ce22ca527cd29da940225a2cf1226ac8fc1d4420b84a795ffde29ec1ebd3735a",
+    "size": 88103396,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
@@ -165,15 +228,15 @@
   },
   {
     "name": "supabase-realtime",
-    "version": "2.143.3",
-    "file": "supabase-realtime-2.143.3-ubuntu24.04-amd64.tar.gz",
-    "sha256": "9eb7110d50ab967faf410c29876a0fe75b671717b2ecb010d32e195c32d9071c",
-    "size": 71024701,
+    "version": "2.153.3",
+    "file": "supabase-realtime-2.153.3-ubuntu24.04-amd64.tar.gz",
+    "sha256": "1a23ebc2d15f4ff0249113c6a652c9ab85c656d3654dd1dd854dffb38cc68c79",
+    "size": 71162689,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
       "repo": "https://github.com/supabase/realtime",
-      "commit": "d46540b3a4a79113f40301d5e5cb690f41150b9b"
+      "commit": "9b3104ad00ece37243fd41300df6cf5d4bd927f1"
     },
     "build": "native-v1",
     "runtimeDeps": [
@@ -185,32 +248,13 @@
     ]
   },
   {
-    "name": "supabase-imgproxy",
-    "version": "3.31.4",
-    "file": "supabase-imgproxy-3.31.4-ubuntu24.04-amd64.tar.gz",
-    "sha256": "679e22b8926dabde96137c65de580095ece22aca80c3d41ae73e0e29f12d7c28",
-    "size": 27590224,
-    "upstreamURL": "",
-    "license": "MIT",
-    "source": {
-      "repo": "https://github.com/imgproxy/imgproxy",
-      "commit": "8b0aa78279f191081054ba709b39f317f66ace78"
-    },
-    "build": "native-v1",
-    "runtimeDeps": [
-      "ca-certificates",
-      "libvips42t64",
-      "fonts-dejavu-core"
-    ]
-  },
-  {
     "name": "supabase-pg17-extensions",
-    "version": "17.11.1-1",
-    "file": "supabase-pg17-extensions-17.11.1-1-ubuntu24.04-amd64.tar.gz",
-    "sha256": "346b262fc170192010ae39798299a38599fcf01d5e67f84c577079f0f4423b0b",
-    "size": 4080038,
+    "version": "17.11.1-2",
+    "file": "supabase-pg17-extensions-17.11.1-2-ubuntu24.04-amd64.tar.gz",
+    "sha256": "c2400e358090a5bfad9e8f56b198fa273c31587ac0d3db0138a30b4766227f1f",
+    "size": 4664923,
     "upstreamURL": "",
-    "license": "PostgreSQL AND MIT",
+    "license": "PostgreSQL AND MIT AND ISC",
     "source": {
       "repo": "https://github.com/supabase/postgres",
       "commit": "d156ba65c14694c12cc5e782bc15b9b8ed2d1376"
@@ -276,8 +320,8 @@
     "name": "supabase-logflare",
     "version": "1.50.15",
     "file": "supabase-logflare-1.50.15-ubuntu24.04-amd64.tar.gz",
-    "sha256": "19ac0fce28e16871cbcbbd4a403f5a4c7906b5d06c2bf9c0bff073ce16baf14b",
-    "size": 122145838,
+    "sha256": "d5a67839535177e4ee593f161e8c39d4db6b8671bf064f09382202129f83fc80",
+    "size": 123866914,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
@@ -295,15 +339,15 @@
   },
   {
     "name": "supabase-edge-runtime",
-    "version": "1.77.4",
-    "file": "supabase-edge-runtime-1.77.4-ubuntu24.04-amd64.tar.gz",
-    "sha256": "85b35bc1afea080970dd1d63a514a84fa8b49d4e04dc5d5c3b590e441fa03a5a",
-    "size": 292933984,
+    "version": "1.77.9",
+    "file": "supabase-edge-runtime-1.77.9-ubuntu24.04-amd64.tar.gz",
+    "sha256": "e101303c7b6814366df68145986bee7293edb72883efbc9ac6b77e03adadcddb",
+    "size": 293648059,
     "upstreamURL": "",
     "license": "MIT",
     "source": {
       "repo": "https://github.com/supabase/edge-runtime",
-      "commit": "d4a4f606a90e8c66864219c9b1d31ef0e3e3f626"
+      "commit": "0dd15ef2281b60ea03413ef5d2a60ebb25b0e21d"
     },
     "build": "native-v1",
     "runtimeDeps": [
@@ -318,8 +362,8 @@
     "name": "supabase-supavisor",
     "version": "2.9.13",
     "file": "supabase-supavisor-2.9.13-ubuntu24.04-amd64.tar.gz",
-    "sha256": "5d8f95c44c3a299324e26e31a9f675518f8c7725befb2599230e969ae3040c8a",
-    "size": 30287788,
+    "sha256": "bc77675aa3b5cb96a24fd992d5d80b7f4ed62c84eb6bba7b3508c339ef2bf2ac",
+    "size": 30321795,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
@@ -339,8 +383,8 @@
     "name": "supabase-studio",
     "version": "2026.10.12-bc27d2661edd",
     "file": "supabase-studio-2026.10.12-bc27d2661edd-ubuntu24.04-amd64.tar.gz",
-    "sha256": "a8133d581e4e7de8b95fcf7950a4481af0894222ec0987f6cacf85d45c85d051",
-    "size": 128177012,
+    "sha256": "840525f69cea098b06d5aa6ece2d6b01eab94e25b1d6f094d758871151030911",
+    "size": 128210773,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
@@ -357,8 +401,8 @@
     "name": "mongodb-mcp-server",
     "version": "3.1.0",
     "file": "mongodb-mcp-server-3.1.0-ubuntu24.04-amd64.tar.gz",
-    "sha256": "381e6031a658bf78abe3fd912a1683437e57a2271a0cf04f9d5daadb8d874204",
-    "size": 239978754,
+    "sha256": "74cc93028743c998f86ec50271585ac99737dc661fcf47930dcf68d1cdbc615a",
+    "size": 240025667,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
@@ -608,16 +652,50 @@
     ]
   },
   {
+    "name": "temporal-server-1.31.5",
+    "version": "1.31.5",
+    "file": "temporal_1.31.5_linux_amd64.tar.gz",
+    "sha256": "fd61bf956f25bd1659df596a536f271c4da01c01787ae183e5752b2d0bf02cab",
+    "size": 85690557,
+    "upstreamURL": "https://github.com/temporalio/temporal/releases/download/v1.31.5/temporal_1.31.5_linux_amd64.tar.gz",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/temporalio/temporal",
+      "commit": "34ff3ead1816353aef02c620348e0a3555d307fd"
+    },
+    "build": "upstream-release",
+    "runtimeDeps": [
+      "ca-certificates"
+    ]
+  },
+  {
+    "name": "temporal-server-1.32.2",
+    "version": "1.32.2",
+    "file": "temporal_1.32.2_linux_amd64.tar.gz",
+    "sha256": "6260f110b6853d2d7f8daa31793d1fac44096077e3b058dc3482de6ac50bc543",
+    "size": 92064830,
+    "upstreamURL": "https://github.com/temporalio/temporal/releases/download/v1.32.2/temporal_1.32.2_linux_amd64.tar.gz",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/temporalio/temporal",
+      "commit": "6d085822273f4336796e6959c73ab1d14a23eb77"
+    },
+    "build": "upstream-release",
+    "runtimeDeps": [
+      "ca-certificates"
+    ]
+  },
+  {
     "name": "temporal-ui-server",
-    "version": "2.56.0",
-    "file": "ui-server_2.56.0_linux_amd64.tar.gz",
-    "sha256": "c9d767a49815d475f00e4882f4cf4b00ff89d3253c9d410f41c93b40b739e2ec",
-    "size": 10082262,
-    "upstreamURL": "https://github.com/temporalio/ui-server/releases/download/v2.56.0/ui-server_2.56.0_linux_amd64.tar.gz",
+    "version": "2.58.0",
+    "file": "ui-server_2.58.0_linux_amd64.tar.gz",
+    "sha256": "703cb4990b115eb72a4ec272dc081d6c2c0eb66cb3d0900611a3d26100ea9832",
+    "size": 10080694,
+    "upstreamURL": "https://github.com/temporalio/ui-server/releases/download/v2.58.0/ui-server_2.58.0_linux_amd64.tar.gz",
     "license": "MIT",
     "source": {
       "repo": "https://github.com/temporalio/ui-server",
-      "commit": "1a0c78c9022cbd985c61fa92be6c4d9fef5cac5c"
+      "commit": "f88a524b0d20039f3ed47c839a24ed0c57c8c33a"
     },
     "build": "upstream-release",
     "runtimeDeps": [
@@ -813,7 +891,35 @@
     "build": "upstream-release"
   },
   {
+    "name": "neo4j-community-2026.10.1",
+    "version": "2026.10.1",
+    "file": "neo4j-community-2026.10.1-unix.tar.gz",
+    "sha256": "afcf4986d47d13dd908427d301d5a9278b2ec7d615a12bb40e22087c7e133e78",
+    "size": 246054933,
+    "upstreamURL": "https://dist.neo4j.org/neo4j-community-2026.10.1-unix.tar.gz",
+    "license": "GPL-3.0-only",
+    "source": {
+      "repo": "https://github.com/neo4j/neo4j",
+      "commit": "2994b43b44f35bf6520bd2667ab181bb76a45585"
+    },
+    "build": "upstream-release"
+  },
+  {
     "name": "temurin-jre-21",
+    "version": "21.0.13+9",
+    "file": "OpenJDK21U-jre_x64_linux_hotspot_21.0.13_9.tar.gz",
+    "sha256": "a535a1df9c6284d9618872984e026ae0352d1f7e9e0605425c0e6114f47351dd",
+    "size": 52181297,
+    "upstreamURL": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jre_x64_linux_hotspot_21.0.13_9.tar.gz",
+    "license": "GPL-2.0-only WITH Classpath-exception-2.0",
+    "source": {
+      "repo": "https://github.com/adoptium/jdk21u",
+      "commit": "2ab10ca20c191701c3a9f3153bfc6e93d63714c1"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "temurin-jre-21-legacy",
     "version": "21.0.12.1+1",
     "file": "OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz",
     "sha256": "2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500",
@@ -828,6 +934,34 @@
   },
   {
     "name": "weaviate-1.40",
+    "version": "1.40.3",
+    "file": "weaviate-v1.40.3-linux-amd64.tar.gz",
+    "sha256": "c152c5d088fda01d075b0f2941d71bd67f43eb76b18c0ba57982545b276ffd75",
+    "size": 77283070,
+    "upstreamURL": "https://github.com/weaviate/weaviate/releases/download/v1.40.3/weaviate-v1.40.3-linux-amd64.tar.gz",
+    "license": "BSD-3-Clause AND LicenseRef-Weaviate-Enterprise",
+    "source": {
+      "repo": "https://github.com/weaviate/weaviate",
+      "commit": "075fe4065cb24e5668733661b551b5b6710f98b9"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "weaviate-1.39",
+    "version": "1.39.15",
+    "file": "weaviate-v1.39.15-linux-amd64.tar.gz",
+    "sha256": "10b74d08baa0a3a53e5a83366376dc2f0f72e11103f616b9af4dc6aaedf191a5",
+    "size": 84563339,
+    "upstreamURL": "https://github.com/weaviate/weaviate/releases/download/v1.39.15/weaviate-v1.39.15-linux-amd64.tar.gz",
+    "license": "BSD-3-Clause AND LicenseRef-Weaviate-Enterprise",
+    "source": {
+      "repo": "https://github.com/weaviate/weaviate",
+      "commit": "4f2afa66fadda236d28e34ab6a845a650c698ea3"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "weaviate-1.40.1",
     "version": "1.40.1",
     "file": "weaviate-v1.40.1-linux-amd64.tar.gz",
     "sha256": "ed3234edb870310bb0d73f247781f9b597e4ca34e65d95c3ba8d5bed4dcbd13e",
@@ -841,7 +975,7 @@
     "build": "upstream-release"
   },
   {
-    "name": "weaviate-1.39",
+    "name": "weaviate-1.39.12",
     "version": "1.39.12",
     "file": "weaviate-v1.39.12-linux-amd64.tar.gz",
     "sha256": "82a073d157c6d8e70a54031ece9b090bcaf7f6520796b2fd0eedabccdf9c4c2d",
@@ -853,5 +987,105 @@
       "commit": "6007f7029a40c567a94535e88cfe50445e7e0369"
     },
     "build": "upstream-release"
+  },
+  {
+    "name": "pgvector-pg16",
+    "version": "0.8.7",
+    "file": "pgvector-pg16-0.8.7-ubuntu24.04-amd64.tar.gz",
+    "sha256": "fc05557b619ebd49e227e3e3f988757af0cf54296834f16a73638d7c61002b9b",
+    "size": 756913,
+    "upstreamURL": "",
+    "license": "PostgreSQL",
+    "source": {
+      "repo": "https://github.com/pgvector/pgvector",
+      "commit": "f37c13f68b57d2c3472b2214fbcff699d6d34876"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 16,
+    "extensions": [
+      "vector"
+    ],
+    "extensionFlags": {
+      "vector": {
+        "preload": false
+      }
+    }
+  },
+  {
+    "name": "pgvector-pg17",
+    "version": "0.8.7",
+    "file": "pgvector-pg17-0.8.7-ubuntu24.04-amd64.tar.gz",
+    "sha256": "ffd35546859747ce6765be6e6cb02d77b6e3e9a274bb802cb864be61e51a764c",
+    "size": 813693,
+    "upstreamURL": "",
+    "license": "PostgreSQL",
+    "source": {
+      "repo": "https://github.com/pgvector/pgvector",
+      "commit": "f37c13f68b57d2c3472b2214fbcff699d6d34876"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 17,
+    "extensions": [
+      "vector"
+    ],
+    "extensionFlags": {
+      "vector": {
+        "preload": false
+      }
+    }
+  },
+  {
+    "name": "pgvector-pg18",
+    "version": "0.8.7",
+    "file": "pgvector-pg18-0.8.7-ubuntu24.04-amd64.tar.gz",
+    "sha256": "efcba1f269039db5be455e1646a408c3a1e32f540c0a829c37ce95df24a5c78a",
+    "size": 822909,
+    "upstreamURL": "",
+    "license": "PostgreSQL",
+    "source": {
+      "repo": "https://github.com/pgvector/pgvector",
+      "commit": "f37c13f68b57d2c3472b2214fbcff699d6d34876"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 18,
+    "extensions": [
+      "vector"
+    ],
+    "extensionFlags": {
+      "vector": {
+        "preload": false
+      }
+    }
+  },
+  {
+    "name": "supabase-imgproxy",
+    "version": "4.0.21",
+    "file": "supabase-imgproxy-4.0.21-ubuntu24.04-amd64.tar.gz",
+    "sha256": "242b982465a12d7b3c878b0acc1deeceb0f3f90c94313784ddd9d08989ec5cab",
+    "size": 25028534,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/imgproxy/imgproxy",
+      "commit": "302105ccd183d0038ef71aa11ab4ff3de5f0c989"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libvips42t64",
+      "fonts-dejavu-core"
+    ]
   }
 ]

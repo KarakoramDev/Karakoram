@@ -4,10 +4,10 @@ stage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)
 trap '"'"'rm -rf -- "$stage"'"'"' EXIT HUP INT TERM
 cd "$stage"
 set -C
-file='"'"'supabase-pg17-extensions-17.11.1-1-ubuntu24.04-amd64.tar.gz'"'"'
+file='"'"'supabase-pg17-extensions-17.11.1-2-ubuntu24.04-amd64.tar.gz'"'"'
 test ! -e "$file" && test ! -L "$file"
-curl -fsSL '"'"'https://example.test/supabase-pg17-extensions-17.11.1-1-ubuntu24.04-amd64.tar.gz'"'"' > "$file"
-printf '"'"'%s\n'"'"' '"'"'346b262fc170192010ae39798299a38599fcf01d5e67f84c577079f0f4423b0b  supabase-pg17-extensions-17.11.1-1-ubuntu24.04-amd64.tar.gz'"'"' | sha256sum -c -
+curl -fsSL '"'"'https://example.test/supabase-pg17-extensions-17.11.1-2-ubuntu24.04-amd64.tar.gz'"'"' > "$file"
+printf '"'"'%s\n'"'"' '"'"'c2400e358090a5bfad9e8f56b198fa273c31587ac0d3db0138a30b4766227f1f  supabase-pg17-extensions-17.11.1-2-ubuntu24.04-amd64.tar.gz'"'"' | sha256sum -c -
 python3 -c '"'"'# SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The Karakoram Authors
 """Validate tar headers, not locale-dependent human-readable tar listings."""

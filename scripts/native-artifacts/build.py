@@ -33,9 +33,10 @@ ROOTLESS = None
 if os.environ.get('NATIVE_ARTIFACT_TRANSPORT') == 'rootless':
     from rootless import Rootless
     ROOTLESS = Rootless(OUT / '.rootless')
-ALL_ORDER = ['supabase-storage','supabase-postgres-meta','supabase-realtime','supabase-studio','supabase-pg17-extensions',
+ALL_ORDER = ['supabase-imgproxy','supabase-storage','supabase-postgres-meta','supabase-realtime','supabase-studio','supabase-pg17-extensions',
              'timescaledb-pg16','timescaledb-pg17','timescaledb-pg18','citus-pg16','citus-pg17','citus-pg18',
-             'supabase-imgproxy','supabase-supavisor','supabase-logflare','supabase-edge-runtime','mongodb-mcp-server']
+             'pgvector-pg16','pgvector-pg17','pgvector-pg18',
+             'supabase-supavisor','supabase-logflare','supabase-edge-runtime','mongodb-mcp-server']
 
 
 def metadata_path(name):
@@ -257,7 +258,8 @@ def toolchains(r):
         install_toolchain('rust-'+v, installer=f'rm -rf /root/rust-{v}-x86_64-unknown-linux-gnu /opt/rust-{v}; tar -xf /root/{filename} -C /root; /root/rust-{v}-x86_64-unknown-linux-gnu/install.sh --prefix=/opt/rust-{v} --disable-ldconfig')
         paths.append('/opt/rust-'+v+'/bin')
     if r.get('name') == 'supabase-pg17-extensions':
-        toolchains({'rust':'1.80.0'})
+        install_toolchain('libsodium-1.0.22', installer='true')
+        install_toolchain('supabase-pg17-extensions-previous', installer='true')
     if r.get('bun'):
         pin = TOOLCHAINS['bun-'+r['bun']]
         install_toolchain('bun-'+r['bun'], installer=f'rm -rf /opt/bun-linux-x64; unzip -oq /root/{pin["file"]} -d /opt; install -m0755 /opt/bun-linux-x64/bun /usr/local/bin/bun')
@@ -412,6 +414,8 @@ def qualify(name, candidate, started):
             run('incus','start',RUNNER)
         push(candidate, RUNNER, '/root/artifact.tar.gz')
         push(HERE/'smoke.py', RUNNER, '/root/smoke.py')
+        if name.startswith('pgvector-pg'):
+            push(ROOT/'internal/engine/nativeartifacts/pgvector_publish.py', RUNNER, '/root/pgvector_publish.py')
         if name == 'mongodb-mcp-server':
             push(HERE/'mongodb_mcp.py', RUNNER, '/root/mongodb_mcp.py')
         if name == 'supabase-studio':
@@ -422,7 +426,7 @@ def qualify(name, candidate, started):
                     raise RuntimeError('Studio postgres-meta fixture differs from lock')
             run('incus','file','push',str(archive),RUNNER+'/root/meta.tar.gz')
         smoke_env = {key:os.environ[key] for key in ('S3_ENDPOINT','S3_ACCESS_KEY','S3_SECRET_KEY','S3_REGION','S3_BUCKET','NATIVE_ARTIFACT_SMOKE_PREFIX') if key in os.environ}
-        if name == 'supabase-imgproxy':
+        if name in ('supabase-imgproxy', 'supabase-storage'):
             smoke_env['imgproxyEnv'] = json.loads((HERE/'imgproxy-env.json').read_text())
         if name == 'supabase-storage':
             imgproxy = next(a for a in json.loads(LOCK.read_text()) if a['name']=='supabase-imgproxy')
@@ -436,6 +440,9 @@ def qualify(name, candidate, started):
             push(HERE/'storage_smoke.py', RUNNER, '/root/storage_smoke.py')
             smoke_env['storageEnv'] = json.loads((HERE/'storage-env.json').read_text())
             smoke_env['imgproxySHA256'] = digest
+        if name == 'supabase-realtime':
+            # Exported by TestRealtimeNativeFixture from the production renderer.
+            smoke_env['realtime'] = json.loads(Path(os.environ['KARAKORAM_REALTIME_SMOKE_FIXTURE']).read_text())
         if name == 'supabase-pg17-extensions':
             extension_pins = json.loads((HERE/'extensions.json').read_text())
             smoke_env['extensionFlags'] = {extension:pin['flags'] for extension,pin in extension_pins.items()}
