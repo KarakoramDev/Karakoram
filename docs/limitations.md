@@ -202,6 +202,18 @@ v0.4.5 fixes only the imported-baseline PITR coverage freeze and empty-GTID back
 Follow the [v0.4.5 upgrade procedure](upgrade.md#upgrading-to-v045), including
 data-member agent relaunch and a new full backup.
 
+- **Data MCP can keep failing with `tool listing unavailable` after its
+  connection to a cluster's companion drops** (also present in v0.3.0–v0.4.4).
+  If the connection between the control plane and a cluster's Data MCP
+  companion closes — for example after the companion restarts or a network
+  interruption — the gateway keeps reusing the closed connection, and Data MCP
+  requests for that cluster keep failing; the stale connection is only dropped
+  after about 10 minutes with no Data MCP requests for that cluster, or when
+  the control plane restarts. Your databases are not affected. Workaround: stop
+  sending Data MCP requests to that cluster for about 10 minutes, or restart
+  the Karakoram control plane (clusters keep running while it restarts).
+  A fix is planned for the next release.
+
 ## Known issues in v0.4.4
 
 The two MySQL issues marked fixed below require the
