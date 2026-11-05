@@ -90,9 +90,9 @@ export function defaultProvider<T extends { name: string }>(providers: T[]): T |
   return providers.find((provider) => provider.name === 'psmdb') ?? providers[0];
 }
 
-/** Deprecated RabbitMQ binaries are API-only upgrade sources, never wizard choices. */
+/** Deprecated migration/recovery sources are never new-cluster wizard choices. */
 export function versionSelectable(provider: string, version: Schemas['Provider']['versions'][number]): boolean {
-  return version.status !== 'unavailable' && (provider !== 'rabbitmq' || version.status !== 'deprecated');
+  return version.status !== 'unavailable' && (!['rabbitmq', 'psmdb', 'mysql', 'pxc'].includes(provider) || version.status !== 'deprecated');
 }
 
 export function tabAvailable(provider: Metadata | undefined, tab: string): boolean {

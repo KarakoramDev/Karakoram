@@ -62,7 +62,7 @@ var clusterName = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}$`)
 
 // Catalog pins noble packages published by repo.percona.com.
 // 8.3 is deliberately excluded: repository presence alone does not establish a supported major-upgrade path.
-var catalog = []domain.VersionInfo{{Version: "6.0.29-23", Major: "6.0", Status: "deprecated"}, {Version: "7.0.40-22", Major: "7.0", Status: "supported"}, {Version: "7.0.43-23", Major: "7.0", Status: "supported"}, {Version: "8.0.29-13", Major: "8.0", Status: "supported"}, {Version: "8.0.32-14", Major: "8.0", Default: true, Status: "supported"}}
+var catalog = []domain.VersionInfo{{Version: "6.0.29-23", Major: "6.0", Status: "deprecated"}, {Version: "7.0.40-22", Major: "7.0", Status: "supported"}, {Version: "7.0.43-23", Major: "7.0", Status: "supported"}, {Version: "7.0.45-24", Major: "7.0", Status: "supported"}, {Version: "8.0.29-13", Major: "8.0", Status: "supported"}, {Version: "8.0.32-14", Major: "8.0", Status: "supported"}, {Version: "8.0.34-15", Major: "8.0", Default: true, Status: "supported"}}
 
 func defaultResources() domain.Resources {
 	return domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 5, MaxDisk: 5}
@@ -156,7 +156,7 @@ func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 		s.Provider = "psmdb"
 	}
 	if s.Version == "" {
-		s.Version = "8.0.32-14"
+		s.Version = "8.0.34-15"
 	}
 	if s.Topology.Type == "" {
 		s.Topology.Type = "replicaSet"
@@ -238,6 +238,9 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 			versions = append(versions, v.Version)
 		}
 		return engine.InvalidField("spec.version", domain.ReasonUnsupported, "spec.version is not offered by provider psmdb; offered versions: %s", strings.Join(versions, ", "))
+	}
+	if old == nil && s.DataSource == nil && major(s.Version) == "6.0" {
+		return engine.InvalidField("spec.version", domain.ReasonUnsupported, "Percona Server for MongoDB 6.0 reached end of life; new clusters must use 7.0 or 8.0. Existing 6.0 clusters keep running and can upgrade to 7.0, then 8.0. Restoring existing 6.0 data is allowed only with a validated dataSource.")
 	}
 	if s.Topology.Type != "replicaSet" && s.Topology.Type != "sharded" {
 		return invalid("unsupported topology")

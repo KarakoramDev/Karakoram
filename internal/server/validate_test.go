@@ -508,7 +508,7 @@ func TestTypedClientOmittedFieldsAndExplicitZero(t *testing.T) {
 		t.Fatal(created, err)
 	}
 	spec := created.JSON201.Spec
-	if spec.Version != "8.0.32-14" || spec.Topology.Type != "replicaSet" || spec.Components.Engine.Replicas != 3 || spec.Components.Engine.Resources.MaxCpu != 1 || spec.Components.Engine.Resources.MinRam != 1 || spec.Components.Engine.Resources.MinDisk != 5 {
+	if spec.Version != "8.0.34-15" || spec.Topology.Type != "replicaSet" || spec.Components.Engine.Replicas != 3 || spec.Components.Engine.Resources.MaxCpu != 1 || spec.Components.Engine.Resources.MinRam != 1 || spec.Components.Engine.Resources.MinDisk != 5 {
 		t.Fatal(spec)
 	}
 	for _, tc := range []struct {

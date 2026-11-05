@@ -25,13 +25,15 @@ test('default provider selects psmdb explicitly rather than catalog order', () =
   assert.equal(defaultProvider([]), undefined);
 });
 
-test('new-cluster version choices exclude deprecated RabbitMQ upgrade sources', () => {
+test('new-cluster version choices exclude deprecated migration sources', () => {
   const old: Schemas['Provider']['versions'][number] = { version: '4.3.5', major: '4.3', status: 'deprecated', default: false };
   const current: Schemas['Provider']['versions'][number] = { version: '4.3.6', major: '4.3', status: 'supported', default: true };
-  assert.equal(versionSelectable('rabbitmq', old), false);
-  assert.equal(versionSelectable('rabbitmq', current), true);
-  assert.equal(versionSelectable('rabbitmq', { ...current, status: 'unavailable' }), false);
-  assert.equal(versionSelectable('psmdb', old), true);
+  for (const provider of ['rabbitmq', 'psmdb', 'mysql', 'pxc']) {
+    assert.equal(versionSelectable(provider, old), false, provider);
+    assert.equal(versionSelectable(provider, current), true, provider);
+    assert.equal(versionSelectable(provider, { ...current, status: 'unavailable' }), false, provider);
+  }
+  assert.equal(versionSelectable('postgres', old), true);
 });
 
 test('replica-set overview details are opt-in through the engine registry', () => {

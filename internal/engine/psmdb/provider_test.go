@@ -186,6 +186,7 @@ func setup(t *testing.T) (*Provider, *engine.Context, *fakeInfra, *int) {
 	p := New(Options{Store: st, InternalCAPEM: "control-plane-ca"})
 	c := &domain.Cluster{Name: "demo"}
 	p.ApplyDefaults(&c.Spec)
+	c.Spec.Version = "8.0.32-14" // Keep this runtime fixture independent of catalog defaults.
 	c.Spec.Components.Engine.Replicas = 1
 	if e = st.CreateCluster(context.Background(), c); e != nil {
 		t.Fatal(e)
@@ -327,7 +328,7 @@ func TestRuntimeSpecAndConfig(t *testing.T) {
 		t.Fatalf("runtime env = %v, want %v", spec.Env, wantEnv)
 	}
 	prepare := strings.Join(spec.Prepare, "\n")
-	for _, want := range []string{"sudo apt-get update", "--scheme https", "PERCONA_TELEMETRY_DISABLE=1", "percona-server-mongodb-server=8.0.29-13.noble", "percona-server-mongodb-mongos=8.0.29-13.noble", "percona-server-mongodb-tools=8.0.29-13.noble", "percona-mongodb-mongosh=2.10.0.noble", "percona-backup-mongodb=2.16.0-1.noble"} {
+	for _, want := range []string{"sudo apt-get update", "--scheme https", "PERCONA_TELEMETRY_DISABLE=1", "percona-server-mongodb-server=8.0.29-13.noble", "percona-server-mongodb-mongos=8.0.29-13.noble", "percona-server-mongodb-tools=8.0.29-13.noble", "mongosh-2.14.1-linux-x64.tgz", "percona-backup-mongodb=2.16.0-1.noble"} {
 		if !strings.Contains(prepare, want) {
 			t.Errorf("missing %q in prepare commands %s", want, prepare)
 		}

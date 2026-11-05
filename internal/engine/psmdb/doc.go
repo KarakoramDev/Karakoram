@@ -11,10 +11,11 @@ https://repo.percona.com/psmdb-60/apt/dists/noble/main/binary-amd64/Packages,
 https://repo.percona.com/psmdb-70/apt/dists/noble/main/binary-amd64/Packages, and
 https://repo.percona.com/psmdb-80/apt/dists/noble/main/binary-amd64/Packages
 provide the catalog pins 6.0.29-23 (deprecated),
-7.0.40-22, 7.0.43-23, 8.0.29-13 and default 8.0.32-14. Package pins add
-.noble. PBM is pinned to 2.16.0-1.noble. Percona's 8.3 documentation at
-https://docs.percona.com/percona-server-for-mongodb/8.3/ explicitly labels
-the family Technical Preview, so it is not advertised as supported.
+7.0.40-22, 7.0.43-23, 7.0.45-24, 8.0.29-13, 8.0.32-14 and default
+8.0.34-15. Server/router package pins add .noble; the new 7.0.45-24 and
+8.0.34-15 releases use independently versioned tools 100.19.1-2.noble.
+Older releases retain matching tools pins. PBM is pinned to 2.16.0-1.noble.
+The GA 8.3 family is excluded pending adjacent-major/FCV qualification.
 Telemetry opt-out follows
 https://docs.percona.com/percona-server-for-mongodb/8.0/telemetry.html:
 PERCONA_TELEMETRY_DISABLE=1 is set during apt installation and at runtime.

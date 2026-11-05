@@ -17,6 +17,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pbm"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/users"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -27,15 +28,44 @@ import (
 
 const pbmVersion = "2.16.0-1.noble"
 
+// The shell is mandatory for supported lines. Fail at startup for a broken
+// embedded lock, just as nativeartifacts does for malformed or duplicate entries.
+var mongoshArtifact = func() nativeartifacts.Artifact {
+	a, err := nativeartifacts.Get("mongodb-mongosh-2.14.1")
+	if err != nil {
+		panic(err)
+	}
+	if a.UpstreamURL == "" {
+		panic("mongosh must have an official upstream URL")
+	}
+	return a
+}()
+
 // PrepareCommands returns the installation commands used by member deployments
 // for the requested Percona Server for MongoDB version.
 func PrepareCommands(version string) []string {
 	series := strings.ReplaceAll(major(version), ".", "")
-	shell := "2.10.0.noble"
+	shell := " percona-mongodb-mongosh=2.10.0.noble"
 	if series == "60" {
-		shell = "2.8.3.noble"
+		shell = " percona-mongodb-mongosh=2.8.3.noble"
 	}
-	return []string{"sudo apt-get update", "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg lsb-release", "curl -fsSL https://repo.percona.com/apt/percona-release_latest.generic_all.deb -o /tmp/percona-release.deb", "sudo dpkg -i /tmp/percona-release.deb", "sudo percona-release enable psmdb-" + series + " release --scheme https", "sudo percona-release enable pbm release --scheme https", "sudo apt-get update", fmt.Sprintf("sudo PERCONA_TELEMETRY_DISABLE=1 apt-get install -y --no-install-recommends percona-server-mongodb-server=%[1]s.noble percona-server-mongodb-mongos=%[1]s.noble percona-server-mongodb-tools=%[1]s.noble percona-mongodb-mongosh=%[2]s percona-backup-mongodb=%[3]s", version, shell, pbmVersion)}
+	tools := version + ".noble"
+	if version == "7.0.45-24" || version == "8.0.34-15" {
+		tools = "100.19.1-2.noble"
+	}
+	commands := []string{"sudo apt-get update", "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg lsb-release python3", "curl -fsSL https://repo.percona.com/apt/percona-release_latest.generic_all.deb -o /tmp/percona-release.deb", "sudo dpkg -i /tmp/percona-release.deb", "sudo percona-release enable psmdb-" + series + " release --scheme https", "sudo percona-release enable pbm release --scheme https", "sudo apt-get update", fmt.Sprintf("sudo PERCONA_TELEMETRY_DISABLE=1 apt-get install -y --no-install-recommends percona-server-mongodb-server=%[1]s.noble percona-server-mongodb-mongos=%[1]s.noble percona-server-mongodb-tools=%[2]s%[3]s percona-backup-mongodb=%[4]s", version, tools, shell, pbmVersion)}
+	if series != "60" {
+		// Keep Percona's package installed: the server depends on its concrete
+		// name. A local diversion preserves that dependency across APT upgrades.
+		url, err := nativeartifacts.ResolveURL(mongoshArtifact)
+		if err != nil {
+			// The embedded official URL makes release fallback unnecessary.
+			panic(err)
+		}
+		commands = append(commands, nativeartifacts.PrepareCommands(mongoshArtifact, url, "/opt/karakoram/mongosh-2.14.1", "root")...)
+		commands = append(commands, "sudo dpkg-divert --local --rename --divert /usr/bin/mongosh.percona --add /usr/bin/mongosh", "sudo ln -sfn /opt/karakoram/mongosh-2.14.1/mongosh-2.14.1-linux-x64/bin/mongosh /usr/bin/mongosh")
+	}
+	return commands
 }
 
 func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) infra.RuntimeSpec {

@@ -162,7 +162,7 @@ func PrepareCommands(a Artifact, resolvedURL, destDir, owner string) []string {
 	if legacy {
 		major = 17
 	}
-	isTar := strings.HasSuffix(a.File, ".tar.gz") || strings.HasSuffix(a.File, ".tar.xz")
+	isTar := strings.HasSuffix(a.File, ".tar.gz") || strings.HasSuffix(a.File, ".tar.xz") || strings.HasSuffix(a.File, ".tgz")
 	if (a.Kind != "" && a.Kind != "pg-extension") || (a.Kind == "" && a.PGMajor != 0) || (isExtension && (!validPGMajor(major) || !isTar)) {
 		return []string{"sudo sh -c " + quote("echo 'invalid native artifact kind or PostgreSQL major' >&2\nexit 1")}
 	}
