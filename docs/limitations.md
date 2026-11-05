@@ -70,7 +70,7 @@ These cross-engine constraints define the operating model; engine-specific limit
 - Result/rate/concurrency bounds are not query-cost guarantees. Stored data can inject prompts; confirmations do not provide rollback. RabbitMQ peeking consumes/requeues and therefore needs write access. Elasticsearch hidden/system/dot indices and streams backed by them are refused.
 - PostgreSQL's companion connects to the first scoped database (default `postgres`); existing PUBLIC grants are not revoked and can weaken scope isolation. See [scope and identity caveats](data-mcp.md#managed-identities-and-rotation).
 
-## Continuing limitations in v0.4.4
+## Continuing limitations in v0.4.5
 
 - **PostgreSQL administrator password rotation remains unavailable.** The
   `postgres` administrator password cannot be rotated in place; follow
@@ -148,16 +148,26 @@ The v0.4.2 PITR memory, singleton backup-memory, PXC retirement and clone,
 PXC post-restore history, ProxySQL TLS and Zerops Weaviate issues are resolved
 in v0.4.3 with the [required rollout procedures](upgrade.md#upgrading-to-v043).
 Their old workarounds remain [historical guidance](upgrade.md#known-issues-in-v042),
-not current v0.4.4 limitations. Existing history latches are not silently cleared.
+not current v0.4.5 limitations. Existing history latches are not silently cleared.
+
+## Known issues in v0.4.5
+
+The continuing limitations above and the Zerops failed-deployment resource
+recovery and false PXC GTID-history incident issues below remain present.
+Their fixes are planned for v0.4.6, not this hotfix. v0.4.5 fixes only the
+imported-baseline PITR coverage freeze and empty-GTID backup metadata rejection.
+Follow the [v0.4.5 upgrade procedure](upgrade.md#upgrading-to-v045), including
+data-member agent relaunch and a new full backup.
 
 ## Known issues in v0.4.4
 
-The continuing limitations above still apply. The following PXC issue is not
-fixed by the hotfix; its fix is planned for v0.4.5.
+The two MySQL issues marked fixed below require the
+[v0.4.5 upgrade procedure](upgrade.md#upgrading-to-v045). The Zerops and PXC
+issues remain unfixed in v0.4.5.
 
 - **MySQL point-in-time recovery can silently stop extending after the writer
-  changes in Group Replication and PXC clusters** (also present in
-  v0.4.0–v0.4.3). When the writer moves — automatic failover, switchover, or
+  changes in Group Replication and PXC clusters — fixed in v0.4.5** (also
+  present in v0.4.0–v0.4.3). When the writer moves — automatic failover, switchover, or
   rolling maintenance — to a member whose data was copied in rather than
   replayed from its own binlogs, binlogs keep uploading and `BinlogArchive`
   stays healthy, but the end of the point-in-time window stops advancing.
@@ -167,8 +177,18 @@ fixed by the hotfix; its fix is planned for v0.4.5.
   place. Restores to points before the freeze still work, and full backups
   are not affected. A new full backup does not restart coverage. To check,
   compare the window end from `karactl backups pitr-window CLUSTER` with the
-  current time. Until the fix, rely on full backups and schedule them as often
-  as your recovery point requires. A fix is planned for the next release.
+  archived transaction times. Corrected agents rebuild existing coverage proofs:
+  an existing same-source full can resume if its exact anchor and contiguous
+  archived dependencies remain available. A rolling GR/PXC agent relaunch moves
+  the writer; take a new full and do not assume the old-to-new-baseline gap is
+  recovered. See the [upgrade procedure](upgrade.md#upgrading-to-v045).
+- **Fresh-cluster first full backup fails with `metadata_invalid`
+  — fixed in v0.4.5** (v0.4.0–v0.4.4; MySQL single-instance, Group Replication
+  and PXC whenever executed GTIDs are empty). The parser rejected valid
+  two-column XtraBackup metadata until a committed binary-logged write made
+  the set nonempty. Corrected data-member agents need no application write;
+  failed backups stay failed, so request a new full after the
+  [upgrade](upgrade.md#upgrading-to-v045).
 - **On Zerops, raising the resources of a member that failed its first deployment
   doesn't take effect** (also present in v0.4.3). If a newly added member, extra
   component or proxy exhausts its deployment retries — for example because it
@@ -189,7 +209,7 @@ fixed by the hotfix; its fix is planned for v0.4.5.
   is and upgrade once the fix is released. After cancelling or a timeout,
   check that the new member is actually gone before making further changes.
   Neo4j and the Data MCP companion are not
-  affected. A fix is planned for the next release.
+  affected. A fix is planned for v0.4.6, not the v0.4.5 hotfix.
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or
@@ -213,7 +233,7 @@ fixed by the hotfix; its fix is planned for v0.4.5.
   scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
   serving reads and writes, so leave it as it is and upgrade once the fix is
   released. This needs configured backup storage and healthy members. A fix is
-  planned for v0.4.5.
+  planned for v0.4.6, not the v0.4.5 hotfix.
 
 ## Known issues in v0.4.3
 

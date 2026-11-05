@@ -37,8 +37,10 @@ Fresh clusters can have an empty executed GTID set because managed bootstrap
 accounts are created with binary logging disabled. XtraBackup then records only
 the binlog filename and position; these remain required and validated, while the
 GTID column is optional. A first full backup does not require an application
-write. This parser correction requires the updated member agent, not only a
-control-plane upgrade.
+write in v0.4.5. In v0.4.0–v0.4.4 this valid two-column format could fail with
+`metadata_invalid`. This parser correction requires the updated member agent,
+not only a control-plane upgrade. Failed backups stay failed; request a new
+full after the [v0.4.5 rollout](../upgrade.md#upgrading-to-v045).
 
 Pipeline failures retain their reason-code prefix (for example,
 `pipeline_stream_failed`) and include XtraBackup/xbcloud exit statuses or signals.
@@ -235,6 +237,15 @@ snapshot file/position to distinguish this baseline history from logged
 dependencies; it does not require purged-only history to reappear in every
 `Previous_gtids` event. A missing anchor remains conservative, and missing
 post-snapshot dependencies still stop coverage.
+
+The coverage-cache identity is versioned so corrected agents rebuild existing
+fulls' proofs. An existing full blocked only by imported baseline history can
+resume extending through previously archived transactions if the physical
+source is unchanged and the exact anchor and contiguous dependencies remain
+available. This cannot recover missing logs or bridge physical-writer changes.
+The rolling GR/PXC relaunch moves the writer at least once; take a new full
+and do not assume recovery into the old-to-new-baseline gap. Follow the
+[v0.4.5 upgrade procedure](../upgrade.md#upgrading-to-v045).
 
 When verified same-source binlogs cannot extend the chain, **PITR** reports
 `False/CoverageBlocked` with the reason and frozen endpoint, and emits a
