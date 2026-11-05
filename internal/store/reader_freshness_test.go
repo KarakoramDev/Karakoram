@@ -9,10 +9,8 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"modernc.org/sqlite"
@@ -21,14 +19,6 @@ import (
 var readerCancelFunctionID atomic.Uint64
 
 func TestCanceledReaderQueryReleasesSnapshot(t *testing.T) {
-	// The deliberately blocked driver mutex prevents virtual time advancing.
-	// Keep the original cancellation scheduling delay on real time.
-	ticks := time.NewTicker(100 * time.Millisecond)
-	defer ticks.Stop()
-	synctest.Test(t, func(t *testing.T) { canceledReaderQueryReleasesSnapshot(t, ticks.C) })
-}
-
-func canceledReaderQueryReleasesSnapshot(t *testing.T, realTicks <-chan time.Time) {
 	ctx := t.Context()
 	readCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -37,13 +27,9 @@ func canceledReaderQueryReleasesSnapshot(t *testing.T, realTicks <-chan time.Tim
 	if err := sqlite.RegisterScalarFunction(function, 0, func(_ *sqlite.FunctionContext, _ []driver.Value) (driver.Value, error) {
 		close(started)
 		<-readCtx.Done()
-		// Let the driver's cancellation watcher mark the query canceled before
-		// its first row returns. Interruption itself is delayed below.
-		// One tick may already be buffered; three retain at least the original
-		// 100ms delay without requiring the fake clock to advance.
-		for range 3 {
-			<-realTicks
-		}
+		// Let the cancellation watcher mark the first-row acquisition before
+		// the callback returns, as in the original driver regression.
+		time.Sleep(100 * time.Millisecond)
 		return int64(1), nil
 	}); err != nil {
 		t.Fatal(err)
@@ -52,51 +38,12 @@ func canceledReaderQueryReleasesSnapshot(t *testing.T, realTicks <-chan time.Tim
 	if _, err := s.writer.ExecContext(ctx, "CREATE TABLE read_freshness(value INTEGER); INSERT INTO read_freshness VALUES(0)"); err != nil {
 		t.Fatal(err)
 	}
-	// Initialize every reader connection, leaving three borrowed so the
-	// canceled query's connection is the next one reused from the pool.
-	var held []*sql.Conn
-	for range 4 {
-		conn, err := s.reader.Conn(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		held = append(held, conn)
-		var initial int
-		if err := conn.QueryRowContext(ctx, "SELECT value FROM read_freshness").Scan(&initial); err != nil {
-			t.Fatal(err)
-		}
-	}
-	defer func() {
-		for _, conn := range held {
-			_ = conn.Close()
-		}
-	}()
-	conn := held[3]
-	// modernc serializes sqlite3_interrupt and connection closure with this
-	// mutex. Holding it reproduces the cancellation watcher's preemption
-	// between marking the query canceled and actually interrupting SQLite.
-	var interruptLock sync.Locker
-	if err := conn.Raw(func(raw any) error {
-		var ok bool
-		interruptLock, ok = raw.(sync.Locker)
-		if !ok {
-			return fmt.Errorf("SQLite connection does not expose its interruption mutex")
-		}
-		interruptLock.Lock()
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		interruptLock.Unlock()
-		// The delayed cancellation watcher reads the driver's db handle
-		// before taking this mutex. Join it before Store.Close cleanup, not
-		// while the lock is held. All snapshot/reuse assertions run first.
-		synctest.Wait()
-	}()
+	// Cancel while SQLite produces the first row. Exercise the public driver
+	// contract rather than holding its private interruption mutex: since
+	// v1.42.2 cancellation and connection reuse synchronize on that mutex.
 	queryDone := make(chan error, 1)
 	go func() {
-		rows, err := conn.QueryContext(readCtx, "SELECT value, "+function+"() FROM read_freshness")
+		rows, err := s.reader.QueryContext(readCtx, "SELECT value, "+function+"() FROM read_freshness")
 		if rows != nil {
 			_ = rows.Close()
 		}
@@ -107,23 +54,16 @@ func canceledReaderQueryReleasesSnapshot(t *testing.T, realTicks <-chan time.Tim
 	if err := <-queryDone; !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected first-row acquisition to be canceled, got %v", err)
 	}
-	if err := conn.Close(); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := s.writer.ExecContext(ctx, "UPDATE read_freshness SET value=1"); err != nil {
 		t.Fatal(err)
 	}
-	var got int
-	if err := s.reader.QueryRowContext(ctx, "SELECT value FROM read_freshness").Scan(&got); err != nil {
+	assertPooledReaderValue(t, s, 1)
+	var busy, log, checkpointed int
+	if err := s.writer.QueryRowContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)").Scan(&busy, &log, &checkpointed); err != nil {
 		t.Fatal(err)
 	}
-	if got != 1 {
-		t.Fatalf("reader retained a canceled query snapshot: got %d, committed 1", got)
-	}
-	for _, conn := range held[:3] {
-		if err := conn.QueryRowContext(ctx, "SELECT value FROM read_freshness").Scan(&got); err != nil || got != 1 {
-			t.Fatalf("reader missed committed update: got %d, error %v", got, err)
-		}
+	if busy != 0 || log != 0 || checkpointed != 0 {
+		t.Fatalf("canceled reader retained WAL: busy=%d log=%d checkpointed=%d", busy, log, checkpointed)
 	}
 }
 

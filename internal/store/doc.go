@@ -3,9 +3,14 @@
 
 // Package store provides pure-Go SQLite persistence for Karakoram resources.
 // Writes use a single connection; readers use a WAL-enabled connection pool.
-// The SQLite driver must close first-row statements on context cancellation
-// (modernc.org/sqlite v1.40.1 or later); otherwise pooled readers can retain
-// obsolete WAL snapshots even after later writes have committed.
+// modernc.org/sqlite v1.61.1 embeds SQLite 3.54.1 with matching libc v1.79.0
+// (Go 1.26). Retain first-row cancellation cleanup (fixed in v1.40.1), the
+// interruption/reuse race fix (v1.42.2), and context-aware busy waits (v1.61).
+// Otherwise readers can retain obsolete WAL snapshots or interrupt later work.
+// Connection-local busy_timeout and foreign_keys use fixed, repeated _pragma
+// parameters; new shorthand pragmas, OFD locks and time conversions are not used.
+// Close releases readers before the writer so SQLite checkpoints and removes
+// WAL sidecars after the last connection closes.
 // Migrations are embedded and ordered. Methods accept contexts and return
 // ErrNotFound or ErrConflict for resource-level failures.
 //
