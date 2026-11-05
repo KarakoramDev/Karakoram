@@ -188,7 +188,7 @@ func TestNativeAPI(t *testing.T) {
 		}
 	})
 	launch("rest", "14.18", rest)
-	launch("gateway", "1.39.1", envoy)
+	launch("gateway", "1.39.6", envoy)
 	request := func(method, path, key string, body []byte) (int, []byte) {
 		t.Helper()
 		req, err := http.NewRequestWithContext(ctx, method, "http://127.0.0.1:8000"+path, bytes.NewReader(body))

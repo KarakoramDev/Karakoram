@@ -34,7 +34,7 @@ type observed struct {
 func TestEnvoyConformance(t *testing.T) {
 	bin := os.Getenv("KARAKORAM_ENVOY_BIN")
 	if bin == "" {
-		t.Skip("set KARAKORAM_ENVOY_BIN to the official Envoy 1.39.1 amd64 executable")
+		t.Skip("set KARAKORAM_ENVOY_BIN to the official Envoy 1.39.6 amd64 executable")
 	}
 	executable, err := os.Open(bin)
 	if err != nil {
@@ -46,11 +46,11 @@ func TestEnvoyConformance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hex.EncodeToString(hash.Sum(nil)) != "002c6e1c69ed0fa0ea381887247cadadfaec9481375fa8d8d2b1731eeabf40b8" {
-		t.Fatal("official Envoy 1.39.1 checksum mismatch")
+	if hex.EncodeToString(hash.Sum(nil)) != "116ef1d0d4e0685bbb0749134aa84ebd6d56a37c568ce6418f1242138d9d10cf" {
+		t.Fatal("official Envoy 1.39.6 checksum mismatch")
 	}
 	version, err := exec.Command(bin, "--version").CombinedOutput()
-	if err != nil || !bytes.Contains(version, []byte("1.39.1")) {
+	if err != nil || !bytes.Contains(version, []byte("1.39.6")) {
 		t.Fatal("unexpected Envoy version")
 	}
 	upstreams := map[string]string{}

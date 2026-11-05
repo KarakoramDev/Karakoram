@@ -376,7 +376,7 @@ class NativeBuilder(unittest.TestCase):
                 commands = MagicMock()
                 commands.Popen.return_value = process
                 scope = {'subprocess':commands,'env':{},'log':None,'time':clock,
-                         'meta_process':meta,'name':'supabase-studio','health':'http://127.0.0.1:3000/',
+                         'meta_process':meta,'image_source':None,'name':'supabase-studio','health':'http://127.0.0.1:3000/',
                          'urllib':build.urllib,'json':json,'image_process':None}
                 with patch.object(build.urllib.request,'urlopen',side_effect=response), patch('builtins.print'):
                     if outcome == 'ready':

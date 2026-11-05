@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -30,14 +29,18 @@ func TestNativeVector(t *testing.T) {
 	defer cancel()
 	root := t.TempDir()
 	var mu sync.Mutex
-	received := map[string]bool{}
+	received := map[string][]map[string]any{}
 	analytics := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("x-api-key") != "test-ingestion-token" {
 			t.Error("missing analytics ingestion key")
 		}
-		io.Copy(io.Discard, r.Body)
+		var events []map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
+			t.Errorf("invalid Logflare JSON batch: %v", err)
+		}
 		mu.Lock()
-		received[r.URL.Query().Get("source_name")] = true
+		name := r.URL.Query().Get("source_name")
+		received[name] = append(received[name], events...)
 		mu.Unlock()
 		w.WriteHeader(200)
 	}))
@@ -94,7 +97,18 @@ func TestNativeVector(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	batch := []map[string]any{{"member": "member", "process": "auth", "timestamp": time.Now().UTC(), "message": "auth message"}, {"member": "member", "process": "rest", "timestamp": time.Now().UTC(), "message": "rest message"}, {"member": "member", "process": "postgres", "timestamp": time.Now().UTC(), "message": "LOG: native vector ingestion"}}
+	now := time.Now().UTC()
+	batch := []map[string]any{
+		{"member": "member", "process": "gateway", "timestamp": now, "message": "gateway diagnostic"},
+		{"member": "member", "process": "auth", "timestamp": now, "message": `{"time":"2026-11-05T12:00:00Z","level":"info","msg":"auth message"}`},
+		{"member": "member", "process": "rest", "timestamp": now, "message": "05/Nov/2026:12:00:00 +0000: rest message"},
+		{"member": "member", "process": "realtime", "timestamp": now, "message": "12:00:00.000 [info] realtime message"},
+		{"member": "member", "process": "realtime", "timestamp": now, "message": "12:00:00.000 [info] GET /health"},
+		{"member": "member", "process": "storage", "timestamp": now, "message": `{"msg":"storage message","level":"info","time":"2026-11-05T12:00:00Z","hostname":"storage-host","pid":42}`},
+		{"member": "member", "process": "functions", "timestamp": now, "message": "functions message ${UNSET_TEST_VALUE}"},
+		{"member": "member", "process": "postgres", "timestamp": now, "message": "WARNING: native vector ingestion"},
+		{"member": "member", "process": "patroni", "timestamp": now, "message": "patroni message"},
+	}
 	data, _ := json.Marshal(batch)
 	request := func(token string) int {
 		req, _ := http.NewRequestWithContext(ctx, "POST", "http://[::1]:9002", bytes.NewReader(data))
@@ -115,7 +129,14 @@ func TestNativeVector(t *testing.T) {
 	}
 	for deadline := time.Now().Add(10 * time.Second); ; {
 		mu.Lock()
-		complete := received["gotrue.logs.prod"] && received["postgREST.logs.prod"] && received["postgres.logs"]
+		complete := len(received) == 7 &&
+			len(received["cloudflare.logs.prod"]) == 1 &&
+			len(received["gotrue.logs.prod"]) == 1 &&
+			len(received["postgREST.logs.prod"]) == 1 &&
+			len(received["realtime.logs.prod"]) == 1 &&
+			len(received["storage.logs.prod.2"]) == 1 &&
+			len(received["deno-relay-logs"]) == 1 &&
+			len(received["postgres.logs"]) == 2
 		mu.Unlock()
 		if complete {
 			break
@@ -125,5 +146,25 @@ func TestNativeVector(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Log("native Vector config validated; bearer authentication rejects invalid credentials; HTTP batches routed to Auth/PostgREST/Postgres Logflare source identities")
+	mu.Lock()
+	defer mu.Unlock()
+	for source, events := range received {
+		for _, event := range events {
+			metadata, ok := event["metadata"].(map[string]any)
+			if !ok || metadata["member"] != "member" || event["event_message"] == nil {
+				t.Errorf("%s lost native member or message metadata", source)
+			}
+		}
+	}
+	authMetadata := received["gotrue.logs.prod"][0]["metadata"].(map[string]any)
+	if authMetadata["timestamp"] != "2026-11-05T12:00:00Z" || authMetadata["level"] != "info" {
+		t.Error("Auth structured metadata differs from upstream Vector policy")
+	}
+	if received["postgREST.logs.prod"][0]["event_message"] != "rest message" ||
+		received["realtime.logs.prod"][0]["event_message"] != "realtime message" ||
+		received["storage.logs.prod.2"][0]["event_message"] != "storage message" ||
+		received["deno-relay-logs"][0]["event_message"] != "functions message ${UNSET_TEST_VALUE}" {
+		t.Error("service parsing or literal message preservation changed")
+	}
+	t.Log("native Vector config validated; bearer authentication enforced; all seven Logflare identities, structured parsing and Realtime health filtering exercised")
 }

@@ -38,7 +38,7 @@ func renderVector(s sbspec.Spec, dir string) ([]byte, error) {
 	parsers := map[string]string{
 		"gateway": `.metadata.level = "info"`,
 		"auth": `parsed, err = parse_json(.event_message)
-if err == null { .metadata = merge!(.metadata, parsed) }`,
+if err == null { .metadata.timestamp = parsed.time; .metadata = merge!(.metadata, parsed) }`,
 		"rest": `parsed, err = parse_regex(.event_message, r'^(?P<time>.*): (?P<msg>.*)$')
 if err == null {
  .event_message = parsed.msg
@@ -67,7 +67,7 @@ parsed, err = parse_regex(.event_message, r'.*(?P<level>INFO|NOTICE|WARNING|ERRO
 if err == null { .metadata.parsed.error_severity = parsed.level }`,
 	}
 	sinks := object{}
-	names := map[string]string{"gateway": "kong.logs.prod", "auth": "gotrue.logs.prod", "rest": "postgREST.logs.prod", "realtime": "realtime.logs.prod", "storage": "storage.logs.prod.2", "functions": "deno-relay-logs", "db": "postgres.logs"}
+	names := map[string]string{"gateway": "cloudflare.logs.prod", "auth": "gotrue.logs.prod", "rest": "postgREST.logs.prod", "realtime": "realtime.logs.prod", "storage": "storage.logs.prod.2", "functions": "deno-relay-logs", "db": "postgres.logs"}
 	for name, parser := range parsers {
 		input := "router." + name
 		if name == "realtime" {

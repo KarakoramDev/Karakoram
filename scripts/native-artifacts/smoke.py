@@ -7,6 +7,10 @@ import os
 import json
 import base64
 import hmac
+import http.server
+import functools
+import socket
+import threading
 from pathlib import Path
 import secrets
 import subprocess
@@ -245,14 +249,23 @@ if name == 'supabase-supavisor':
 if name == 'supabase-logflare':
     subprocess.run(['runuser','-u','postgres','--',pg+'psql','-v','ON_ERROR_STOP=1','-d','smoke','-c','CREATE SCHEMA _analytics;'],check=True,stdout=subprocess.DEVNULL)
     env |= {'PHX_SERVER':'true','PHX_HTTP_PORT':'4000','PHX_HTTP_IP':'127.0.0.1','PHX_SECRET_KEY_BASE':env['SECRET_KEY_BASE'],'DB_DATABASE':'smoke','DB_HOSTNAME':'127.0.0.1','DB_USERNAME':'postgres','DB_SCHEMA':'public','DB_SSL':'false','LOGFLARE_SINGLE_TENANT':'true','LOGFLARE_SUPABASE_MODE':'true','POSTGRES_BACKEND_URL':'postgres://postgres@127.0.0.1:5432/smoke','POSTGRES_BACKEND_SCHEMA':'_analytics','LOGFLARE_PUBLIC_ACCESS_TOKEN':secrets.token_hex(24),'LOGFLARE_PRIVATE_ACCESS_TOKEN':secrets.token_hex(24)}
+image_source = None
 if name == 'supabase-imgproxy':
-    env |= {'IMGPROXY_BIND':'127.0.0.1:5001','IMGPROXY_LOCAL_FILESYSTEM_ROOT':'/tmp/imgproxy-source'}
+    env |= json.loads(Path('/root/smoke-env.json').read_text())['imgproxyEnv']
     source_root = Path('/tmp/imgproxy-source')
     source_root.mkdir()
     def chunk(kind, data):
         return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data))
     png = b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',2,2,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(b'\x00'+b'\xff\x00\x00'*2+b'\x00'+b'\x00\xff\x00'*2))+chunk(b'IEND',b'')
     (source_root/'probe.png').write_bytes(png)
+    (source_root/'probe.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><a href="javascript:alert(1)"><rect width="2" height="2" fill="red"/></a></svg>')
+    # Storage's S3 backend supplies an HTTP(S) source URL, not a shared local file.
+    # Exercise a private address without weakening the loopback/link-local guards.
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:
+        route.connect(('192.0.2.1', 9))
+        image_source_host = route.getsockname()[0]
+    image_source = http.server.ThreadingHTTPServer(('0.0.0.0', 0), functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(source_root)))
+    threading.Thread(target=image_source.serve_forever, daemon=True).start()
 meta_process = None
 image_process = None
 if name == 'supabase-studio':
@@ -399,12 +412,31 @@ try:
                             assert tables.status == 200
                             assert isinstance(json.load(tables),list)
                     if name == 'supabase-imgproxy':
-                        source = base64.urlsafe_b64encode(b'local:///probe.png').rstrip(b'=').decode()
-                        with urllib.request.urlopen('http://127.0.0.1:5001/insecure/rs:fit:1:1/'+source+'.png',timeout=10) as transformed:
+                        def transform(source_url, options, headers=None):
+                            source = urllib.parse.quote(source_url, safe='')
+                            request = urllib.request.Request('http://127.0.0.1:5001/public/'+options+'/plain/'+source, headers=headers or {})
+                            return urllib.request.urlopen(request, timeout=10)
+                        origin = f'http://{image_source_host}:{image_source.server_port}'
+                        with transform(origin+'/probe.png?probe=storage', 'width:1/height:1/resizing_type:fit/format:png') as transformed:
                             assert transformed.status == 200
+                            assert 'Last-Modified' not in transformed.headers
                             output = transformed.read()
                             assert output.startswith(b'\x89PNG')
                             assert struct.unpack('>II',output[16:24]) == (1,1)
+                        with transform(origin+'/probe.png', 'width:1/height:1/resizing_type:fill', headers={'Accept':'image/webp'}) as transformed:
+                            output = transformed.read()
+                            assert transformed.headers['Content-Type'] == 'image/webp'
+                            assert output[:4] == b'RIFF' and output[8:12] == b'WEBP'
+                        with transform(origin+'/probe.svg', 'width:1/height:1/resizing_type:fit/format:svg') as transformed:
+                            output = transformed.read().lower()
+                            assert b'<svg' in output and b'javascript:' not in output
+                        try:
+                            transform(f'http://127.0.0.1:{image_source.server_port}/probe.png', 'width:1/format:png')
+                        except urllib.error.HTTPError as rejected:
+                            assert 400 <= rejected.code < 500
+                        else:
+                            raise AssertionError('loopback source guard was bypassed')
+                        print('NATIVE_IMGPROXY_HTTP_PNG_WEBP_SVG_SOURCE_GUARD_OK')
                     break
         except (OSError,urllib.error.URLError) as error:
             if healthy:
@@ -419,6 +451,9 @@ finally:
     process.terminate()
     try: process.wait(timeout=20)
     except subprocess.TimeoutExpired: process.kill(); process.wait()
+    if image_source is not None:
+        image_source.shutdown()
+        image_source.server_close()
     if meta_process is not None:
         meta_process.terminate()
         try: meta_process.wait(timeout=20)

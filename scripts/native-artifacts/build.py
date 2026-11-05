@@ -422,6 +422,8 @@ def qualify(name, candidate, started):
                     raise RuntimeError('Studio postgres-meta fixture differs from lock')
             run('incus','file','push',str(archive),RUNNER+'/root/meta.tar.gz')
         smoke_env = {key:os.environ[key] for key in ('S3_ENDPOINT','S3_ACCESS_KEY','S3_SECRET_KEY','S3_REGION','S3_BUCKET','NATIVE_ARTIFACT_SMOKE_PREFIX') if key in os.environ}
+        if name == 'supabase-imgproxy':
+            smoke_env['imgproxyEnv'] = json.loads((HERE/'imgproxy-env.json').read_text())
         if name == 'supabase-storage':
             imgproxy = next(a for a in json.loads(LOCK.read_text()) if a['name']=='supabase-imgproxy')
             archive = Path(os.environ.get('NATIVE_ARTIFACT_IMGPROXY', str(OUT/imgproxy['file'])))

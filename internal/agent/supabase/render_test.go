@@ -4,6 +4,7 @@ package supabase
 
 import (
 	"encoding/json"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -61,6 +62,109 @@ func TestRenderComponents(t *testing.T) {
 				t.Fatal("invalid Vector JSON")
 			}
 		})
+	}
+}
+
+func TestVectorModernHTTPConfiguration(t *testing.T) {
+	s := testSpec("vector")
+	s.VectorSinkToken = "literal-${NOT_AN_ENV_VAR}"
+	p, files, err := Render(s, "/data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Sources map[string]struct {
+			Type     string
+			Decoding map[string]string
+			Framing  map[string]string
+			Auth     map[string]string
+		}
+		Sinks map[string]struct {
+			Type    string
+			URI     string
+			Request struct {
+				Headers map[string]string
+			}
+		}
+	}
+	if err := json.Unmarshal(files["supabase/vector.json"], &config); err != nil {
+		t.Fatal(err)
+	}
+	source := config.Sources["member_logs"]
+	if source.Type != "http_server" || source.Decoding["codec"] != "json" || source.Framing["method"] != "bytes" {
+		t.Fatal("Vector source must decode logship JSON arrays without deprecated HTTP options")
+	}
+	if source.Auth["strategy"] != "custom" || !strings.Contains(source.Auth["source"], s.VectorSinkToken) {
+		t.Fatal("Vector ingestion lost literal bearer authentication")
+	}
+	for _, arg := range append(append([]string{}, p.Args...), p.Env...) {
+		if strings.Contains(arg, "dangerously") {
+			t.Fatal("Vector security defaults must not be disabled")
+		}
+	}
+	expected := map[string]string{
+		"gateway": "cloudflare.logs.prod", "auth": "gotrue.logs.prod",
+		"rest": "postgREST.logs.prod", "realtime": "realtime.logs.prod",
+		"storage": "storage.logs.prod.2", "functions": "deno-relay-logs", "db": "postgres.logs",
+	}
+	if len(config.Sinks) != len(expected) {
+		t.Fatal("unexpected Logflare sink count")
+	}
+	for name, identity := range expected {
+		sink := config.Sinks["logflare_"+name]
+		if sink.Type != "http" || sink.URI != "http://analytics.example:4000/api/logs?source_name="+identity ||
+			sink.Request.Headers["x-api-key"] != s.LogflarePublicToken {
+			t.Errorf("%s sink differs from upstream Logflare identity or modern header configuration", name)
+		}
+	}
+}
+
+func TestStorageImgproxyV4Contract(t *testing.T) {
+	storage := testSpec("storage")
+	storage.Upstreams["imgproxy"] = "images.example:5001"
+	storage.Storage.ImageTransformation = true
+	process, _, err := Render(storage, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, setting := range []string{"STORAGE_BACKEND=s3", "ENABLE_IMAGE_TRANSFORMATION=true", "IMGPROXY_URL=http://images.example:5001"} {
+		if !contains(process.Env, setting) {
+			t.Fatalf("missing Storage image handoff: %s", setting)
+		}
+	}
+	storage.Storage.ImageTransformation = false
+	process, _, err = Render(storage, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(process.Env, "ENABLE_IMAGE_TRANSFORMATION=false") {
+		t.Fatal("image transformations cannot be disabled")
+	}
+
+	process, _, err = Render(testSpec("imgproxy").ProjectSecrets(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, setting := range process.Env {
+		key, value, _ := strings.Cut(setting, "=")
+		if strings.HasPrefix(key, "IMGPROXY_") {
+			got[key] = value
+		}
+	}
+	// Qualification consumes this same golden, including the actual bind address.
+	// Storage supplies presigned HTTP(S) URLs; no local/S3 credentials or source
+	// guard opt-outs belong in the imgproxy environment.
+	golden, err := os.ReadFile("../../../scripts/native-artifacts/imgproxy-env.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want map[string]string
+	if err := json.Unmarshal(golden, &want); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("imgproxy environment contract differs: got %v, want %v", got, want)
 	}
 }
 

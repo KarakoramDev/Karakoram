@@ -182,7 +182,7 @@ func Render(s sbspec.Spec, dataDir string) (agent.ProcessSpec, map[string][]byte
 			env["JWT_JWKS"] = s.JWKS
 		}
 	case "imgproxy":
-		set(map[string]string{"IMGPROXY_BIND": ":5001", "IMGPROXY_USE_ETAG": "true", "IMGPROXY_AUTO_WEBP": "true", "IMGPROXY_MAX_SRC_RESOLUTION": "16.8"})
+		set(map[string]string{"IMGPROXY_BIND": ":5001", "IMGPROXY_USE_ETAG": "true", "IMGPROXY_AUTO_WEBP": "true", "IMGPROXY_MAX_SRC_RESOLUTION": "16.8", "IMGPROXY_USE_LAST_MODIFIED": "false"})
 	case "meta":
 		set(map[string]string{"PG_META_HOST": "127.0.0.1", "PG_META_PORT": "8081", "PG_META_DB_HOST": dbhost, "PG_META_DB_PORT": dbport, "PG_META_DB_NAME": s.Database, "PG_META_DB_USER": "postgres", "PG_META_DB_PASSWORD": s.DBRoles["postgres"], "CRYPTO_KEY": s.Studio.MetaCryptoKey})
 		env["PG_META_DB_URL"] = roleURL("postgresql", "postgres", s.Database)

@@ -1,4 +1,11 @@
 {
+  "go-1.27.3": {
+    "file": "go1.27.3.linux-amd64.tar.gz",
+    "url": "https://go.dev/dl/go1.27.3.linux-amd64.tar.gz",
+    "sha256": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40",
+    "checksumURL": "https://go.dev/dl/?mode=json",
+    "size": 70588678
+  },
   "npm-11.12.1": {
     "file": "npm-11.12.1.tgz",
     "url": "https://registry.npmjs.org/npm/-/npm-11.12.1.tgz",

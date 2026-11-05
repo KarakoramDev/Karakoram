@@ -85,7 +85,8 @@ case "$name" in
         entry=apps/studio/server.js
         ;;
     supabase-imgproxy)
-        CGO_ENABLED=1 go build -trimpath -ldflags='-s -w' -o "$stage/bin/imgproxy" .
+        CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$stage/bin/imgproxy" ./cli
+        cp NOTICE "$license_dir/"
         ln -s imgproxy "$stage/bin/start"
         ;;
     supabase-pg17-extensions)

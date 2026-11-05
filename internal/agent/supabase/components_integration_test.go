@@ -224,7 +224,7 @@ func TestNativeAdditionalComponents(t *testing.T) {
 		}
 		base.Upstreams = map[string]string{"storage": "127.0.0.1:5000"}
 		defer launch(t, "storage", "1.81.5", storageDir)()
-		defer launch(t, "gateway", "1.39.1", gatewayDir)()
+		defer launch(t, "gateway", "1.39.6", gatewayDir)()
 		bucket := "native-" + strings.ToLower(rand.Text())
 		body, _ := json.Marshal(map[string]any{"id": bucket, "name": bucket, "public": false})
 		status, _ := request(t, "POST", "/storage/v1/bucket", keys.ServiceRoleKey, body)
@@ -261,7 +261,7 @@ func TestNativeAdditionalComponents(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer launch(t, "realtime", "2.143.3", realtimeDir)()
-		defer launch(t, "gateway", "1.39.1", gatewayDir)()
+		defer launch(t, "gateway", "1.39.6", gatewayDir)()
 		for _, method := range []string{"GET", "DELETE"} {
 			for _, key := range []string{keys.AnonKey, keys.ServiceRoleKey, keys.AnonJWT, keys.ServiceRoleJWT} {
 				req, _ := http.NewRequestWithContext(ctx, method, "http://127.0.0.1:4000/api//tenants/realtime-dev", nil)
@@ -357,7 +357,7 @@ func TestNativeAdditionalComponents(t *testing.T) {
 				t.Fatalf("unauthenticated private Studio SQL status %d", resp.StatusCode)
 			}
 		}
-		defer launch(t, "gateway", "1.39.1", gatewayDir)()
+		defer launch(t, "gateway", "1.39.6", gatewayDir)()
 		status, _ := request(t, "GET", "/pg/tables", keys.ServiceRoleKey, nil)
 		if status != 200 {
 			t.Fatalf("native postgres-meta tables status %d", status)
