@@ -50,6 +50,7 @@ func newReplayCoverageState(baseline myspec.BackupResult) (*replayCoverageState,
 func (s *replayCoverageState) clone() *replayCoverageState {
 	out := *s
 	out.have = cloneCoverageGTIDs(s.have)
+	out.base = cloneCoverageGTIDs(s.base)
 	out.response.Windows = slices.Clone(s.response.Windows)
 	return &out
 }
@@ -98,11 +99,26 @@ func (s *replayCoverageState) consume(log archivedBinlog, baseline myspec.Backup
 			}
 		}
 	}
+	var err error
+	s.base, err = snapshotLoggedGTIDs(log, baseline, s.base)
+	if err != nil {
+		return err
+	}
 	anchored, eligible, err := anchorReplayLog(log, baseline, s.base)
 	if err != nil {
 		return err
 	}
 	if !eligible {
+		// Foreign streams and pre-snapshot files are intentionally ignored.
+		// A later same-source file failing the baseline check is blocked.
+		prefix, ordinal, _ := strings.Cut(log.meta.File, ".")
+		basePrefix, baseOrdinal, _ := strings.Cut(baseline.BinlogFile, ".")
+		sequence, parseErr := strconv.ParseUint(ordinal, 10, 64)
+		baseSequence, _ := strconv.ParseUint(baseOrdinal, 10, 64)
+		if log.meta.ServerUUID == baseline.SourceUUID && prefix == basePrefix && parseErr == nil && sequence > baseSequence {
+			s.stopped = true
+			s.response.BlockedReason = "baseline_logged_gtids_missing"
+		}
 		return nil
 	}
 	if s.stopped {
@@ -114,6 +130,7 @@ func (s *replayCoverageState) consume(log archivedBinlog, baseline myspec.Backup
 	}
 	if !s.have.contains(previous) {
 		s.stopped = true
+		s.response.BlockedReason = "binlog_dependency_missing"
 		return nil
 	}
 	set, err := parseRecoveryGTIDs(anchored.meta.GTIDSet)
@@ -136,6 +153,7 @@ func (s *replayCoverageState) consume(log archivedBinlog, baseline myspec.Backup
 	if !decoded.contains(set) || !set.contains(decoded) {
 		return errors.New("invalid_sidecar")
 	}
+	s.base.add(set)
 	return nil
 }
 

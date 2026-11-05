@@ -352,10 +352,105 @@ Follow the full [stopped-member procedure](neo4j/operations.md#legacy-bootstrap-
 marker deletion is not a general readiness or lost-password workaround.
 
 
+## Upgrading to v0.4.5
+
+v0.4.5 is a hotfix of v0.4.4 with only two MySQL fixes. It does not include
+the features planned for the next feature release, v0.4.6.
+
+### Fixed in v0.4.5
+
+**MySQL PITR coverage after copied-data provisioning:** in v0.4.0–v0.4.4,
+the recovery-window end could stop advancing while binlogs kept uploading and
+`BinlogArchive` stayed healthy. This commonly appears after a writer change in
+Group Replication or PXC to a member provisioned by native clone or state
+snapshot transfer (SST), including during ordinary cluster formation. A
+single-instance writer restored from a physical backup, or the initial writer
+of a restored/cloned cluster, can also be affected without a writer change.
+The trigger is executed GTID history imported without corresponding local
+binlog history, not log expiration alone. Repeated full backups on that writer
+did not repair forward coverage: each could stop at its own snapshot file.
+
+Coverage and restore selection now verify the exact physical snapshot
+file/position and distinguish imported baseline GTIDs from logged dependencies.
+Missing anchors or post-snapshot dependencies still fail closed. Verified
+same-source chains that cannot extend now report `PITR=False/CoverageBlocked`
+with the reason and verified endpoint, plus a deduplicated Warning event.
+The safe prefix remains usable; `BinlogArchive` independently reports upload
+health and can remain `True`. Idle time alone is not a coverage failure.
+This does not remove the [physical-writer boundary](mysql/backups.md#binary-log-pitr):
+a new writer's uploads cannot extend a different writer's full baseline.
+
+**Fresh-cluster first full backup:** in v0.4.0–v0.4.4, a full could fail with
+`metadata_invalid` when the source had no executed GTIDs. XtraBackup legitimately
+writes only the binlog filename and position in that case, but the parser
+required a third GTID column. This is shared by MySQL single-instance, Group
+Replication and PXC, on all providers, whenever executed GTIDs are empty; not
+every fresh clustered source is empty. Managed bootstrap account creation is
+not binary-logged, so it does not ensure a nonempty set. Before the fix, a
+committed binary-logged application write followed by a new full could avoid
+this parser error. Corrected agents require no such write: filename and position
+remain mandatory and validated, while an absent/empty GTID column is accepted.
+
+### Required rollout and recovery
+
+1. **Back up state, then upgrade the control plane first.** Use the
+   [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
+   the original `KARAKORAM_MASTER_KEY` separately, and retain the old executable
+   with its pre-upgrade state. Deploy v0.4.5 through your provider's documented
+   singleton control-plane deployment path. Control-plane rollback does not
+   undo database or infrastructure changes.
+2. **Relaunch every affected MySQL/PXC data-member agent.** In a maintenance
+   window, apply a genuinely changed CPU or memory resource target; rolling
+   maintenance stops and redeploys members with the current executable. An
+   unchanged patch, control-plane restart or `karactl clusters restart` does
+   not replace agents. MySQL/PXC have no supported `upgrade-agents` operation
+   in v0.4.5, although the shared CLI exposes that command for other engines.
+   Check provider capacity, keep a validated backup and independent recovery
+   path, and expect writer-handoff interruptions (downtime for a singleton).
+   Do not attempt the roll without a healthy majority. Verify each member's
+   build, replication and client writes. See the
+   [resource-change relaunch guidance](#existing-clusters-and-member-artifacts).
+   These fixes need data-member agents, not a PXC proxy rollout.
+3. **Re-enable PITR if disabled** (`spec.backup.pitr.enabled: true`) only after
+   all affected data agents run the corrected code. Retain native binlogs and
+   archived objects until coverage checks finish.
+4. **Take a successful new full backup from the current writer.** Failed first
+   fulls stay failed; the upgrade neither repairs them nor requires an application
+   write. Request a new full and observe its completion. For PITR, the corrected
+   agent versions its coverage-cache identity and rebuilds existing fulls' proofs.
+   If the physical writer/source stays the same and the exact anchor and
+   contiguous archived dependencies remain available, an existing full blocked
+   only by imported baseline history can resume extending across the formerly
+   stuck period. This is conditional, not retroactive recovery of missing logs.
+   On Group Replication and PXC the rolling relaunch moves the writer at least
+   once, so establish coverage from the new full; do not assume PITR beyond the
+   old verified endpoint into the old-to-new-baseline gap is recovered.
+   Preserve earlier backups and proven windows. A new full cannot reconstruct
+   purged unarchived logs or bridge different physical sources.
+5. **Verify the window advances** with `karactl backups pitr-window CLUSTER`
+   after post-backup writes and completed archive uploads/coverage checks.
+   Confirm its end passes the previously frozen endpoint. Inspect `PITR`,
+   `BinlogArchive`, Warning events and writer-agent diagnostics; green upload
+   health or a zero-width full-backup snapshot is not continuous PITR coverage.
+
+Do not downgrade the control plane after rolling agents; keep the upgraded
+control plane with the corrected agents. In particular, versions below v0.4.3
+cannot negotiate the pending/freshness coverage contract.
+
+### Known issues in v0.4.5
+
+The [continuing limitations](limitations.md#continuing-limitations-in-v045)
+still apply, including physical-writer PITR boundaries, the single-interval
+window display, PostgreSQL administrator-password rotation, Temporal on Zerops
+and incomplete Nomad live coverage. The Zerops failed-deployment resource
+recovery and false PXC GTID-history incident issues documented
+[below](#known-issues-in-v044) also remain unfixed in v0.4.5; their workarounds
+still apply and their fixes are deferred to v0.4.6, not included in this hotfix.
+
 ## Upgrading to v0.4.4
 
 v0.4.4 is a hotfix of v0.4.3 with only two MySQL/PXC point-in-time recovery
-corrections. It does not include the features planned for v0.4.5.
+corrections. It does not include the features now planned for v0.4.6.
 
 ### Fixed in v0.4.4
 
@@ -433,9 +528,14 @@ coverage contract. Keep the upgraded control plane with the corrected agents.
 
 ### Known issues in v0.4.4
 
+The [continuing limitations](#continuing-limitations) from v0.4.3 still apply:
+PostgreSQL administrator-password rotation is unavailable, Temporal is unsupported
+on Zerops, Nomad live coverage is incomplete, and PITR displays only the interval
+with the latest end. See [all current limitations](limitations.md).
+
 - **MySQL point-in-time recovery can silently stop extending after the writer
-  changes in Group Replication and PXC clusters** (also present in
-  v0.4.0–v0.4.3). When the writer moves — automatic failover, switchover, or
+  changes in Group Replication and PXC clusters — fixed in v0.4.5** (also
+  present in v0.4.0–v0.4.3). When the writer moves — automatic failover, switchover, or
   rolling maintenance — to a member whose data was copied in rather than
   replayed from its own binlogs, binlogs keep uploading and `BinlogArchive`
   stays healthy, but the end of the point-in-time window stops advancing.
@@ -445,8 +545,16 @@ coverage contract. Keep the upgraded control plane with the corrected agents.
   place. Restores to points before the freeze still work, and full backups
   are not affected. A new full backup does not restart coverage. To check,
   compare the window end from `karactl backups pitr-window CLUSTER` with the
-  current time. Until the fix, rely on full backups and schedule them as often
-  as your recovery point requires. A fix is planned for the next release.
+  archived transaction times. Install the corrected agents using the
+  [v0.4.5 upgrade procedure](#upgrading-to-v045); see its conditional
+  same-source proof rebuild and new-writer full-backup recovery guidance.
+- **Fresh-cluster first full backup fails with `metadata_invalid`
+  — fixed in v0.4.5** (v0.4.0–v0.4.4; MySQL single-instance, Group Replication
+  and PXC when executed GTIDs are empty). Valid two-column XtraBackup metadata
+  was rejected until a committed binary-logged write made the GTID set nonempty.
+  Install corrected data-member agents and take a new full; no application
+  write is needed. Existing failed fulls stay failed. Follow the
+  [v0.4.5 upgrade procedure](#upgrading-to-v045).
 - **On Zerops, raising the resources of a member that failed its first deployment
   doesn't take effect** (also present in v0.4.3). If a newly added member, extra
   component or proxy exhausts its deployment retries — for example because it
@@ -467,7 +575,31 @@ coverage contract. Keep the upgraded control plane with the corrected agents.
   is and upgrade once the fix is released. After cancelling or a timeout,
   check that the new member is actually gone before making further changes.
   Neo4j and the Data MCP companion are not
-  affected. A fix is planned for the next release.
+  affected. A fix is planned for v0.4.6, not the v0.4.5 hotfix.
+- **PXC clusters can be wrongly flagged as having diverged GTID history after a
+  member restart** (also present in earlier v0.4 releases). After any member
+  restarts and rejoins while writes continue — a rolling CPU, memory or
+  parameter change, an engine upgrade, a `mysqld` crash or agent restart, TLS
+  rotation, suspend/resume or a restore — the cluster can report Degraded with
+  a GTID history incident even though all members have the same data.
+  Incremental backups are blocked and point-in-time recovery coverage stops
+  advancing until a full backup succeeds. Workaround: take a full backup; the
+  flag clears about 20 seconds after it completes. If a cluster change (for
+  example a resource change or proxy count change) was still running when the
+  flag appeared, the cluster can get stuck: the manual full backup and
+  cancelling the change are both refused. To recover, add an enabled
+  full-backup schedule a few minutes ahead next to your existing schedules
+  (`spec.backup.schedules`: name, cron, `type: full`, `retainCount`,
+  `enabled: true`) with `karactl clusters patch CLUSTER -f change.yaml`; change
+  nothing else in that patch; this works when the change itself had already
+  been applied and the cluster was only waiting to report healthy (for example
+  a finished proxy count change): the scheduled full clears the flag and the
+  pending change completes. Afterwards restore your original schedules.
+  If the change was still rolling through members when the flag appeared, the
+  scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
+  serving reads and writes, so leave it as it is and upgrade once the fix is
+  released. This needs configured backup storage and healthy members. A fix is
+  planned for v0.4.6, not the v0.4.5 hotfix.
 
 ## Upgrading to v0.4.3
 

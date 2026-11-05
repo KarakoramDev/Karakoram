@@ -124,8 +124,10 @@ func ParseBackupMetadata(dir string) (myspec.BackupResult, error) {
 	if err != nil {
 		return out, errors.New("metadata_missing")
 	}
+	// XtraBackup omits the GTID column when gtid_executed is empty.
+	// The filename and position still anchor a valid fresh snapshot.
 	fields := strings.Fields(string(binlog))
-	if len(fields) < 3 {
+	if len(fields) < 2 {
 		return out, errors.New("metadata_invalid")
 	}
 	out.BinlogFile = filepath.Base(fields[0])

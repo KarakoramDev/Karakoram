@@ -61,7 +61,11 @@ type coverageRefresh struct {
 func coverageRequestKey(request myspec.PITRCoverageRequest) string {
 	request.RequireFresh = false
 	request.AcceptPending = false
-	return requestDigest(request)
+	// Rebuild proofs made before purged-only baseline history was recognized.
+	return requestDigest(struct {
+		Version int
+		Request myspec.PITRCoverageRequest
+	}{2, request})
 }
 func (e *Runner) coverageService() (*coverageRefresh, error) {
 	e.coverageServiceMu.Lock()
