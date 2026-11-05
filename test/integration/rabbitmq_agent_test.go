@@ -33,14 +33,19 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 )
 
-const rabbitMQImage = "karakoram-rabbitmq-agent:4.3.6-otp27.3.4.17"
+const rabbitMQImage = "karakoram-rabbitmq-agent:4.3.7-otp27.3.4.19"
 
-func rabbitMQDockerfile() string {
+func rabbitMQDockerfile(t *testing.T) string {
+	t.Helper()
 	var b strings.Builder
 	b.WriteString("FROM ubuntu:24.04\nRUN apt-get update && apt-get install -y --no-install-recommends sudo\n")
 	// Keep the fixture's repositories, package versions, and apt preferences
 	// identical to member deployments. JSON-form RUN preserves shell quoting.
-	for _, command := range rabbitmq.PrepareCommands("4.3.6") {
+	prepare, err := rabbitmq.PrepareCommands("4.3.7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range prepare {
 		args, _ := json.Marshal([]string{"/bin/bash", "-o", "pipefail", "-c", command})
 		fmt.Fprintf(&b, "RUN %s\n", args)
 	}
@@ -67,7 +72,7 @@ func TestRabbitMQAgent(t *testing.T) {
 	docker("info")
 	if err := exec.CommandContext(ctx, "docker", "image", "inspect", rabbitMQImage).Run(); err != nil {
 		cmd := exec.CommandContext(ctx, "docker", "build", "-t", rabbitMQImage, "-")
-		cmd.Stdin = strings.NewReader(rabbitMQDockerfile())
+		cmd.Stdin = strings.NewReader(rabbitMQDockerfile(t))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("build pinned RabbitMQ image: %v\n%s", err, output)
 		}

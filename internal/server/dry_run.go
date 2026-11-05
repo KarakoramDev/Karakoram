@@ -133,8 +133,8 @@ func (s *Server) dryRunResult(operation string, before, after *domain.Cluster, r
 			add("backups-disabled", "Disables PITR or removes an enabled backup schedule.")
 		}
 	}
-	if after.Spec.Provider == "rabbitmq" && after.Spec.Version == "4.3.5" {
-		result.Warnings = append(result.Warnings, rabbitMQ435Warning)
+	if after.Spec.Provider == "rabbitmq" && (after.Spec.Version == "4.3.5" || after.Spec.Version == "4.3.6") {
+		result.Warnings = append(result.Warnings, rabbitMQDeprecatedWarning)
 	}
 	return ok(result)
 }

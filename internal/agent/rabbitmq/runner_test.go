@@ -96,7 +96,7 @@ func TestRendering(t *testing.T) {
 			management := "management.tcp.port = 15672\n"
 			if mode == "requireTLS" {
 				tcp = "listeners.tcp = none\n"
-				management = "management.ssl.port = 15671\n"
+				management = ""
 				if strings.Contains(config, "management.tcp.") {
 					t.Fatal("required TLS exposed management HTTP", config)
 				}
@@ -108,7 +108,7 @@ func TestRendering(t *testing.T) {
 				t.Fatal(config)
 			}
 			if mode != "disabled" {
-				for _, line := range []string{"listeners.ssl.default = 5671\n", "management.ssl.port = 15671\n", "ssl_options.keyfile = /data/karakoram/tls/server.key\n", "management.ssl.cacertfile = /data/karakoram/tls/ca.pem\n"} {
+				for _, line := range []string{"listeners.ssl.default = 5671\n", "ssl_options.keyfile = /data/karakoram/tls/server.key\n"} {
 					if !strings.Contains(config, line) {
 						t.Fatal(line, config)
 					}
@@ -129,6 +129,64 @@ func TestRendering(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestManagementTLSListenerRendering(t *testing.T) {
+	for _, version := range []string{"4.3.5", "4.3.6", "4.3.7"} {
+		for _, ipv4 := range []bool{false, true} {
+			for _, mode := range []string{"disabled", "preferTLS", "requireTLS"} {
+				t.Run(version+"/"+map[bool]string{false: "ipv6", true: "ipv4"}[ipv4]+"/"+mode, func(t *testing.T) {
+					s := testSpec()
+					s.Version, s.IPv4Distribution = version, ipv4
+					if mode != "disabled" {
+						s.AMQPSPort, s.ManagementTLSPort = 5671, 15671
+					}
+					if mode == "requireTLS" {
+						s.AMQPPort, s.ManagementPort, s.InterNodeTLS = 0, 0, true
+					}
+					c := memberConfig(s)
+					c.TLS = agentapi.TLSConfig{Mode: mode, CAPEM: "CA", CertPEM: "CERT", KeyPEM: "KEY"}
+					files, _ := render("/data", s, c)
+					var advanced string
+					for _, file := range files {
+						if file.name == "advanced.config" {
+							advanced = file.content
+						}
+					}
+					config := files[0].content
+					if strings.Contains(config, "management.ssl.") {
+						t.Fatal("modern TLS config would reintroduce nested bind options", config)
+					}
+					if mode == "disabled" {
+						if advanced != "[].\n" {
+							t.Fatal(advanced)
+						}
+						return
+					}
+					ip := "{0,0,0,0,0,0,0,0}"
+					if ipv4 {
+						ip = "{0,0,0,0}"
+					}
+					listener := `{rabbitmq_management,[{listener,[{port,15671},{ip,` + ip + `},{ssl,true},{ssl_opts,[{cacertfile,"/data/karakoram/tls/ca.pem"},{certfile,"/data/karakoram/tls/server.pem"},{keyfile,"/data/karakoram/tls/server.key"}]}]}]}`
+					if !strings.HasPrefix(advanced, "["+listener) {
+						t.Fatalf("missing explicit TLS listener: %s", advanced)
+					}
+					if strings.Count(advanced, "{ip,") != 1 || strings.Count(advanced, "{port,") != 1 {
+						t.Fatal("duplicate bind options", advanced)
+					}
+					if strings.Contains(config, "ssl_options.ip") || !strings.Contains(config, "listeners.ssl.default = 5671\n") {
+						t.Fatal("AMQPS bind options changed", config)
+					}
+					if got := strings.Contains(advanced, "{osiris,"); got != s.InterNodeTLS {
+						t.Fatal("management TLS clobbered replication TLS", advanced)
+					}
+					if got := strings.Contains(config, "management.tcp.port = 15672\n"); got != (mode == "preferTLS") {
+						t.Fatal("management HTTP TLS-mode policy changed", config)
+					}
+				})
+			}
+		}
 	}
 }
 

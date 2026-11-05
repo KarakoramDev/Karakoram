@@ -50,22 +50,25 @@ var catalog = struct {
 	ErlangVersion string
 	Versions      []domain.VersionInfo
 }{
-	ErlangVersion: "1:27.3.4.17-1",
+	ErlangVersion: "1:27.3.4.19-1",
 	Versions: []domain.VersionInfo{
 		{Version: "4.3.5", Major: "4.3", Status: "deprecated"},
-		{Version: "4.3.6", Major: "4.3", Status: "supported", Default: true},
+		{Version: "4.3.6", Major: "4.3", Status: "deprecated"},
+		{Version: "4.3.7", Major: "4.3", Status: "supported", Default: true},
 	},
 }
 
 func defaultResources() domain.Resources {
 	return domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 5, MaxDisk: 5}
 }
-func upgrade(from, to string) bool             { return from == to || from == "4.3.5" && to == "4.3.6" }
+func upgrade(from, to string) bool {
+	return from == to || from == "4.3.5" && (to == "4.3.6" || to == "4.3.7") || from == "4.3.6" && to == "4.3.7"
+}
 func invalid(format string, args ...any) error { return engine.Invalid(format, args...) }
 func (*Provider) Describe() domain.ProviderInfo {
 	r := defaultResources()
 	ci := domain.ComponentInfo{Defaults: domain.ComponentSpec{Replicas: 3, Resources: r}, MinReplicas: 1, MaxReplicas: 7, AllowedReplicas: []int{1, 3, 5, 7}}
-	return domain.ProviderInfo{Name: "rabbitmq", DisplayName: "RabbitMQ", Versions: append([]domain.VersionInfo(nil), catalog.Versions...), UpgradePaths: []domain.UpgradePath{{From: "4.3.5", To: "4.3.6"}}, Topologies: []domain.TopologyInfo{{Type: "cluster", Components: map[string]domain.ComponentInfo{"engine": ci}}}, Presets: []domain.Preset{{Name: "dev", Description: "Single broker; no queue redundancy", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: domain.ComponentSpec{Replicas: 1, Resources: r}}}, {Name: "prod", Description: "Three brokers; placement separation is not guaranteed", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: ci.Defaults}}}, Capabilities: []string{"systemUsers", "backups", "restores", "publicExposure", "tls", "monitoring", "engineConfig", "rabbitmqAccess"}, Operations: []string{"backup", "delete-backup", "restore", "restart", "replace-member", "rotate-system-user", "rotate-tls", domain.OperationUpgradeAgents}, Processes: []string{"rabbitmq-server"}, BackupTypes: []string{"definitions"}, EngineOptions: optionsDescription(), EngineConfig: map[string]any{
+	return domain.ProviderInfo{Name: "rabbitmq", DisplayName: "RabbitMQ", Versions: append([]domain.VersionInfo(nil), catalog.Versions...), UpgradePaths: []domain.UpgradePath{{From: "4.3.5", To: "4.3.6"}, {From: "4.3.5", To: "4.3.7"}, {From: "4.3.6", To: "4.3.7"}}, Topologies: []domain.TopologyInfo{{Type: "cluster", Components: map[string]domain.ComponentInfo{"engine": ci}}}, Presets: []domain.Preset{{Name: "dev", Description: "Single broker; no queue redundancy", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: domain.ComponentSpec{Replicas: 1, Resources: r}}}, {Name: "prod", Description: "Three brokers; placement separation is not guaranteed", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: ci.Defaults}}}, Capabilities: []string{"systemUsers", "backups", "restores", "publicExposure", "tls", "monitoring", "engineConfig", "rabbitmqAccess"}, Operations: []string{"backup", "delete-backup", "restore", "restart", "replace-member", "rotate-system-user", "rotate-tls", domain.OperationUpgradeAgents}, Processes: []string{"rabbitmq-server"}, BackupTypes: []string{"definitions"}, EngineOptions: optionsDescription(), EngineConfig: map[string]any{
 		"format": "rabbitmq.conf", "syntax": "key = value",
 		"managedKeyPrefixes": slices.Clone(managedConfigPrefixes),
 		"managedKeyMatching": "A key is rejected when it starts with a listed prefix or equals that prefix with its trailing dot removed.",
@@ -76,7 +79,7 @@ func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 		s.Provider = "rabbitmq"
 	}
 	if s.Version == "" {
-		s.Version = "4.3.6"
+		s.Version = "4.3.7"
 	}
 	if s.Topology.Type == "" {
 		s.Topology.Type = "cluster"

@@ -199,22 +199,41 @@ func TestScaleDownRefusesWhenRemainingMemberDown(t *testing.T) {
 }
 
 func TestRollingUpgradeSafetyOrder(t *testing.T) {
-	for _, replicas := range []int{1, 3} {
-		t.Run(fmt.Sprintf("members=%d", replicas), func(t *testing.T) {
-			p, rc, _, a := setup(t)
-			rc.Cluster.Spec.Version = "4.3.5"
+	for _, tc := range []struct {
+		from     string
+		replicas int
+	}{{"4.3.5", 1}, {"4.3.5", 3}, {"4.3.6", 1}, {"4.3.6", 3}} {
+		t.Run(fmt.Sprintf("%s/members=%d", tc.from, tc.replicas), func(t *testing.T) {
+			replicas := tc.replicas
+			p, rc, f, a := setup(t)
+			rc.Cluster.Spec.Version = tc.from
 			rc.Cluster.Spec.Components.Engine.Replicas = replicas
 			ready(t, p, rc)
 			a.log.clear()
-			rc.Cluster.Spec.Version = "4.3.6"
+			f.deployments = nil
+			rc.Cluster.Spec.Version = "4.3.7"
 			syncUntil(t, p, rc, func(s *internalState) bool {
 				for _, m := range s.Members {
-					if m.Version != "4.3.6" || m.ChangeStep != "" {
+					if m.Version != "4.3.7" || m.ChangeStep != "" {
 						return false
 					}
 				}
 				return !s.FeatureFlags && !s.Rebalance && s.Pending == nil
 			})
+			if len(f.deployments) != replicas {
+				t.Fatalf("expected each existing member to redeploy: %d", len(f.deployments))
+			}
+			for _, deployment := range f.deployments {
+				prepare := strings.Join(deployment.Runtime.Prepare, "\n")
+				for _, want := range []string{"erlang-base=1:27.3.4.19-1", "erlang-ssl=1:27.3.4.19-1", "rabbitmq-server_4.3.7-1_all.deb", "sha256sum -c -", "DPKG_DEB_THREADS_MAX=1"} {
+					if !strings.Contains(prepare, want) {
+						t.Fatalf("rolling deployment omits %q: %s", want, prepare)
+					}
+				}
+				if strings.Index(prepare, "erlang-base=") > strings.Index(prepare, "rabbitmq-server_4.3.7-1_all.deb") {
+					t.Fatal("broker installed before pinned Erlang")
+				}
+			}
 			calls := a.log.snapshot()
 			for i := range replicas {
 				name := fmt.Sprintf("demom%d", i)

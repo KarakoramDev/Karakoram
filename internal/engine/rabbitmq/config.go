@@ -20,6 +20,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
@@ -29,7 +30,7 @@ import (
 
 // PrepareCommands returns the installation commands used by member deployments
 // for a supported RabbitMQ version and its catalog-pinned Erlang runtime.
-func PrepareCommands(version string) []string {
+func PrepareCommands(version string) ([]string, error) {
 	prepare := []string{"sudo apt-get update", "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg", "curl -fsSL https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA | sudo gpg --dearmor -o /usr/share/keyrings/com.rabbitmq.team.gpg"}
 	sources := []string{}
 	for _, mirror := range []string{"deb1", "deb2"} {
@@ -42,12 +43,26 @@ func PrepareCommands(version string) []string {
 		"printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d && sudo chmod 755 /usr/sbin/policy-rc.d",
 		"printf '%s\\n' 'Package: erlang*' 'Pin: version "+catalog.ErlangVersion+"' 'Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/erlang",
 		"sudo apt-get update")
-	packages := []string{"rabbitmq-server=" + version + "-1"}
+	packages := []string{}
+	if version != "4.3.7" {
+		packages = append(packages, "rabbitmq-server="+version+"-1")
+	}
 	for _, pkg := range []string{"base", "asn1", "crypto", "eldap", "inets", "mnesia", "os-mon", "parsetools", "public-key", "runtime-tools", "ssl", "syntax-tools", "tools", "xmerl"} {
 		packages = append(packages, "erlang-"+pkg+"="+catalog.ErlangVersion)
 	}
 	prepare = append(prepare, "sudo apt-get install -y --no-install-recommends "+strings.Join(packages, " "))
-	return prepare
+	if version == "4.3.7" {
+		artifact, err := nativeartifacts.Get("rabbitmq-server")
+		if err != nil {
+			return nil, err
+		}
+		url, err := nativeartifacts.ResolveURL(artifact)
+		if err != nil {
+			return nil, err
+		}
+		prepare = append(prepare, nativeartifacts.PrepareCommands(artifact, url, "", "")...)
+	}
+	return prepare, nil
 }
 
 func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) (infra.RuntimeSpec, error) {
@@ -58,7 +73,10 @@ func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) (i
 	if agentURL == "" {
 		agentURL = p.options.ControlPlaneURL
 	}
-	prepare := PrepareCommands(version)
+	prepare, err := PrepareCommands(version)
+	if err != nil {
+		return infra.RuntimeSpec{}, err
+	}
 	options, err := parseOptions(m.EngineOptions)
 	if err != nil {
 		return infra.RuntimeSpec{}, err

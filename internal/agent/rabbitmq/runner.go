@@ -179,19 +179,12 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 	if s.AMQPSPort > 0 {
 		line("listeners.ssl.default", s.AMQPSPort)
 	}
-	if s.AMQPSPort > 0 || s.ManagementTLSPort > 0 || s.StreamTLSPort > 0 {
+	if s.AMQPSPort > 0 || s.StreamTLSPort > 0 {
 		for _, pair := range [][2]string{{"cacertfile", "tls/ca.pem"}, {"certfile", "tls/server.pem"}, {"keyfile", "tls/server.key"}} {
-			if s.AMQPSPort > 0 || s.StreamTLSPort > 0 {
-				line("ssl_options."+pair[0], path(pair[1]))
-			}
-			if s.ManagementTLSPort > 0 {
-				line("management.ssl."+pair[0], path(pair[1]))
-			}
+			line("ssl_options."+pair[0], path(pair[1]))
 		}
-		if s.AMQPSPort > 0 || s.StreamTLSPort > 0 {
-			line("ssl_options.verify", "verify_none")
-			line("ssl_options.fail_if_no_peer_cert", "false")
-		}
+		line("ssl_options.verify", "verify_none")
+		line("ssl_options.fail_if_no_peer_cert", "false")
 	}
 	managementHost := "::"
 	if s.IPv4Distribution {
@@ -200,10 +193,6 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 	if s.ManagementPort > 0 {
 		line("management.tcp.port", s.ManagementPort)
 		line("management.tcp.ip", managementHost)
-	}
-	if s.ManagementTLSPort > 0 {
-		line("management.ssl.port", s.ManagementTLSPort)
-		line("management.ssl.ip", managementHost)
 	}
 	if s.PrometheusPort > 0 {
 		line("prometheus.tcp.port", s.PrometheusPort)
@@ -253,7 +242,20 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 		plugins = append(slices.Clone(plugins), "rabbitmq_peer_discovery_k8s")
 	}
 	files := []renderedFile{{"rabbitmq.conf", b.String(), 0600}, {"enabled_plugins", "[" + strings.Join(plugins, ",") + "].\n", 0600}, {"home/.erlang.cookie", s.Cookie, 0400}}
-	advanced := "[].\n"
+	advancedApps := make([]string, 0, 2)
+	// Keep bind options outside ssl_opts. RabbitMQ 4.3.7's modern ssl_config
+	// path nests its string IP in ssl_opts, then prepends a different tuple IP;
+	// the unconverted duplicate reaches ssl:listen and fails with badarg.
+	// The explicit listener form is supported throughout the 4.3 series.
+	// Erlang terms use quoted strings; JSON escaping is compatible for managed paths.
+	quote := func(p string) string { v, _ := json.Marshal(path(p)); return string(v) }
+	if s.ManagementTLSPort > 0 {
+		ip := "{0,0,0,0,0,0,0,0}"
+		if s.IPv4Distribution {
+			ip = "{0,0,0,0}"
+		}
+		advancedApps = append(advancedApps, fmt.Sprintf("{rabbitmq_management,[{listener,[{port,%d},{ip,%s},{ssl,true},{ssl_opts,[{cacertfile,%s},{certfile,%s},{keyfile,%s}]}]}]}", s.ManagementTLSPort, ip, quote("tls/ca.pem"), quote("tls/server.pem"), quote("tls/server.key")))
+	}
 	dist := "-proto_dist inet6_tcp"
 	if s.IPv4Distribution {
 		dist = "-proto_dist inet_tcp"
@@ -262,22 +264,20 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 		files = append(files, renderedFile{"tls/ca.pem", c.TLS.CAPEM, 0600}, renderedFile{"tls/server.pem", c.TLS.CertPEM, 0600}, renderedFile{"tls/server.key", c.TLS.KeyPEM, 0600})
 	}
 	if s.InterNodeTLS {
-		// Erlang terms use quoted strings; JSON escaping is compatible for managed paths.
-		quote := func(p string) string { v, _ := json.Marshal(path(p)); return string(v) }
 		// OTP 27.3.4.17 is affected by CVE-2026-89422 / GHSA-rgxr-4g4w-j875.
 		// Restrict generated TLS clients to TLS 1.2 until a patched OTP is packaged.
 		opts := "[{server, [{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{fail_if_no_peer_cert,true}]},\n{client, [{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{versions, ['tlsv1.2']}]}].\n"
 		files = append(files, renderedFile{"inter_node_tls.config", opts, 0600})
 		serverOptions := "[{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{fail_if_no_peer_cert,true},{versions, ['tlsv1.2']}]"
 		clientOptions := "[{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{versions, ['tlsv1.2']}]"
-		advanced = "[{osiris,[{replication_transport,ssl},{replication_server_ssl_options," + serverOptions + "},{replication_client_ssl_options," + clientOptions + "}]}].\n"
+		advancedApps = append(advancedApps, "{osiris,[{replication_transport,ssl},{replication_server_ssl_options,"+serverOptions+"},{replication_client_ssl_options,"+clientOptions+"}]}")
 		dist = "-proto_dist inet6_tls -ssl_dist_optfile "
 		if s.IPv4Distribution {
 			dist = "-proto_dist inet_tls -ssl_dist_optfile "
 		}
 		dist += path("inter_node_tls.config")
 	}
-	files = append(files, renderedFile{"advanced.config", advanced, 0600})
+	files = append(files, renderedFile{"advanced.config", "[" + strings.Join(advancedApps, ",") + "].\n", 0600})
 	schedulers := cpuSchedulers()
 	flags := fmt.Sprintf("+S %d:%d +SDcpu %d:%d +SDio 2 +A 4", schedulers, schedulers, schedulers, schedulers)
 	// Discovery peers inherit scheduler caps, but RabbitMQ explicitly replays

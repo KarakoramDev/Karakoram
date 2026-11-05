@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const rabbitMQ435Warning = "RabbitMQ 4.3.5 is deprecated because of stream authorization disclosures GHSA-6jvc-jx8w-m757 and GHSA-342v-cj47-c9g8. Use RabbitMQ 4.3.6, which fixes both disclosures."
+const rabbitMQDeprecatedWarning = "RabbitMQ 4.3.5 and 4.3.6 are deprecated. Upgrade to RabbitMQ 4.3.7 for the October security fixes (memory denial of service, log amplification, SASL leakage, conversion disconnect denial of service and OAuth HTML injection). Version 4.3.5 also lacks stream authorization fixes GHSA-6jvc-jx8w-m757 and GHSA-342v-cj47-c9g8. See https://www.rabbitmq.com/security."
 
 func mergePatch(target, patch any) any {
 	p, yes := patch.(map[string]any)
@@ -1287,20 +1287,20 @@ func (s *Server) createCluster(ctx context.Context, b *api.CreateClusterRequest,
 		return response{status: 201, body: s.clusterAPI(accepted), operationID: op.ID}
 	})
 	ctx = store.WithOperation(ctx, &op)
-	if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
+	if c.Spec.Provider == "rabbitmq" && (c.Spec.Version == "4.3.5" || c.Spec.Version == "4.3.6") {
 		c.Status.Conditions = append(c.Status.Conditions, domain.Condition{
-			Type: "DeprecatedVersion", Status: "True", Reason: "StreamAuthorizationDisclosures",
-			Message: rabbitMQ435Warning, LastTransitionTime: engine.RealClock{}.Now(),
+			Type: "DeprecatedVersion", Status: "True", Reason: "SecurityMaintenanceRequired",
+			Message: rabbitMQDeprecatedWarning, LastTransitionTime: engine.RealClock{}.Now(),
 		})
 	}
 	if err = s.Store.CreateClusterWithSecrets(ctx, &c, values); err != nil {
 		return s.failure(err)
 	}
-	if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
+	if c.Spec.Provider == "rabbitmq" && (c.Spec.Version == "4.3.5" || c.Spec.Version == "4.3.6") {
 		if err = s.recordAudit(ctx, domain.Event{
 			Namespace: namespace, Cluster: c.Name, Resource: "clusters", Target: c.Name,
 			Actor: store.Actor(ctx), Type: "Warning", Reason: "DeprecatedVersion",
-			Message: rabbitMQ435Warning,
+			Message: rabbitMQDeprecatedWarning,
 		}); err != nil {
 			return s.failure(err)
 		}

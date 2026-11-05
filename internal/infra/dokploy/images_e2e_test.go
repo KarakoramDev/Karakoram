@@ -162,9 +162,13 @@ type engineImageCase struct {
 
 func engineImageSpecs(t *testing.T) []engineImageCase {
 	t.Helper()
+	rabbitPrepare, err := rabbitmq.PrepareCommands("4.3.7")
+	if err != nil {
+		t.Fatal(err)
+	}
 	cases := []engineImageCase{
 		{"psmdb", (engine.AgentRuntime{Cluster: "imagetest", Member: "mongo1", Volume: "mongodata", Prepare: psmdb.PrepareCommands("8.0.32-14"), Ports: []infra.Port{{Port: 27017, Protocol: "tcp"}}, Env: map[string]string{"PERCONA_TELEMETRY_DISABLE": "1"}}).Spec(layout), "mongod --version && mongos --version && pbm version"},
-		{"rabbitmq", (engine.AgentRuntime{Cluster: "imagetest", Member: "rabbit1", Engine: "rabbitmq", Volume: "rabbitdata", Prepare: rabbitmq.PrepareCommands("4.3.6"), Ports: []infra.Port{{Port: 5672, Protocol: "tcp"}, {Port: 5671, Protocol: "tcp"}, {Port: 15672, Protocol: "tcp"}, {Port: 15671, Protocol: "tcp"}, {Port: 15692, Protocol: "tcp"}, {Port: 4369, Protocol: "tcp"}, {Port: 25672, Protocol: "tcp"}}}).Spec(layout), "test -x /usr/sbin/rabbitmq-server && command -v rabbitmq-server && command -v erl"},
+		{"rabbitmq", (engine.AgentRuntime{Cluster: "imagetest", Member: "rabbit1", Engine: "rabbitmq", Volume: "rabbitdata", Prepare: rabbitPrepare, Ports: []infra.Port{{Port: 5672, Protocol: "tcp"}, {Port: 5671, Protocol: "tcp"}, {Port: 15672, Protocol: "tcp"}, {Port: 15671, Protocol: "tcp"}, {Port: 15692, Protocol: "tcp"}, {Port: 4369, Protocol: "tcp"}, {Port: 25672, Protocol: "tcp"}}}).Spec(layout), "test -x /usr/sbin/rabbitmq-server && command -v rabbitmq-server && command -v erl"},
 	}
 	for _, component := range []string{"elasticsearch", "kibana"} {
 		volume := ""

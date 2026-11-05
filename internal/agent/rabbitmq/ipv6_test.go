@@ -47,8 +47,8 @@ func TestIPv6NativeConfig(t *testing.T) {
 			// A port-only RabbitMQ listener means all available interfaces, not the
 			// IPv4 wildcard. Distribution selects inet6 explicitly above.
 			listeners := []string{c["management.tcp.ip"]}
-			if tls {
-				listeners = append(listeners, c["management.ssl.ip"])
+			if tls && !strings.Contains(files[len(files)-1].content, "{ip,{0,0,0,0,0,0,0,0}}") {
+				t.Fatal("management TLS is not bound to the IPv6 wildcard")
 			}
 			configtest.CheckIPv6NativeConfig(t, configtest.NetworkConfig{Listeners: listeners, AdvertisedHosts: []string{strings.TrimPrefix(values["RABBITMQ_NODENAME"], "rabbit@"), strings.TrimPrefix(c["cluster_formation.classic_config.nodes.2"], "rabbit@")}})
 		})
@@ -71,5 +71,8 @@ func TestIPv4NativeConfig(t *testing.T) {
 	if !strings.Contains(e["RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS"], "-proto_dist inet_tls ") || strings.Contains(e["RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS"], "inet6") {
 		t.Fatal("IPv4 distribution requires IPv6")
 	}
-	configtest.CheckIPv4NativeConfig(t, configtest.NetworkConfig{Listeners: []string{v["management.tcp.ip"], v["management.ssl.ip"]}, AdvertisedHosts: []string{strings.TrimPrefix(e["RABBITMQ_NODENAME"], "rabbit@"), strings.TrimPrefix(v["cluster_formation.classic_config.nodes.1"], "rabbit@")}})
+	if !strings.Contains(files[len(files)-1].content, "{ip,{0,0,0,0}}") {
+		t.Fatal("management TLS is not bound to the IPv4 wildcard")
+	}
+	configtest.CheckIPv4NativeConfig(t, configtest.NetworkConfig{Listeners: []string{v["management.tcp.ip"]}, AdvertisedHosts: []string{strings.TrimPrefix(e["RABBITMQ_NODENAME"], "rabbit@"), strings.TrimPrefix(v["cluster_formation.classic_config.nodes.1"], "rabbit@")}})
 }

@@ -29,10 +29,10 @@ func TestCatalogAndValidation(t *testing.T) {
 	p, rc, _, _ := setup(t)
 	ctx := context.Background()
 	info := p.Describe()
-	if info.Name != "rabbitmq" || info.DisplayName != "RabbitMQ" || len(info.Versions) != 2 || info.Versions[0].Version != "4.3.5" || info.Versions[0].Status != "deprecated" || info.Versions[1].Version != "4.3.6" || info.Versions[1].Status != "supported" || !info.Versions[1].Default {
+	if info.Name != "rabbitmq" || info.DisplayName != "RabbitMQ" || len(info.Versions) != 3 || info.Versions[0].Version != "4.3.5" || info.Versions[0].Status != "deprecated" || info.Versions[1].Version != "4.3.6" || info.Versions[1].Status != "deprecated" || info.Versions[2].Version != "4.3.7" || info.Versions[2].Status != "supported" || !info.Versions[2].Default {
 		t.Fatalf("catalog: %+v", info)
 	}
-	if len(info.UpgradePaths) != 1 || info.UpgradePaths[0].From != "4.3.5" || info.UpgradePaths[0].To != "4.3.6" {
+	if !slices.Equal(info.UpgradePaths, []domain.UpgradePath{{From: "4.3.5", To: "4.3.6"}, {From: "4.3.5", To: "4.3.7"}, {From: "4.3.6", To: "4.3.7"}}) {
 		t.Fatal(info.UpgradePaths)
 	}
 	if len(info.Topologies) != 1 || info.Topologies[0].Type != "cluster" || !slices.Equal(info.Topologies[0].Components["engine"].AllowedReplicas, []int{1, 3, 5, 7}) {
@@ -51,10 +51,15 @@ func TestCatalogAndValidation(t *testing.T) {
 			t.Errorf("missing operation %s", operation)
 		}
 	}
-	if rc.Cluster.Spec.Version != "4.3.6" || rc.Cluster.Spec.Components.Engine.Replicas != 3 || rc.Cluster.Spec.Components.Engine.Resources.MinDisk != 5 || rc.Cluster.Spec.TLS.Mode != "requireTLS" {
+	if rc.Cluster.Spec.Version != "4.3.7" || rc.Cluster.Spec.Components.Engine.Replicas != 3 || rc.Cluster.Spec.Components.Engine.Resources.MinDisk != 5 || rc.Cluster.Spec.TLS.Mode != "requireTLS" {
 		t.Fatal(rc.Cluster.Spec)
 	}
-	for _, version := range []string{"4.3.5", "4.3.6"} {
+	var defaults domain.ClusterSpec
+	p.ApplyDefaults(&defaults)
+	if defaults.Version != "4.3.7" {
+		t.Fatal("default version does not match catalog", defaults.Version)
+	}
+	for _, version := range []string{"4.3.5", "4.3.6", "4.3.7"} {
 		for _, replicas := range []int{1, 3, 5, 7} {
 			for _, mode := range []string{"disabled", "preferTLS", "requireTLS"} {
 				c := cloneCluster(t, rc.Cluster)
@@ -291,10 +296,14 @@ func TestRuntimeSpecAndMemberConfigTLSModes(t *testing.T) {
 						t.Fatalf("port mismatch: %+v", port)
 					}
 				}
-				if !slices.Equal(runtime.Prepare, PrepareCommands("4.3.5")) {
+				prepare, err := PrepareCommands("4.3.5")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !slices.Equal(runtime.Prepare, prepare) {
 					t.Fatal("exported prepare commands differ from member deployment")
 				}
-				for _, want := range []string{"rabbitmq-server=4.3.5-1", "1:27.3.4.17-1", "policy-rc.d", "deb1.rabbitmq.com", "deb2.rabbitmq.com"} {
+				for _, want := range []string{"rabbitmq-server=4.3.5-1", "1:27.3.4.19-1", "policy-rc.d", "deb1.rabbitmq.com", "deb2.rabbitmq.com"} {
 					if !strings.Contains(strings.Join(runtime.Prepare, "\n"), want) {
 						t.Errorf("missing %q in prepare: %v", want, runtime.Prepare)
 					}
@@ -314,7 +323,7 @@ func TestRuntimeSpecAndMemberConfigTLSModes(t *testing.T) {
 					t.Fatal("broker package could start before policy-rc.d prevents system startup")
 				}
 				for _, pkg := range []string{"base", "asn1", "crypto", "eldap", "inets", "mnesia", "os-mon", "parsetools", "public-key", "runtime-tools", "ssl", "syntax-tools", "tools", "xmerl"} {
-					if !strings.Contains(install, "erlang-"+pkg+"=1:27.3.4.17-1") {
+					if !strings.Contains(install, "erlang-"+pkg+"=1:27.3.4.19-1") {
 						t.Errorf("unpinned Erlang package %s", pkg)
 					}
 				}
@@ -337,7 +346,7 @@ func TestRuntimeSpecAndMemberConfigTLSModes(t *testing.T) {
 					t.Fatalf("member config: %+v", cfg)
 				}
 				// The other fixture members are still planned (no runtime), so the seed discovers only itself.
-				if spec.NodeName != "rabbit@demom0" || !slices.Equal(spec.Peers, []string{"rabbit@demom0"}) || spec.Cookie == "" || spec.Version != "4.3.6" || spec.DefaultQueueType != "quorum" || spec.PrometheusPort != 15692 || spec.ConfigOverrides != rc.Cluster.Spec.EngineConfig || spec.TotalMemoryBytes <= 0 || spec.MemoryHighWatermarkBytes <= 0 || spec.MemoryHighWatermarkBytes >= spec.TotalMemoryBytes || spec.DiskFreeLimitBytes <= 0 || !slices.Contains(spec.Plugins, "rabbitmq_management") || !slices.Contains(spec.Plugins, "rabbitmq_prometheus") || !slices.Contains(spec.Plugins, "rabbitmq_stream") {
+				if spec.NodeName != "rabbit@demom0" || !slices.Equal(spec.Peers, []string{"rabbit@demom0"}) || spec.Cookie == "" || spec.Version != "4.3.7" || spec.DefaultQueueType != "quorum" || spec.PrometheusPort != 15692 || spec.ConfigOverrides != rc.Cluster.Spec.EngineConfig || spec.TotalMemoryBytes <= 0 || spec.MemoryHighWatermarkBytes <= 0 || spec.MemoryHighWatermarkBytes >= spec.TotalMemoryBytes || spec.DiskFreeLimitBytes <= 0 || !slices.Contains(spec.Plugins, "rabbitmq_management") || !slices.Contains(spec.Plugins, "rabbitmq_prometheus") || !slices.Contains(spec.Plugins, "rabbitmq_stream") {
 					t.Fatalf("member spec: %+v", spec)
 				}
 				amqp, amqps, mgmt, mgmts := 5672, 0, 15672, 0

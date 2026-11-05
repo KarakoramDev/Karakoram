@@ -360,7 +360,7 @@ func TestCatalogErlangPackageControlsAllBrokerVersions(t *testing.T) {
 				preferenceIndex = i
 			case command == "sudo apt-get update":
 				updateIndex = i
-			case strings.Contains(command, "rabbitmq-server="+v.Version+"-1"):
+			case strings.Contains(command, "rabbitmq-server="+v.Version+"-1") || strings.Contains(command, "rabbitmq-server_"+v.Version+"-1_all.deb"):
 				installIndex = i
 			}
 		}

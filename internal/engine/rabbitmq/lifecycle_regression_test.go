@@ -57,7 +57,7 @@ func TestStatusUsesObservedBrokerVersion(t *testing.T) {
 				t.Fatalf("single broker status: %+v", status)
 			}
 			m := status.Members[0]
-			if !m.Health || !m.Agent.Healthy || m.Role != "broker" || m.State != "RUNNING" || m.Version != "4.3.6" {
+			if !m.Health || !m.Agent.Healthy || m.Role != "broker" || m.State != "RUNNING" || m.Version != "4.3.7" {
 				t.Fatalf("broker observation replaced by cached agent version: %+v", m)
 			}
 		})
