@@ -54,7 +54,7 @@ func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 		s.Provider = "weaviate"
 	}
 	if s.Version == "" {
-		s.Version = "1.40.1"
+		s.Version = catalog[0].Version
 	}
 	if s.Topology.Type == "" {
 		s.Topology.Type = "single"

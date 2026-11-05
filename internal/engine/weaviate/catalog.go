@@ -13,7 +13,12 @@ import (
 	"strings"
 )
 
-var catalog = []domain.VersionInfo{{Version: "1.40.1", Major: "1.40", Default: true, Status: "supported"}, {Version: "1.39.12", Major: "1.39", Status: "supported"}}
+var catalog = []domain.VersionInfo{
+	{Version: "1.40.3", Major: "1.40", Default: true, Status: "supported"},
+	{Version: "1.39.15", Major: "1.39", Status: "supported"},
+	{Version: "1.40.1", Major: "1.40", Status: "deprecated"},
+	{Version: "1.39.12", Major: "1.39", Status: "deprecated"},
+}
 var versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
 func parseVersion(v string) ([3]int, bool) {
@@ -49,6 +54,9 @@ func catalogUpgradePaths() []domain.UpgradePath {
 func ArtifactName(version string) string {
 	for _, v := range catalog {
 		if v.Version == version {
+			if v.Status == "deprecated" {
+				return "weaviate-" + v.Version
+			}
 			return "weaviate-" + v.Major
 		}
 	}

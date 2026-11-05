@@ -141,7 +141,7 @@ func TestBackupDurableRecordReplayAndFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if saved.Weaviate == nil || saved.Location != backupLocation(saved.Weaviate) || !reflect.DeepEqual(saved.Weaviate.Members, []string{s.Members[0].Name}) || saved.Weaviate.ClusterUID != s.UID || saved.SourceVersion != "1.40.1" || n.posts != 0 {
+			if saved.Weaviate == nil || saved.Location != backupLocation(saved.Weaviate) || !reflect.DeepEqual(saved.Weaviate.Members, []string{s.Members[0].Name}) || saved.Weaviate.ClusterUID != s.UID || saved.SourceVersion != "1.40.3" || n.posts != 0 {
 				t.Fatalf("provenance not durable: %+v", saved)
 			}
 			// Lose operation checkpoint after record write; replay preserves location.

@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/KarakoramDev/Karakoram/internal/engine/weaviate/wvspec"
 )
 
 func TestClusterRenderEnvironment(t *testing.T) {
@@ -80,6 +82,30 @@ func TestLocalClusterRenderHook(t *testing.T) {
 	env = strings.Join(p.Env, "\n")
 	if strings.Contains(env, "CLUSTER_IN_LOCALHOST") || !strings.Contains(env, "RAFT_JOIN=node00:28301,node01:28401,node02:28501") {
 		t.Fatal(env)
+	}
+}
+
+// The patched internal backup handlers require cluster basic auth. Startup
+// repair scans remain opt-in; a patch upgrade must not request recurring scans.
+func TestPatchedBackupAuthenticationAndStartupDefaults(t *testing.T) {
+	for _, version := range []string{"1.39.15", "1.40.3"} {
+		t.Run(version, func(t *testing.T) {
+			s := testSpec()
+			s.Version = version
+			s.Backup = &wvspec.BackupS3{Bucket: "backups", Path: "cluster", Endpoint: "s3.example.com", UseSSL: true, Region: "region", AccessKey: "access", SecretKey: "backup-secret"}
+			p, _ := render("/data", s, config(s), "127.0.0.1")
+			env := strings.Join(p.Env, "\n")
+			for _, required := range []string{"CLUSTER_BASIC_AUTH_USERNAME=" + s.ClusterUsername, "CLUSTER_BASIC_AUTH_PASSWORD=" + s.ClusterPassword, "ENABLE_MODULES=backup-s3"} {
+				if !strings.Contains(env, required) {
+					t.Fatalf("missing %s", strings.SplitN(required, "=", 2)[0])
+				}
+			}
+			for _, key := range []string{"RECOUNT_PROPERTIES_AT_STARTUP", "REINDEX_VECTOR_DIMENSIONS_AT_STARTUP", "REINDEX_VECTOR_DIMENSIONS_TO_ROARING_SET_AT_STARTUP"} {
+				if strings.Contains(env, key+"=") {
+					t.Fatalf("unexpected startup repair %s", key)
+				}
+			}
+		})
 	}
 }
 
