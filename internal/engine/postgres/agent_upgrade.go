@@ -58,9 +58,15 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 	if cancel && !cp.Waiting {
 		return engine.OpResult{Done: true}, nil
 	}
-	// Completing a frozen target does not deploy the new control-plane build.
-	// A restart after the final acknowledgement must still retire the journal.
+	// Preparation can update extension packages without changing the server
+	// release. Wait for every member's binary rollout before updating SQL.
+	// Retain the pending flag on failure so normal reconciliation can retry.
 	if cp.Order != nil && cp.Index >= len(cp.Order) {
+		s.ExtensionsPending = true
+		if err := p.updateProfileExtensions(ctx, rc); err != nil {
+			return result, err
+		}
+		s.ExtensionsPending = false
 		return engine.OpResult{Done: true}, nil
 	}
 	if !cp.Waiting && cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {

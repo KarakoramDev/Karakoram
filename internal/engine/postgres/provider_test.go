@@ -42,6 +42,7 @@ type fakeBackend struct {
 	appliedVersions     map[string]int64
 	reloadFailures      int
 	statusFailures      map[string]int
+	extensionFailures   int
 	fenced              map[string]bool
 	held                map[string]bool
 	runtimeStopBusy     bool
@@ -456,6 +457,18 @@ func setupWithStatePath(t *testing.T, topology, statePath string) (*Core, *engin
 			b.upgradePaused = false
 			b.actions = append(b.actions, r.URL.Path+":"+name)
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/postgres/update-extensions":
+			var request pgspec.AccessRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+			}
+			b.actions = append(b.actions, "update-extensions:"+name+":"+strings.Join(request.Extensions, ","))
+			if b.extensionFailures > 0 {
+				b.extensionFailures--
+				http.Error(w, "updating installed extension SQL failed", http.StatusConflict)
+				return
+			}
+			json.NewEncoder(w).Encode([]pgspec.ExtensionUpdateResult{})
 		case "/v1/postgres/profile-bootstrap":
 			var request pgspec.ProfileBootstrapRequest
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {

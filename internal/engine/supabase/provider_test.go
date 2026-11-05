@@ -261,6 +261,9 @@ func setupProvider(t *testing.T) (*Provider, *engine.Context, *testBackend) {
 				status = observed
 			}
 			json.NewEncoder(w).Encode(status)
+		case "/v1/postgres/update-extensions":
+			// Match the native API's result-array contract, not ActionResponse.
+			json.NewEncoder(w).Encode([]pgspec.ExtensionUpdateResult{})
 		case "/v1/supabase/status":
 			status := sbspec.Status{Ready: true}
 			if strings.HasSuffix(name, codes["gateway"]) {

@@ -256,21 +256,9 @@ func (p *Core) profileAvailableExtensions(_ context.Context, rc *engine.Context)
 }
 
 func (p *Core) selectedProfileExtensions(rc *engine.Context) []string {
-	if wrapper, ok := p.options.Flavour.(interface {
-		SelectedExtensions(json.RawMessage) ([]string, error)
-	}); ok {
-		selected, err := wrapper.SelectedExtensions(rc.Cluster.Spec.EngineOptions)
-		if err != nil {
-			return nil
-		}
-		out := []string{"pgcrypto", "uuid-ossp"}
-		for _, name := range selected {
-			if !slices.Contains(out, name) {
-				out = append(out, name)
-			}
-		}
-		return out
-	}
+	// Supabase selections can be removed without dropping installed objects.
+	// Update every installed managed extension, including formerly selected ones.
+	// The agent skips extensions absent from each database.
 	profiles, err := p.profiles(rc.Cluster.Spec.EngineOptions, major(rc.Cluster.Spec.Version))
 	if err != nil {
 		return nil
