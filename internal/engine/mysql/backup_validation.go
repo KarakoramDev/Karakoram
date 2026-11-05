@@ -197,6 +197,7 @@ func (p *Core) pitrWindowsByFull(ctx context.Context, rc *engine.Context) ([]dom
 type pitrWindowObservation struct {
 	end           time.Time
 	writerChanged bool
+	blockedReason string
 	pending       error
 }
 
@@ -348,9 +349,11 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 						// extend this baseline; historical foreign uploads do not forbid it.
 						incompatibleWriter := myspec.ValidUUID(writerUUID) && myspec.ValidUUID(coverage.SourceUUID) && writerUUID != coverage.SourceUUID
 						frozen := incompatibleWriter && bounded.End.Equal(w.End) && coverage.LatestForeignEventTime.After(w.End)
-						if bounded.End.After(observation.end) || bounded.End.Equal(observation.end) && !frozen {
+						// Equal safe endpoints prefer a lineage that can still extend.
+						if bounded.End.After(observation.end) || bounded.End.Equal(observation.end) && !frozen && (observation.writerChanged || observation.blockedReason != "" || coverage.BlockedReason == "") {
 							observation.end = bounded.End
 							observation.writerChanged = frozen
+							observation.blockedReason = coverage.BlockedReason
 						}
 					}
 				}
@@ -478,6 +481,23 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 		if observation.writerChanged && observation.end.Equal(latest.End) {
 			condition.Reason = "WindowFrozenWriterChanged"
 			condition.Message = fmt.Sprintf("Recovery window ends at %s because the archive writer changed; take a full backup to extend point-in-time recovery", latest.End.UTC().Format(time.RFC3339Nano))
+		}
+		if observation.blockedReason != "" && observation.end.Equal(latest.End) {
+			condition.Status = "False"
+			condition.Reason = "CoverageBlocked"
+			condition.Message = fmt.Sprintf("Recovery coverage ends at %s: %s; inspect the binlog chain and take a full backup after resolving the missing history", latest.End.UTC().Format(time.RFC3339Nano), observation.blockedReason)
+			known := false
+			for _, old := range rc.Cluster.Status.Conditions {
+				if old.Type == condition.Type && old.Reason == condition.Reason && old.Message == condition.Message {
+					known = true
+					break
+				}
+			}
+			if !known && rc.Events != nil {
+				if err := recordArchiveWarning(ctx, rc, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Type: "Warning", Reason: condition.Reason, Message: condition.Message, CreatedAt: now(rc)}); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	status.Conditions = append(status.Conditions, condition)

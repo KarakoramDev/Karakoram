@@ -33,6 +33,9 @@ type PITRCoverageResponse struct {
 	// LatestForeignEventTime is diagnostic only: transactions archived by a
 	// different physical source cannot extend this baseline's replay lineage.
 	LatestForeignEventTime time.Time `json:"latestForeignEventTime,omitzero"`
+	// BlockedReason describes verified same-source history that cannot extend
+	// the safe windows. Upload health alone is not recovery coverage health.
+	BlockedReason string `json:"blockedReason,omitempty"`
 }
 
 type PITRCoverageProgress struct {

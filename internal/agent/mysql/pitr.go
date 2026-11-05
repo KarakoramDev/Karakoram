@@ -342,6 +342,14 @@ func trustedReplayHistory(logs []archivedBinlog, backup myspec.BackupResult) ([]
 	if err != nil {
 		return nil, 0, err
 	}
+	// The exact physical anchor proves which baseline GTIDs were logged.
+	// Purged-only history in the full need not occur in Previous_gtids.
+	for _, l := range logs {
+		base, err = snapshotLoggedGTIDs(l, backup, base)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
 	type orderedLog struct {
 		log      archivedBinlog
 		sequence uint64
@@ -373,7 +381,7 @@ func trustedReplayHistory(logs []archivedBinlog, backup myspec.BackupResult) ([]
 		if err != nil {
 			return nil, 0, err
 		}
-		if !have.contains(prev) {
+		if !have.contains(prev) || !prev.contains(base) {
 			break
 		}
 		set, err := parseRecoveryGTIDs(l.meta.GTIDSet)
@@ -400,6 +408,7 @@ func trustedReplayHistory(logs []archivedBinlog, backup myspec.BackupResult) ([]
 		if !decoded.contains(set) || !set.contains(decoded) {
 			return nil, 0, errors.New("invalid_sidecar")
 		}
+		base.add(set)
 		if len(novel) > 0 {
 			l.meta.Transactions = novel
 			trusted = append(trusted, l)
@@ -498,6 +507,51 @@ func fetchReplayLogs(ctx context.Context, s myspec.Spec, r myspec.Restore, dir s
 		files = append(files, replayFile{Path: name, ObjectKey: l.key, SHA256: l.meta.SHA256, Size: l.meta.Size})
 	}
 	return replayLogs{Files: files, StartPosition: startPosition}, target, nil
+}
+
+// snapshotLoggedGTIDs derives the logged part of the full's executed set from
+// its exact source/file/position. MySQL Previous_gtids accumulates logged GTIDs,
+// not all executed GTIDs: provisioning can leave history only in gtid_purged.
+// Without the anchor, retain the conservative requirement for the complete base.
+func snapshotLoggedGTIDs(l archivedBinlog, backup myspec.BackupResult, base recoveryGTIDs) (recoveryGTIDs, error) {
+	if l.meta.ServerUUID != backup.SourceUUID || l.meta.File != backup.BinlogFile {
+		return base, nil
+	}
+	logged, err := parseRecoveryGTIDs(l.meta.PreviousGTIDSet)
+	if err != nil {
+		return nil, err
+	}
+	all, err := parseRecoveryGTIDs(l.meta.GTIDSet)
+	if err != nil {
+		return nil, err
+	}
+	decoded := recoveryGTIDs{}
+	for _, tx := range l.meta.Transactions {
+		g, err := parseRecoveryGTIDs(tx.GTID)
+		if err != nil || !all.contains(g) || tx.EndPosition == 0 {
+			return nil, errors.New("invalid_sidecar")
+		}
+		decoded.add(g)
+		if tx.EndPosition <= backup.BinlogPosition {
+			logged.add(g)
+		}
+	}
+	if !decoded.contains(all) || !all.contains(decoded) {
+		return nil, errors.New("invalid_sidecar")
+	}
+	required := recoveryGTIDs{}
+	for sid, ranges := range base {
+		for _, r := range ranges {
+			for _, l := range logged[sid] {
+				lo, hi := max(r.lo, l.lo), min(r.hi, l.hi)
+				if lo <= hi {
+					required[sid] = append(required[sid], gtidInterval{lo, hi})
+				}
+			}
+		}
+	}
+	required.normalize()
+	return required, nil
 }
 
 // anchorReplayLog excludes pre-snapshot original-source bytes, including GTIDs
