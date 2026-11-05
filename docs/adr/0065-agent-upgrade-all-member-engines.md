@@ -22,7 +22,7 @@ Replication (GR), PXC including ProxySQL, OpenBao with Raft or PostgreSQL storag
 Keycloak, Temporal, Neo4j Community and Weaviate. Use the existing API, CLI,
 agent-build inventory and opt-in automatic rollout settings; no public API change
 or separate rollout mechanism is introduced. After upgrading the control plane
-to v0.4.5, existing v0.4.3 agents are eligible for upgrade. Missing legacy build
+to v0.4.6, existing v0.4.3 agents are eligible for upgrade. Missing legacy build
 identity means eligible/unknown, not current.
 
 Freeze the enqueue target and initial order in durable checkpoints. Journal

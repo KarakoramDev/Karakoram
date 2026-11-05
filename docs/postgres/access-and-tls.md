@@ -21,7 +21,7 @@ connection files contain the same secret; protect them as credentials. Hiding
 system roles from the native role API does **not** mean the administrator is
 never disclosed.
 
-Starting with v0.4.5, rotate `postgres` in place with the durable system-user
+Starting with v0.4.6, rotate `postgres` in place with the durable system-user
 operation (PostgreSQL single/Patroni HA, Citus and Supabase):
 
 ```sh
