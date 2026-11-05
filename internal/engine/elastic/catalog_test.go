@@ -36,7 +36,7 @@ func TestCatalog(t *testing.T) {
 	want := []struct {
 		version, major string
 		def            bool
-	}{{"9.5.5", "9.5", true}, {"9.5.4", "9.5", false}, {"9.4.8", "9.4", false}, {"8.19.23", "8.19", false}}
+	}{{"9.5.6", "9.5", true}, {"9.5.5", "9.5", false}, {"9.5.4", "9.5", false}, {"9.4.9", "9.4", false}, {"9.4.8", "9.4", false}, {"8.19.24", "8.19", false}, {"8.19.23", "8.19", false}}
 	if len(catalog) != len(want) {
 		t.Fatal("catalog length")
 	}
@@ -49,7 +49,7 @@ func TestCatalog(t *testing.T) {
 		})
 	}
 	paths := catalogUpgradePaths()
-	if len(paths) != 6 {
+	if len(paths) != 21 {
 		t.Fatalf("got %d upgrade paths", len(paths))
 	}
 	seen := map[string]bool{}

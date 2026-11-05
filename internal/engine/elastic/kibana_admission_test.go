@@ -33,7 +33,7 @@ func TestKibanaVersionAdmission(t *testing.T) {
 			minimum, maximum float64
 			wantError        bool
 		}{
-			{"one", 1, 1, 1, version.Version != "8.19.23"},
+			{"one", 1, 1, 1, version.Major != "8.19"},
 			{"floor", 1, 1.5, 1.5, false},
 			{"inverted", 1, 1.5, 1, true},
 			{"disabled", 0, 1, 1, false},

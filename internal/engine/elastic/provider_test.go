@@ -532,7 +532,7 @@ func cloneCluster(t *testing.T, c *domain.Cluster) *domain.Cluster {
 func TestProviderCatalogDefaultsValidation(t *testing.T) {
 	p, rc, _, _ := coreSetup(t, 1)
 	info := p.Describe()
-	if info.Name != "elasticsearch" || len(info.Versions) != 4 || len(info.Topologies) != 2 || len(info.Presets) != 4 || !slices.Contains(info.Capabilities, "elasticAccess") {
+	if info.Name != "elasticsearch" || len(info.Versions) != 7 || len(info.Topologies) != 2 || len(info.Presets) != 4 || !slices.Contains(info.Capabilities, "elasticAccess") {
 		t.Fatal(info)
 	}
 	for _, preset := range info.Presets {

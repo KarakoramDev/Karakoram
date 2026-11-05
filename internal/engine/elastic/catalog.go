@@ -14,9 +14,12 @@ import (
 )
 
 var catalog = []domain.VersionInfo{
-	{Version: "9.5.5", Major: "9.5", Default: true, Status: "supported"},
+	{Version: "9.5.6", Major: "9.5", Default: true, Status: "supported"},
+	{Version: "9.5.5", Major: "9.5", Status: "supported"},
 	{Version: "9.5.4", Major: "9.5", Status: "supported"},
+	{Version: "9.4.9", Major: "9.4", Status: "supported"},
 	{Version: "9.4.8", Major: "9.4", Status: "supported"},
+	{Version: "8.19.24", Major: "8.19", Status: "supported"},
 	{Version: "8.19.23", Major: "8.19", Status: "supported"},
 }
 
