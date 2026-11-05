@@ -99,6 +99,18 @@ recovery and false PXC GTID-history incident issues documented
 [below](#known-issues-in-v044) also remain unfixed in v0.4.5; their workarounds
 still apply and their fixes are deferred to v0.4.6, not included in this hotfix.
 
+- **Data MCP can keep failing with `tool listing unavailable` after its
+  connection to a cluster's companion drops** (also present in v0.3.0–v0.4.4).
+  If the connection between the control plane and a cluster's Data MCP
+  companion closes — for example after the companion restarts or a network
+  interruption — the gateway keeps reusing the closed connection, and Data MCP
+  requests for that cluster keep failing; the stale connection is only dropped
+  after about 10 minutes with no Data MCP requests for that cluster, or when
+  the control plane restarts. Your databases are not affected. Workaround: stop
+  sending Data MCP requests to that cluster for about 10 minutes, or restart
+  the Karakoram control plane (clusters keep running while it restarts).
+  A fix is planned for the next release.
+
 ## Upgrading to v0.4.4
 
 v0.4.4 is a hotfix of v0.4.3 with only two MySQL/PXC point-in-time recovery
