@@ -11,7 +11,7 @@ import (
 
 var pxcCatalog = []domain.VersionInfo{
 	{Version: "8.4.11-11.1", Major: "8.4", Default: true, Status: "supported"},
-	{Version: "8.0.46-38.1", Major: "8.0", Status: "supported"},
+	{Version: "8.0.46-38.1", Major: "8.0", Status: "deprecated"},
 }
 
 func (p *Core) versions() []domain.VersionInfo {

@@ -49,8 +49,8 @@ func (p *Core) Name() string {
 var catalog = []domain.VersionInfo{
 	{Version: "8.4.11-11", Major: "8.4", Default: true, Status: "supported"},
 	{Version: "8.4.10-10", Major: "8.4", Status: "supported"},
-	{Version: "8.0.46-37", Major: "8.0", Status: "supported"},
-	{Version: "8.0.45-36", Major: "8.0", Status: "supported"},
+	{Version: "8.0.46-37", Major: "8.0", Status: "deprecated"},
+	{Version: "8.0.45-36", Major: "8.0", Status: "deprecated"},
 }
 var clusterName = regexp.MustCompile(`^[a-z][a-z0-9]{0,11}$`)
 var proxyComponents = engine.ComponentSet{{Name: "proxy", DisplayName: "ProxySQL", Defaults: domain.ComponentSpec{Replicas: 1, Resources: defaultResources(false)}, MinReplicas: 0, MaxReplicas: 5}}
@@ -179,6 +179,15 @@ func (p *Core) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	}
 	if !known {
 		return engine.Invalid("unsupported MySQL version")
+	}
+	// Physical recovery requires the source major. Data-source creates still
+	// pass the ordinary backup provenance and same-provider/major validation.
+	if old == nil && s.DataSource == nil && major(s.Version) == "8.0" {
+		name := "Percona Server"
+		if p.Name() == "pxc" {
+			name = "Percona XtraDB Cluster"
+		}
+		return engine.InvalidField("spec.version", domain.ReasonUnsupported, "%s 8.0 reached end of life; new clusters must use 8.4. Existing 8.0 clusters keep running and can upgrade to 8.4. Recovery from existing 8.0 backups or PITR remains available through dataSource.", name)
 	}
 	if p.Name() == "pxc" && s.Topology.Type != "cluster" || p.Name() == "mysql" && s.Topology.Type != "single" && s.Topology.Type != "group" {
 		return engine.Invalid("unsupported provider topology")
