@@ -28,7 +28,7 @@ type Provider struct{ options Options }
 func New(o Options) *Provider  { return &Provider{options: o} }
 func (*Provider) Name() string { return "neo4j" }
 
-const defaultVersion = "2026.10.0"
+const defaultVersion = "2026.10.1"
 
 func resources() domain.Resources {
 	return domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 2, MaxRAM: 2, MinDisk: 10, MaxDisk: 10}
@@ -36,8 +36,8 @@ func resources() domain.Resources {
 func (*Provider) Describe() domain.ProviderInfo {
 	return domain.ProviderInfo{
 		Name: "neo4j", DisplayName: "Neo4j Community",
-		Versions:     []domain.VersionInfo{{Version: "2026.09.0", Major: "2026", Status: "supported"}, {Version: defaultVersion, Major: "2026", Default: true, Status: "supported"}},
-		UpgradePaths: []domain.UpgradePath{{From: "2026.09.0", To: defaultVersion, RequiresBackup: true}},
+		Versions:     []domain.VersionInfo{{Version: "2026.09.0", Major: "2026", Status: "supported"}, {Version: "2026.10.0", Major: "2026", Status: "supported"}, {Version: defaultVersion, Major: "2026", Default: true, Status: "supported"}},
+		UpgradePaths: []domain.UpgradePath{{From: "2026.09.0", To: "2026.10.0", RequiresBackup: true}, {From: "2026.09.0", To: defaultVersion, RequiresBackup: true}, {From: "2026.10.0", To: defaultVersion, RequiresBackup: true}},
 		Topologies:   []domain.TopologyInfo{{Type: "single", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 1, Resources: resources()}, MinReplicas: 1, MaxReplicas: 1, AllowedReplicas: []int{1}}}}},
 		BackupTypes:  []string{"dump"},
 		Capabilities: []string{"tls", "monitoring", "publicExposure", "systemUsers", "neo4jAccess", "backups", "restores", "clone"},
@@ -110,7 +110,7 @@ func (*Provider) Validate(_ context.Context, old, n *domain.Cluster) error {
 	if s.Provider != "neo4j" {
 		return engine.Invalid("provider must be neo4j")
 	}
-	if s.Version != "2026.09.0" && s.Version != defaultVersion {
+	if s.Version != "2026.09.0" && s.Version != "2026.10.0" && s.Version != defaultVersion {
 		return engine.Invalid("unsupported Neo4j version")
 	}
 	if s.Topology.Type != "single" || s.Topology.Shards != 0 || s.Components.Engine.Replicas != 1 {
@@ -149,7 +149,7 @@ func (*Provider) Validate(_ context.Context, old, n *domain.Cluster) error {
 	var exposure *domain.Exposure
 	if old != nil {
 		exposure = &old.Spec.Exposure
-		if old.Spec.Version != s.Version && !(old.Spec.Version == "2026.09.0" && s.Version == defaultVersion) {
+		if old.Spec.Version != s.Version && !((old.Spec.Version == "2026.09.0" && s.Version == "2026.10.0") || ((old.Spec.Version == "2026.09.0" || old.Spec.Version == "2026.10.0") && s.Version == defaultVersion)) {
 			return engine.Invalid("unsupported Neo4j upgrade or downgrade")
 		}
 		a, b := old.Spec.Components.Engine.Resources, s.Components.Engine.Resources

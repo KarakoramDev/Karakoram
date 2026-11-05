@@ -76,12 +76,13 @@ func TestMemberConfigTokenIndependentOfPullCapabilities(t *testing.T) {
 			}
 			originalToken := digest(struct {
 				Version     string
+				JavaHome    string
 				Heap, Page  int
 				Settings    map[string]string
 				Certificate string
-			}{legacy.Version, legacy.HeapMB, legacy.PageCacheMB, legacy.Settings, digest(legacy.Server.CertPEM)})
+			}{legacy.Version, legacy.Install.JavaHome, legacy.HeapMB, legacy.PageCacheMB, legacy.Settings, digest(legacy.Server.CertPEM)})
 			if legacy.RestartToken != originalToken {
-				t.Fatal("CP token differs from original token computation")
+				t.Fatal("CP token differs from pinned-runtime token computation")
 			}
 			observed.config = agentConfig
 			if err := json.Unmarshal(agentConfig.EngineSpec, &observed.spec); err != nil {

@@ -13,13 +13,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/neo4j/neo4jspec"
 )
 
@@ -67,8 +67,8 @@ func (e *Engine) ports(recovery bool) (int, int) {
 	return b, h
 }
 
-var versionPattern = regexp.MustCompile(`^2026\.(09|10)\.0$`)
-
+// Use the same pinned inventory as control-plane admission, not a second
+// release-specific allowlist that can lag behind catalog patch updates.
 func decodeSpec(c agentapi.MemberConfig) (neo4jspec.Spec, error) {
 	var s neo4jspec.Spec
 	d := json.NewDecoder(bytes.NewReader(c.EngineSpec))
@@ -80,7 +80,8 @@ func decodeSpec(c agentapi.MemberConfig) (neo4jspec.Spec, error) {
 	if d.Decode(&extra) != io.EOF {
 		return s, errors.New("invalid Neo4j member payload")
 	}
-	if !versionPattern.MatchString(s.Version) || !filepath.IsAbs(s.Install.Neo4jHome) || !filepath.IsAbs(s.Install.JavaHome) || s.HeapMB <= 0 || s.PageCacheMB <= 0 || s.CAPEM == "" || s.Server.CertPEM == "" || s.Server.KeyPEM == "" || s.AdminPassword == "" || s.RestartToken == "" || s.AdvertisedHost == "" || strings.ContainsAny(s.AdvertisedHost, "\r\n\x00= ") {
+	artifact, versionErr := nativeartifacts.Get("neo4j-community-" + s.Version)
+	if versionErr != nil || artifact.Version != s.Version || !filepath.IsAbs(s.Install.Neo4jHome) || !filepath.IsAbs(s.Install.JavaHome) || s.HeapMB <= 0 || s.PageCacheMB <= 0 || s.CAPEM == "" || s.Server.CertPEM == "" || s.Server.KeyPEM == "" || s.AdminPassword == "" || s.RestartToken == "" || s.AdvertisedHost == "" || strings.ContainsAny(s.AdvertisedHost, "\r\n\x00= ") {
 		return s, errors.New("invalid Neo4j member configuration")
 	}
 	for _, home := range []string{s.Install.Neo4jHome, s.Install.JavaHome} {

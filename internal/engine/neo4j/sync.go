@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/neo4j/neo4jspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -136,6 +137,8 @@ func observePending(ctx context.Context, rc *engine.Context, s *state) (bool, er
 	case "deploy":
 		m.Stage = "deployed"
 		m.Version = m.PendingVersion
+		m.JavaVersion = m.PendingJavaVersion
+		m.PendingJavaVersion = ""
 	case "resize":
 		m.Resources = m.PendingResources
 	case "resize-volume":
@@ -418,6 +421,10 @@ func restrictExposure(ctx context.Context, rc *engine.Context, m *member, e doma
 }
 
 func (p *Provider) deployMember(ctx context.Context, rc *engine.Context, s *state, version string) error {
+	java, err := nativeartifacts.Get("temurin-jre-21")
+	if err != nil {
+		return err
+	}
 	accepted := *rc.Cluster
 	accepted.Spec.Version = version
 	view := *rc
@@ -432,5 +439,6 @@ func (p *Provider) deployMember(ctx context.Context, rc *engine.Context, s *stat
 	}
 	track(s.Member, "deploy", op)
 	s.Member.PendingVersion = version
+	s.Member.PendingJavaVersion = java.Version
 	return nil
 }

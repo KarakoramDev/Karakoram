@@ -34,6 +34,11 @@ func (p *Provider) runtimeSpec(rc *engine.Context, s *state) (infra.RuntimeSpec,
 	if s.Member.PreviousVersion != "" && s.Member.PreviousVersion != rc.Cluster.Spec.Version {
 		names = append(names, "neo4j-community-"+s.Member.PreviousVersion)
 	}
+	// A replacement filesystem must also be able to run the cached member
+	// configuration while deployment receipt recovery precedes JRE activation.
+	if s.Member.Version != "" && (s.Member.JavaVersion == "" || s.Member.JavaVersion == "21.0.12.1+1") {
+		names = append(names, "temurin-jre-21-legacy")
+	}
 	for _, n := range names {
 		a, e := nativeartifacts.Get(n)
 		if e != nil {
@@ -43,7 +48,11 @@ func (p *Provider) runtimeSpec(rc *engine.Context, s *state) (infra.RuntimeSpec,
 		if e != nil {
 			return infra.RuntimeSpec{}, e
 		}
-		prepare = append(prepare, nativeartifacts.PrepareCommands(a, u, "/opt/karakoram/"+a.Name, rc.Backend.Layout().User)...)
+		dest := "/opt/karakoram/" + a.Name
+		if a.Name == "temurin-jre-21-legacy" {
+			dest = "/opt/karakoram/temurin-jre-21"
+		}
+		prepare = append(prepare, nativeartifacts.PrepareCommands(a, u, dest, rc.Backend.Layout().User)...)
 	}
 	url := rc.AgentURL
 	if url == "" {
@@ -103,13 +112,33 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	if e != nil {
 		return agentapi.MemberConfig{}, e
 	}
+	// Legacy members retain their installed JRE until runtime preparation has
+	// completed. A control-plane upgrade alone must not publish a missing root.
+	javaVersion := m.JavaVersion
+	if javaVersion == "" && m.Version == "" {
+		javaVersion = m.PendingJavaVersion
+	}
+	if javaVersion == "" {
+		javaVersion = "21.0.12.1+1"
+	}
+	inst.JavaHome = "/opt/karakoram/temurin-jre-21/jdk-" + javaVersion + "-jre"
 	sp := neo4jspec.Spec{Version: version, Install: inst, HeapMB: h, PageCacheMB: pc, CAPEM: get("tls/ca.crt"), Server: neo4jspec.Certificate{CertPEM: get("tls/servers/" + name + ".crt"), KeyPEM: get("tls/servers/" + name + ".key")}, AdvertisedHost: name, AdminPassword: get("users/neo4j"), Settings: o.Settings}
 	sp.RestartToken = digest(struct {
 		Version     string
+		JavaHome    string
 		Heap, Page  int
 		Settings    map[string]string
 		Certificate string
-	}{sp.Version, h, pc, o.Settings, digest(sp.Server.CertPEM)})
+	}{sp.Version, inst.JavaHome, h, pc, o.Settings, digest(sp.Server.CertPEM)})
+	if m.JavaVersion == "" && m.Version != "" {
+		// Preserve the pre-rollout restart token on legacy config pulls.
+		sp.RestartToken = digest(struct {
+			Version     string
+			Heap, Page  int
+			Settings    map[string]string
+			Certificate string
+		}{sp.Version, h, pc, o.Settings, digest(sp.Server.CertPEM)})
+	}
 	tls := agentapi.Certificate{CertPEM: get("tls/agents/" + name + ".crt"), KeyPEM: get("tls/agents/" + name + ".key")}
 	if err != nil {
 		return agentapi.MemberConfig{}, err

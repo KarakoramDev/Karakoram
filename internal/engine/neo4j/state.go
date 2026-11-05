@@ -27,24 +27,26 @@ type state struct {
 	CloneComplete      bool                     `json:"cloneComplete,omitempty"`
 }
 type member struct {
-	Name             string                 `json:"name"`
-	Volume           string                 `json:"volume"`
-	ServiceID        string                 `json:"serviceId,omitempty"`
-	VolumeID         string                 `json:"volumeId,omitempty"`
-	Stage            string                 `json:"stage"`
-	Version          string                 `json:"version,omitempty"`
-	PreviousVersion  string                 `json:"previousVersion,omitempty"`
-	Resources        domain.Resources       `json:"resources"`
-	Disk             domain.Resources       `json:"disk"`
-	ImportBatch      *engine.ImportPlan     `json:"importBatch,omitempty"`
-	Pending          *infra.Op              `json:"pending,omitempty"`
-	PendingAction    string                 `json:"pendingAction,omitempty"`
-	PendingVersion   string                 `json:"pendingVersion,omitempty"`
-	PendingResources domain.Resources       `json:"pendingResources"`
-	RuntimeRecovery  engine.RuntimeRecovery `json:"runtimeRecovery,omitempty"`
-	Offline          bool                   `json:"offline,omitempty"`
-	Exposure         domain.Exposure        `json:"exposure"`
-	Public           bool                   `json:"public,omitempty"`
+	Name               string                 `json:"name"`
+	Volume             string                 `json:"volume"`
+	ServiceID          string                 `json:"serviceId,omitempty"`
+	VolumeID           string                 `json:"volumeId,omitempty"`
+	Stage              string                 `json:"stage"`
+	Version            string                 `json:"version,omitempty"`
+	JavaVersion        string                 `json:"javaVersion,omitempty"`
+	PendingJavaVersion string                 `json:"pendingJavaVersion,omitempty"`
+	PreviousVersion    string                 `json:"previousVersion,omitempty"`
+	Resources          domain.Resources       `json:"resources"`
+	Disk               domain.Resources       `json:"disk"`
+	ImportBatch        *engine.ImportPlan     `json:"importBatch,omitempty"`
+	Pending            *infra.Op              `json:"pending,omitempty"`
+	PendingAction      string                 `json:"pendingAction,omitempty"`
+	PendingVersion     string                 `json:"pendingVersion,omitempty"`
+	PendingResources   domain.Resources       `json:"pendingResources"`
+	RuntimeRecovery    engine.RuntimeRecovery `json:"runtimeRecovery,omitempty"`
+	Offline            bool                   `json:"offline,omitempty"`
+	Exposure           domain.Exposure        `json:"exposure"`
+	Public             bool                   `json:"public,omitempty"`
 }
 
 func load(c *domain.Cluster) (*state, error) {

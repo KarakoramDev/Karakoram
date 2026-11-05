@@ -231,7 +231,7 @@ func TestMemoryMB(t *testing.T) {
 }
 func TestDescribe(t *testing.T) {
 	info := New(Options{}).Describe()
-	if info.Name != "neo4j" || info.DisplayName != "Neo4j Community" || len(info.Topologies) != 1 || info.Topologies[0].Type != "single" || len(info.UpgradePaths) != 1 || !info.UpgradePaths[0].RequiresBackup {
+	if info.Name != "neo4j" || info.DisplayName != "Neo4j Community" || len(info.Topologies) != 1 || info.Topologies[0].Type != "single" || len(info.UpgradePaths) != 3 || !info.UpgradePaths[0].RequiresBackup {
 		t.Fatal(info)
 	}
 	if !reflect.DeepEqual(info.BackupTypes, []string{"dump"}) {
@@ -297,7 +297,7 @@ func TestCreateMemberConfigAndStatus(t *testing.T) {
 	}
 	var spec neo4jspec.Spec
 	json.Unmarshal(cfg.EngineSpec, &spec)
-	if spec.HeapMB != 768 || spec.PageCacheMB != 512 || spec.Install.Neo4jHome != "/opt/karakoram/neo4j-community-2026.10.0/neo4j-community-2026.10.0" || spec.AdminPassword == "" || spec.RestartToken == "" || cfg.Volume == nil || !cfg.Volume.Initialized {
+	if spec.HeapMB != 768 || spec.PageCacheMB != 512 || spec.Install.Neo4jHome != "/opt/karakoram/neo4j-community-"+defaultVersion+"/neo4j-community-"+defaultVersion || spec.AdminPassword == "" || spec.RestartToken == "" || cfg.Volume == nil || !cfg.Volume.Initialized {
 		t.Fatal("incomplete member config", cfg.Volume)
 	}
 	runtime, ok := b.Deployed(s.Member.Name)

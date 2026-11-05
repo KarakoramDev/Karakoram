@@ -10,6 +10,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
@@ -20,6 +21,7 @@ type agentUpgradeCheckpoint struct {
 	Step          string                     `json:"step"`
 	Deploy        *infra.Op                  `json:"deploy,omitempty"`
 	PreviousBuild string                     `json:"previousBuild,omitempty"`
+	JavaVersion   string                     `json:"javaVersion,omitempty"`
 }
 
 func agentUpgradeResult(cp agentUpgradeCheckpoint, done bool) (engine.OpResult, error) {
@@ -67,6 +69,14 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		st, e := a.Status(ctx)
 		return domain.MemberStatus{Agent: domain.AgentStatus{Build: st.Agent.Build, Healthy: e == nil && st.Error == "" && st.ConfigVersion >= s.ConfigVersion && st.Processes["neo4j"].State == "running"}}, e
 	}
+	activateJava := func() error {
+		if cp.JavaVersion == "" || m.JavaVersion == cp.JavaVersion {
+			return nil
+		}
+		m.JavaVersion = cp.JavaVersion
+		s.ConfigVersion++
+		return save(rc.Cluster, s)
+	}
 	settledBuild := ""
 	settled := func() bool {
 		native, e := readiness(ctx, rc)
@@ -83,6 +93,12 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if intentSettled && cp.PreviousBuild != cp.Target.TargetBuild && settledBuild == cp.Target.TargetBuild {
 			containers, err := rc.Backend.Containers(ctx, m.Name)
 			if err == nil && len(containers) == 1 && (containers[0].Status == infra.ContainerRunning || containers[0].Status == infra.ContainerActive) {
+				if m.JavaVersion != cp.JavaVersion && cp.JavaVersion != "" {
+					if err := activateJava(); err != nil {
+						return engine.OpResult{}, err
+					}
+					return agentUpgradeResult(cp, false)
+				}
 				cp.Done = append(cp.Done, m.Name)
 				cp.Step = "complete"
 				return agentUpgradeResult(cp, true)
@@ -115,6 +131,11 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			return r, e
 		}
 		cp.PreviousBuild = st.Agent.Build
+		java, err := nativeartifacts.Get("temurin-jre-21")
+		if err != nil {
+			return engine.OpResult{}, err
+		}
+		cp.JavaVersion = java.Version
 		cp.Step = "deploy" // Persist the in-flight member before the platform mutation.
 		return agentUpgradeResult(cp, false)
 	case "deploy":
@@ -162,6 +183,9 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 				return agentUpgradeResult(cp, false)
 			}
 			cp.Deploy = nil
+			if err := activateJava(); err != nil {
+				return engine.OpResult{}, err
+			}
 		}
 		r, e := readiness(ctx, rc)
 		if e != nil {
