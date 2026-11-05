@@ -16,12 +16,13 @@ import (
 )
 
 type agentUpgradeCheckpoint struct {
-	Target   engine.AgentUpgradePayload `json:"target"`
-	Core     json.RawMessage            `json:"core,omitempty"`
-	CoreDone bool                       `json:"coreDone"`
-	Order    []string                   `json:"order"`
-	Index    int                        `json:"index"`
-	Waiting  bool                       `json:"waiting"`
+	Target    engine.AgentUpgradePayload `json:"target"`
+	Core      json.RawMessage            `json:"core,omitempty"`
+	CoreDone  bool                       `json:"coreDone"`
+	Order     []string                   `json:"order"`
+	Index     int                        `json:"index"`
+	Waiting   bool                       `json:"waiting"`
+	Preparing bool                       `json:"preparing,omitempty"`
 }
 
 func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain.Operation, cancel bool) (result engine.OpResult, err error) {
@@ -72,7 +73,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		}
 		return checkpoint()
 	}
-	if cancel && !cp.Waiting {
+	if cancel && !cp.Waiting && !cp.Preparing {
 		return engine.OpResult{Done: true}, nil
 	}
 	if cp.Index >= len(cp.Order) {
@@ -91,8 +92,19 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 	if m == nil {
 		return result, engine.ErrNotFound
 	}
+	if e := p.recoverComponentVersion(ctx, rc, m); e != nil {
+		return result, e
+	}
 	if cp.Waiting {
+		pendingDeploy := s.Pending != nil && s.Pending.Action == "deploy"
 		if busy, e := p.observeComponent(ctx, rc, s); busy || e != nil {
+			if pendingDeploy && s.Pending == nil && m.Stage != engine.ComponentDeployed {
+				// Failed preparation (or a definitively unsubmitted receipt)
+				// must return to the admitted, bounded preparation path. The
+				// replacement cannot prove readiness before that path finishes.
+				cp.Waiting = false
+				cp.Preparing = true
+			}
 			returned, ce := checkpoint()
 			return returned, errors.Join(e, ce)
 		}
@@ -110,6 +122,18 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 	}
 	if cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {
 		return result, engine.Invalid("agent upgrade target build %q differs from running control-plane build %q", cp.Target.TargetBuild, engine.CurrentAgentBuild().Build)
+	}
+	if cp.Preparing {
+		// This intent was admitted while the incumbent was healthy. A lost
+		// submission receipt may have replaced it, so retry preparation without
+		// demanding readiness of either the old or unprepared target process.
+		e := p.deployComponent(ctx, rc, s, m)
+		if s.Pending != nil && s.Pending.Action == "deploy" {
+			cp.Preparing = false
+			cp.Waiting = true
+		}
+		returned, ce := checkpoint()
+		return returned, errors.Join(e, ce)
 	}
 	status, identity, e := componentStatusObserved(ctx, rc, m)
 	if e != nil {
@@ -143,10 +167,8 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		result.Message = "Waiting for maintenance window"
 		return result, err
 	}
-	if e = p.deployComponent(ctx, rc, s, m, sp); e != nil {
-		return result, e
-	}
-	cp.Waiting = true
+	// Make the admitted preparation durable before any deployment side effect.
+	cp.Preparing = true
 	return checkpoint()
 }
 

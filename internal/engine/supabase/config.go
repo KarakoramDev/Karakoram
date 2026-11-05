@@ -106,6 +106,28 @@ func retainGatewayURL(ctx context.Context, rc *engine.Context, s *componentState
 	}
 	return nil
 }
+func (p *Provider) recoverComponentVersion(ctx context.Context, rc *engine.Context, m *componentMember) error {
+	if m.Version != "" {
+		return nil
+	}
+	raw, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "supabase/config/"+m.Name)
+	if missing(err) && m.Stage != engine.ComponentJoined && m.Stage != engine.ComponentDeployed && m.ConfigVersion == 0 && m.ConfigHash == "" && !m.RuntimeRecovery.Deployed {
+		return nil // A fresh member has no installed configuration yet.
+	}
+	if err != nil {
+		return engine.Invalid("component %s installed version is unknown; artifact preparation is required", m.Name)
+	}
+	var config agentapi.MemberConfig
+	var spec sbspec.Spec
+	if json.Unmarshal(raw, &config) != nil || json.Unmarshal(config.EngineSpec, &spec) != nil ||
+		spec.Component != m.Component || spec.Version == "" ||
+		spec.InstallDir != "/opt/karakoram/"+componentArtifact(m.Component)+"-"+spec.Version {
+		return engine.Invalid("component %s installed version cannot be recovered from its applied configuration", m.Name)
+	}
+	m.Version = spec.Version
+	return nil
+}
+
 func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *componentMember) (sbspec.Spec, error) {
 	var out sbspec.Spec
 	o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
@@ -128,6 +150,15 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 	a, err := nativeartifacts.Get(componentArtifact(m.Component))
 	if err != nil {
 		return out, err
+	}
+	// Missing state is not installation evidence: existing members recover
+	// their applied identity from the sealed configuration, never the new lock.
+	if err := p.recoverComponentVersion(ctx, rc, m); err != nil {
+		return out, err
+	}
+	version := m.Version
+	if version == "" {
+		version = a.Version
 	}
 	private := "http://" + rc.Cluster.Name + "gw:8000"
 	api := private
@@ -168,8 +199,8 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 	}
 	roles["postgres"] = pg.Superuser.Password
 	out = sbspec.Spec{
-		Component: m.Component, Version: a.Version,
-		InstallDir: "/opt/karakoram/" + a.Name + "-" + a.Version,
+		Component: m.Component, Version: version,
+		InstallDir: "/opt/karakoram/" + a.Name + "-" + version,
 		Topology:   rc.Cluster.Spec.Topology.Type, DataPeers: peers,
 		CAPEM: pg.CAPEM, PatroniUsername: pg.PatroniREST.Username, PatroniPassword: pg.PatroniREST.Password,
 		Database: "postgres", DatabaseTLS: rc.Cluster.Spec.TLS.Mode != "disabled", DBRoles: roles,

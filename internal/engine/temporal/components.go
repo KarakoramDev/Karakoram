@@ -85,7 +85,7 @@ func importComponent(ctx context.Context, rc *engine.Context, s *componentState,
 	return nil
 }
 
-func observePending(ctx context.Context, rc *engine.Context, s *componentState) (bool, error) {
+func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *componentState) (bool, error) {
 	q := s.Pending
 	if q == nil {
 		return false, nil
@@ -93,6 +93,26 @@ func observePending(ctx context.Context, rc *engine.Context, s *componentState) 
 	m := s.Members[q.Component]
 	if m == nil {
 		return true, engine.ErrNotFound
+	}
+	if !rc.Cluster.Deleting && q.Action == "deploy" && q.Version != "" && (m.Version != q.Version || m.ConfigHash != q.ConfigHash) {
+		conn, err := p.options.Bindings.Resolve(ctx, s.BindingID)
+		if err != nil {
+			return true, err
+		}
+		ca, err := ensureCA(ctx, rc)
+		if err != nil {
+			return true, err
+		}
+		target := *m
+		target.Version = q.Version
+		sp, err := p.desiredSpec(ctx, rc, &target, conn, ca)
+		if err != nil {
+			return true, err
+		}
+		if err := p.publishConfig(ctx, rc, m, sp, ca); err != nil {
+			return true, err
+		}
+		q.ConfigHash = m.ConfigHash
 	}
 	if q.Action == "import" && m.ImportBatch != nil {
 		token, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
@@ -112,14 +132,23 @@ func observePending(ctx context.Context, rc *engine.Context, s *componentState) 
 		}
 	}
 	status, e := rc.Backend.OpStatus(ctx, q.Op)
-	if e != nil {
+	if e != nil && !errors.Is(e, infra.ErrDeploymentRetriesExhausted) {
 		return true, e
+	}
+	if status.Failed || status.Status == "DeploymentRetriesExhausted" || errors.Is(e, infra.ErrDeploymentRetriesExhausted) {
+		if q.Action == "deploy" {
+			s.Pending = nil
+			m.Stage = engine.ComponentImported
+			detail := status.Message
+			if e != nil {
+				detail = infra.SafeDetail(e)
+			}
+			return true, p.recordComponentDeploymentFailure(ctx, rc, m, q.Op, status.Status, detail, q.RetryIntent, e)
+		}
+		return true, fmt.Errorf("temporal component %s %s failed (%s)", q.Component, q.Action, status.Status)
 	}
 	if !status.Done {
 		return true, nil
-	}
-	if status.Failed {
-		return true, fmt.Errorf("temporal component %s %s failed (%s)", q.Component, q.Action, status.Status)
 	}
 	switch q.Action {
 	case "import":
@@ -135,6 +164,7 @@ func observePending(ctx context.Context, rc *engine.Context, s *componentState) 
 	case "deploy":
 		m.Stage = engine.ComponentDeployed
 		m.RuntimeDeployed = true
+		m.DeploymentFailure = nil
 	case "scale":
 		m.Replicas = q.Replicas
 		m.Stage = engine.ComponentDeployed
@@ -245,11 +275,11 @@ func deleteComponent(ctx context.Context, rc *engine.Context, s *componentState,
 
 // syncUIExposure serializes route changes before configuration publication.
 // An anonymous private UI is stopped before enabling its public callback origin.
-func syncUIExposure(ctx context.Context, rc *engine.Context, s *componentState, m *componentMember) (bool, error) {
+func (p *Provider) syncUIExposure(ctx context.Context, rc *engine.Context, s *componentState, m *componentMember) (bool, error) {
 	if m.Component != tspec.UI || m.Stage == engine.ComponentPlanned {
 		return false, nil
 	}
-	if busy, err := observePending(ctx, rc, s); busy || err != nil {
+	if busy, err := p.observePending(ctx, rc, s); busy || err != nil {
 		return true, err
 	}
 	o, err := optionsFor(rc.Cluster)
@@ -306,7 +336,7 @@ func syncUIExposure(ctx context.Context, rc *engine.Context, s *componentState, 
 }
 
 func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *componentState, conn pgbinding.Connection, ca *pki.CA) (bool, error) {
-	if busy, e := observePending(ctx, rc, s); busy || e != nil {
+	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 		return true, e
 	}
 	deferred := false
@@ -389,7 +419,7 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 		}
 		// Exposure transitions precede every UI configuration publication.
 		if m != nil && d.Replicas > 0 {
-			if busy, e := syncUIExposure(ctx, rc, s, m); busy || e != nil {
+			if busy, e := p.syncUIExposure(ctx, rc, s, m); busy || e != nil {
 				return true, e
 			}
 		}
@@ -487,7 +517,8 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 					}
 					sp = deferredConfiguration(accepted, conn.CredentialGeneration, version, m.RestartNonce)
 				}
-				if e = p.publishConfig(ctx, rc, m, sp, ca); e != nil {
+				sp, e = deploymentUISpec(sp, conn.CredentialGeneration, rc.Cluster.Spec.Version, m.RestartNonce)
+				if e != nil {
 					return e
 				}
 				deploymentContext := rc
@@ -514,12 +545,12 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 						return err
 					}
 				}
-				op, e := engine.Deploy(ctx, rc, m.Name, runtime)
+				op, intent, e := p.deployPreparedRuntime(ctx, rc, m, runtime, deploymentContext.Cluster.Spec.Version)
 				if e != nil {
 					return e
 				}
-				s.Pending = &componentPending{Component: m.Component, Action: "deploy", Op: op}
-				return nil
+				s.Pending = &componentPending{Component: m.Component, Action: "deploy", Op: op, Version: sp.Version, ConfigHash: sp.RestartToken, RetryIntent: intent}
+				return p.publishConfig(ctx, rc, m, sp, ca)
 			},
 			AwaitReady: func(ctx context.Context) error {
 				status, e := componentStatus(ctx, rc, m)

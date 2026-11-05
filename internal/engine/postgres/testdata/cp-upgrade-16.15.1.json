@@ -1,0 +1,651 @@
+{
+  "Cluster": {
+    "namespace": "default",
+    "name": "demo",
+    "spec": {
+      "provider": "postgres",
+      "version": "16.15.1",
+      "topology": {
+        "type": "single"
+      },
+      "components": {
+        "engine": {
+          "replicas": 1,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 1,
+            "minRam": 2,
+            "maxRam": 2,
+            "minDisk": 5,
+            "maxDisk": 5
+          }
+        },
+        "configServer": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "router": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "extra": {
+          "proxy": {
+            "replicas": 1,
+            "resources": {
+              "cpuMode": "SHARED",
+              "minCpu": 1,
+              "maxCpu": 1,
+              "minRam": 1,
+              "maxRam": 1,
+              "minDisk": 1,
+              "maxDisk": 1
+            }
+          }
+        }
+      },
+      "engineOptions": {
+        "profiles": [
+          "pgvector"
+        ]
+      },
+      "backup": {
+        "schedules": null,
+        "pitr": {
+          "enabled": false,
+          "oplogSpanMinutes": 0
+        }
+      },
+      "tls": {
+        "mode": "requireTLS",
+        "ca": "selfSigned"
+      },
+      "exposure": {
+        "public": false,
+        "ipType": "IPV6",
+        "allowlist": null
+      },
+      "monitoring": {
+        "enabled": true
+      }
+    },
+    "status": {
+      "phase": "Ready",
+      "conditions": [
+        {
+          "type": "Ready",
+          "status": "True",
+          "reason": "MembersReady",
+          "lastTransitionTime": "2026-11-05T20:35:43.127089064Z"
+        },
+        {
+          "type": "CredentialsPublished",
+          "status": "True",
+          "reason": "ProxyPublicationComplete",
+          "key": "6f8cd24c9fc36eb0c719dc12ca53ffba3b8186eb9bc7a02615149a7b3e3efea7",
+          "message": "Every proxy has applied the current managed access revision and reports healthy runtime users.",
+          "lastTransitionTime": "2026-11-05T20:35:43.127089515Z"
+        },
+        {
+          "type": "ReplicationSlots",
+          "status": "True",
+          "reason": "RetentionObserved",
+          "lastTransitionTime": "2026-11-05T20:35:43.127090607Z"
+        },
+        {
+          "type": "WALCapacity",
+          "status": "True",
+          "reason": "CapacityAvailable",
+          "lastTransitionTime": "2026-11-05T20:35:43.127091188Z"
+        }
+      ],
+      "observedGeneration": 1,
+      "observedAt": "0001-01-01T00:00:00Z",
+      "version": "16.15.1",
+      "members": [
+        {
+          "name": "demop0",
+          "set": "postgres",
+          "role": "standalone",
+          "state": "standalone",
+          "health": true,
+          "version": "16.15.1",
+          "lagSeconds": 0,
+          "optime": "0001-01-01T00:00:00Z",
+          "uptime": 0,
+          "cpuUsage": 0,
+          "ramUsage": 0,
+          "diskUsage": 0,
+          "agent": {
+            "healthy": true,
+            "configVersion": 6,
+            "lastSeen": "2026-11-05T20:35:43.12700109Z"
+          },
+          "placementGroup": "node-a"
+        },
+        {
+          "name": "demopx",
+          "set": "proxy",
+          "role": "proxy",
+          "state": "proxy",
+          "health": true,
+          "version": "16.15.1",
+          "lagSeconds": 0,
+          "optime": "0001-01-01T00:00:00Z",
+          "uptime": 0,
+          "cpuUsage": 0,
+          "ramUsage": 0,
+          "diskUsage": 0,
+          "agent": {
+            "healthy": true,
+            "configVersion": 6,
+            "lastSeen": "2026-11-05T20:35:43.127004265Z"
+          },
+          "placementGroup": "node-a"
+        }
+      ],
+      "connection": {
+        "hosts": [
+          "demopx:5432"
+        ],
+        "uri": "postgresql://demopx:5432/postgres?sslmode=verify-full",
+        "publicHosts": [],
+        "endpoints": [
+          {
+            "name": "postgres",
+            "url": "postgresql://demopx:5432/postgres?sslmode=verify-full",
+            "public": false
+          }
+        ]
+      },
+      "backup": {},
+      "placement": {
+        "source": "backend",
+        "guaranteedAntiAffinity": false,
+        "warning": "members demop0, demopx are co-located",
+        "groups": {
+          "node-a": [
+            "demop0",
+            "demopx"
+          ]
+        }
+      }
+    },
+    "generation": 1,
+    "deleting": false,
+    "deleteOptions": {
+      "keepVolumes": false,
+      "keepBackups": false
+    },
+    "createdAt": "2026-11-05T20:35:42.96847911Z",
+    "updatedAt": "2026-11-05T20:35:42.96847911Z"
+  },
+  "Configs": {
+    "demop0": {
+      "cluster": "demo",
+      "member": "demop0",
+      "volume": {
+        "clusterUid": "66Km2NyMxmqH1BfY",
+        "member": "demop0",
+        "volume": "demop0v",
+        "volumeId": "demop0v-id",
+        "initialized": true
+      },
+      "engine": "postgres",
+      "engineSpec": {
+        "dataAccess": {
+          "roles": [
+            {
+              "username": "kk_mcp_ro",
+              "password": "",
+              "enabled": false,
+              "settings": {
+                "default_transaction_read_only": "on",
+                "idle_in_transaction_session_timeout": "60s",
+                "statement_timeout": "30s"
+              }
+            },
+            {
+              "username": "kk_mcp_rw",
+              "password": "",
+              "enabled": false,
+              "write": true,
+              "settings": {
+                "idle_in_transaction_session_timeout": "60s",
+                "statement_timeout": "30s"
+              }
+            }
+          ],
+          "databases": [
+            "postgres"
+          ],
+          "globalRead": true
+        },
+        "role": "data",
+        "topology": "single",
+        "flavour": "postgres",
+        "profiles": [
+          "pgvector"
+        ],
+        "scope": "demo-66Km2NyMxmqH1BfY",
+        "major": 16,
+        "binDir": "/usr/lib/postgresql/16/bin",
+        "version": "16.15.1",
+        "member": "demop0",
+        "peers": [
+          {
+            "name": "demop0",
+            "host": "demop0"
+          }
+        ],
+        "listenHost": "0.0.0.0",
+        "postgres": {
+          "requireTls": true,
+          "clientCidrs": [
+            "0.0.0.0/0"
+          ],
+          "synchronous": "off"
+        },
+        "bootstrap": {
+          "method": "initdb",
+          "generation": 1
+        },
+        "superuser": {
+          "username": "postgres",
+          "password": "gE4C7drbtEzsNQ36f0bLguUsye7MpabhCgAf8gxv"
+        },
+        "replication": {
+          "username": "kk_replicator",
+          "password": "jfCRpK4f0IuMlfvVw8pWCWtBDwi3UgxD4tM540Tb"
+        },
+        "rewind": {
+          "username": "kk_rewind",
+          "password": "V7Lhifb0IDIttJ0bGBso0R7yLSxhTQhsxy7wCcQi"
+        },
+        "monitor": {
+          "username": "kk_monitor",
+          "password": "Ks7BWunQqyfiLUC6nk0vM7H8sQwMwGH7OmHDC6RM"
+        },
+        "patroniRest": {
+          "username": "kk_admin",
+          "password": "QXryzwQht4B3yRzuatWlkUfIKRc21tczliqfgPpM"
+        },
+        "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBXzCCAQWgAwIBAgIRAJTNVl9w6TdtWNtqUxsLrOkwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEZGVtbzAeFw0yNjExMDUyMDMwNDJaFw0zNjExMDIyMDM1NDJaMA8x\nDTALBgNVBAMTBGRlbW8wWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQZSiPscAov\no5hl7VK3tcpqKqyOR4t+4TXIL1NHgD4jLUjCXuCPbICPDgqMUUlehgqr+JF36jjR\nh4TJr3k42Gx5o0IwQDAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUlFCkmDUWGQeQU2bC1G/kmbsDxtowCgYIKoZIzj0EAwIDSAAwRQIh\nAOUnyIYY64tQYpVRa2UWGpVrGRHAYWFUBWMmnMvkZYhzAiAS0JRCxZ/lGQHfxJ4Q\nPiRxax6YgHvilv2XucOiT1AIjw==\n-----END CERTIFICATE-----\n",
+        "serverCert": {
+          "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBuDCCAV2gAwIBAgIRALHtvw4Oug3t+3RoakvtKHswCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEZGVtbzAeFw0yNjExMDUyMDMwNDJaFw0yNzEyMDcyMDM1NDJaMBEx\nDzANBgNVBAMTBmRlbW9wMDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABCwdCW0l\nWsDud9yRinmIBsHU/G4mZIuegzNOjmSAwvzCGxXxyByTo7jNjCsoDPW+ycjyhcXW\nWK4yNT6Fz1p4+2KjgZcwgZQwDgYDVR0PAQH/BAQDAgWgMB0GA1UdJQQWMBQGCCsG\nAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8EAjAAMB8GA1UdIwQYMBaAFJRQpJg1\nFhkHkFNmwtRv5Jm7A8baMDQGA1UdEQQtMCuCBmRlbW9wMIIJbG9jYWxob3N0hwR/\nAAABhxAAAAAAAAAAAAAAAAAAAAABMAoGCCqGSM49BAMCA0kAMEYCIQDG9WzsnStE\nkjnNHzxfiHA0UKriisPMGOvn6vLK7OFhTgIhAKXLTpjLi4bp9aiMoS52nuIZp69J\nR9G073qk+V2ZPVF8\n-----END CERTIFICATE-----\n",
+          "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgVUqc8Om5t+97QSNR\n45JKBhVtUHODAi3Zpdw6fbbsUj6hRANCAAQsHQltJVrA7nfckYp5iAbB1PxuJmSL\nnoMzTo5kgML8whsV8cgck6O4zYwrKAz1vsnI8oXF1liuMjU+hc9aePti\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+        }
+      },
+      "role": "data",
+      "replSetName": "",
+      "port": 5432,
+      "engineVersion": "16.15.1",
+      "engineConfig": "",
+      "keyfile": "",
+      "tls": {
+        "mode": "",
+        "caPEM": "",
+        "certPEM": "",
+        "keyPEM": ""
+      },
+      "agentTLS": {
+        "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBrjCCAVOgAwIBAgIRAPm49zn5mF1lguDbu0JfDYcwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEZGVtbzAeFw0yNjExMDUyMDMwNDJaFw0yNzEyMDcyMDM1NDJaMBEx\nDzANBgNVBAMTBmRlbW9wMDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABNNjrYx+\nqseUtdZPKWHSmnMrv7SJo+IoiL5vL00mK2rVbNuGZwVxbs2YhgQup6F8xj+p5EVE\n1SOuYL2HBqCpLiKjgY0wgYowDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsG\nAQUFBwMBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUlFCkmDUWGQeQU2bC1G/k\nmbsDxtowNAYDVR0RBC0wK4IGZGVtb3Awgglsb2NhbGhvc3SHBH8AAAGHEAAAAAAA\nAAAAAAAAAAAAAAEwCgYIKoZIzj0EAwIDSQAwRgIhAKPDG690IOQULwknM54OaQI1\nVZsWZ8AMA/QCHTTemiIyAiEA+P/pIT6C10YWdIiebdjzvWKegVGiOSbUic+LOtkg\nMrE=\n-----END CERTIFICATE-----\n",
+        "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgS7z6zkW4e1AZR3O1\nRTWtZtu3FaXF8NqJkpsu1lw9SdGhRANCAATTY62MfqrHlLXWTylh0ppzK7+0iaPi\nKIi+by9NJitq1WzbhmcFcW7NmIYELqehfMY/qeRFRNUjrmC9hwagqS4i\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+      },
+      "systemUsers": null,
+      "pbmEnabled": false,
+      "desiredProcesses": [
+        "postgres"
+      ],
+      "maintenance": false,
+      "configVersion": 6
+    },
+    "demopx": {
+      "cluster": "demo",
+      "member": "demopx",
+      "engine": "postgres",
+      "engineSpec": {
+        "role": "proxy",
+        "topology": "single",
+        "flavour": "postgres",
+        "scope": "demo-66Km2NyMxmqH1BfY",
+        "major": 16,
+        "binDir": "/usr/lib/postgresql/16/bin",
+        "version": "16.15.1",
+        "member": "demopx",
+        "peers": [
+          {
+            "name": "demop0",
+            "host": "demop0"
+          }
+        ],
+        "listenHost": "0.0.0.0",
+        "proxy": {
+          "servers": [
+            "demop0"
+          ],
+          "users": [
+            {
+              "username": "postgres",
+              "password": "gE4C7drbtEzsNQ36f0bLguUsye7MpabhCgAf8gxv",
+              "requireTls": true
+            }
+          ],
+          "monitor": {
+            "username": "kk_monitor",
+            "password": "Ks7BWunQqyfiLUC6nk0vM7H8sQwMwGH7OmHDC6RM"
+          },
+          "admin": {
+            "username": "kk_proxy_admin",
+            "password": "QLiwcLBjtypQflAkBJGuVC37ioEHXO7aoqVkonHw"
+          },
+          "threads": 2,
+          "maxConnections": 43,
+          "serverCert": {
+            "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBtzCCAV2gAwIBAgIRAI+d112u/FtsMr/mgK5R5tMwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEZGVtbzAeFw0yNjExMDUyMDMwNDJaFw0yNzEyMDcyMDM1NDJaMBEx\nDzANBgNVBAMTBmRlbW9weDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABER4L4of\na5m9CPTokapiuwz0OXk08hYylhca7cZWHoRrjc5Prjo8KB+NWSGPdAJIEiwvTJ8P\ncEhkuzxYXG9HFbSjgZcwgZQwDgYDVR0PAQH/BAQDAgWgMB0GA1UdJQQWMBQGCCsG\nAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8EAjAAMB8GA1UdIwQYMBaAFJRQpJg1\nFhkHkFNmwtRv5Jm7A8baMDQGA1UdEQQtMCuCBmRlbW9weIIJbG9jYWxob3N0hwR/\nAAABhxAAAAAAAAAAAAAAAAAAAAABMAoGCCqGSM49BAMCA0gAMEUCIA9G20G8tFD3\niT/wbUbxQXe8ZEHWeHaskcheULDFIiFBAiEA31UJAhcBfJy66d2nXOhaQTAwmDC7\n0UEZ/4HPn2yg/PU=\n-----END CERTIFICATE-----\n",
+            "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg7vCM2+r+WFaL/LWu\nbZm7a0AEWEUSgTLYZZ3SR8BwnTuhRANCAAREeC+KH2uZvQj06JGqYrsM9Dl5NPIW\nMpYXGu3GVh6Ea43OT646PCgfjVkhj3QCSBIsL0yfD3BIZLs8WFxvRxW0\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+          },
+          "backendTls": true
+        },
+        "superuser": {
+          "username": "",
+          "password": ""
+        },
+        "replication": {
+          "username": "",
+          "password": ""
+        },
+        "rewind": {
+          "username": "",
+          "password": ""
+        },
+        "monitor": {
+          "username": "",
+          "password": ""
+        },
+        "patroniRest": {
+          "username": "",
+          "password": ""
+        },
+        "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBXzCCAQWgAwIBAgIRAJTNVl9w6TdtWNtqUxsLrOkwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEZGVtbzAeFw0yNjExMDUyMDMwNDJaFw0zNjExMDIyMDM1NDJaMA8x\nDTALBgNVBAMTBGRlbW8wWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQZSiPscAov\no5hl7VK3tcpqKqyOR4t+4TXIL1NHgD4jLUjCXuCPbICPDgqMUUlehgqr+JF36jjR\nh4TJr3k42Gx5o0IwQDAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUlFCkmDUWGQeQU2bC1G/kmbsDxtowCgYIKoZIzj0EAwIDSAAwRQIh\nAOUnyIYY64tQYpVRa2UWGpVrGRHAYWFUBWMmnMvkZYhzAiAS0JRCxZ/lGQHfxJ4Q\nPiRxax6YgHvilv2XucOiT1AIjw==\n-----END CERTIFICATE-----\n",
+        "serverCert": {
+          "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBtzCCAV2gAwIBAgIRAI+d112u/FtsMr/mgK5R5tMwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEZGVtbzAeFw0yNjExMDUyMDMwNDJaFw0yNzEyMDcyMDM1NDJaMBEx\nDzANBgNVBAMTBmRlbW9weDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABER4L4of\na5m9CPTokapiuwz0OXk08hYylhca7cZWHoRrjc5Prjo8KB+NWSGPdAJIEiwvTJ8P\ncEhkuzxYXG9HFbSjgZcwgZQwDgYDVR0PAQH/BAQDAgWgMB0GA1UdJQQWMBQGCCsG\nAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8EAjAAMB8GA1UdIwQYMBaAFJRQpJg1\nFhkHkFNmwtRv5Jm7A8baMDQGA1UdEQQtMCuCBmRlbW9weIIJbG9jYWxob3N0hwR/\nAAABhxAAAAAAAAAAAAAAAAAAAAABMAoGCCqGSM49BAMCA0gAMEUCIA9G20G8tFD3\niT/wbUbxQXe8ZEHWeHaskcheULDFIiFBAiEA31UJAhcBfJy66d2nXOhaQTAwmDC7\n0UEZ/4HPn2yg/PU=\n-----END CERTIFICATE-----\n",
+          "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg7vCM2+r+WFaL/LWu\nbZm7a0AEWEUSgTLYZZ3SR8BwnTuhRANCAAREeC+KH2uZvQj06JGqYrsM9Dl5NPIW\nMpYXGu3GVh6Ea43OT646PCgfjVkhj3QCSBIsL0yfD3BIZLs8WFxvRxW0\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+        }
+      },
+      "role": "proxy",
+      "replSetName": "",
+      "port": 5432,
+      "engineVersion": "16.15.1",
+      "engineConfig": "",
+      "keyfile": "",
+      "tls": {
+        "mode": "",
+        "caPEM": "",
+        "certPEM": "",
+        "keyPEM": ""
+      },
+      "agentTLS": {
+        "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBrDCCAVOgAwIBAgIRAO6lovlRivSosGU4AvBzVMwwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEZGVtbzAeFw0yNjExMDUyMDMwNDJaFw0yNzEyMDcyMDM1NDJaMBEx\nDzANBgNVBAMTBmRlbW9weDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABIXZxFub\nGtSDgzoOsMHTvlbV8/lqZ0B32Jz6SoFQOFt/CPoQDH3/+q11p6kustYCQt7EfpYu\nEl739WIZAmIDT3OjgY0wgYowDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsG\nAQUFBwMBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUlFCkmDUWGQeQU2bC1G/k\nmbsDxtowNAYDVR0RBC0wK4IGZGVtb3B4gglsb2NhbGhvc3SHBH8AAAGHEAAAAAAA\nAAAAAAAAAAAAAAEwCgYIKoZIzj0EAwIDRwAwRAIgPa7WYPhXwjOiUrN1Ar5ByaIW\nKjk651Gn6PuKZ1vn9pgCIF4hc/+TgLQ96kk72M7JblG7Oi0L96R6uMK1gogw+nhN\n-----END CERTIFICATE-----\n",
+        "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgdeiW8kYYTP+bi6Cv\nKmVO2pvACNUN6Tv/Mfu68leilf6hRANCAASF2cRbmxrUg4M6DrDB075W1fP5amdA\nd9ic+kqBUDhbfwj6EAx9//qtdaepLrLWAkLexH6WLhJe9/ViGQJiA09z\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+      },
+      "systemUsers": null,
+      "pbmEnabled": false,
+      "desiredProcesses": [
+        "proxysql"
+      ],
+      "maintenance": false,
+      "configVersion": 6
+    }
+  },
+  "Internal": {
+    "postgres": {
+      "exposureAdmission": {
+        "admitted": {
+          "public": false,
+          "ipType": "IPV6",
+          "allowlist": null
+        }
+      },
+      "uid": "66Km2NyMxmqH1BfY",
+      "nextIndex": 1,
+      "configVersion": 6,
+      "configHash": "6f8cd24c9fc36eb0c719dc12ca53ffba3b8186eb9bc7a02615149a7b3e3efea7",
+      "bootstrapGeneration": 1,
+      "topology": "single",
+      "members": [
+        {
+          "name": "demop0",
+          "role": "data",
+          "index": 0,
+          "volume": "demop0v",
+          "serviceId": "demop0-id",
+          "volumeId": "demop0v-id",
+          "stage": "joined",
+          "version": "16.15.1",
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 1,
+            "minRam": 2,
+            "maxRam": 2,
+            "minDisk": 5,
+            "maxDisk": 5
+          },
+          "disk": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 5,
+            "maxDisk": 5
+          },
+          "replicas": 1,
+          "configVersion": 6,
+          "etcdState": "new",
+          "etcdId": "demop0-etcd",
+          "options": {
+            "profiles": [
+              "pgvector"
+            ]
+          },
+          "topology": "single",
+          "proxyReady": true,
+          "runtimeRecovery": {
+            "retryRecordedAt": "0001-01-01T00:00:00Z",
+            "retryAt": "0001-01-01T00:00:00Z",
+            "initialized": true,
+            "deployed": true
+          }
+        },
+        {
+          "name": "demopx",
+          "role": "proxy",
+          "index": 0,
+          "serviceId": "demopx-id",
+          "stage": "joined",
+          "version": "16.15.1",
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 1,
+            "minRam": 1,
+            "maxRam": 1,
+            "minDisk": 1,
+            "maxDisk": 1
+          },
+          "disk": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          },
+          "replicas": 1,
+          "configVersion": 6,
+          "options": {
+            "profiles": [
+              "pgvector"
+            ]
+          },
+          "topology": "single",
+          "runtimeRecovery": {
+            "retryRecordedAt": "0001-01-01T00:00:00Z",
+            "retryAt": "0001-01-01T00:00:00Z",
+            "deployed": true
+          }
+        }
+      ],
+      "formed": true
+    }
+  },
+  "Ownership": {
+    "demop0": {
+      "KARAKORAM_OWNER": "v1.7cf018663600da80ed24cc02716fb4c4b705c5ae0ea46a682cb18e5fbdfad790"
+    },
+    "demopx": {
+      "KARAKORAM_OWNER": "v1.62f8488c7032c284eff0f3d0305ec3b6ebc7cfaae7a7e45b6affde604ccf3cd4"
+    }
+  },
+  "Revision": "1cb6bd98",
+  "Runtime": {
+    "base": "ubuntu-24.04",
+    "prepare": [
+      "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl gnupg lsb-release",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'percona-release.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://repo.percona.com/apt/percona-release_latest.noble_all.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'10a419065480e4cd4ad6d1036e742832203e79ff537461115361ec2f7ff62e36  percona-release.deb'\"'\"' | sha256sum -c -\nif DPKG_DEB_THREADS_MAX=1 apt-get install -y \"$stage/$file\"; then\n:\nelse\nstatus=$?\nprintf '\"'\"'%s\\n'\"'\"' \"native artifact $file: package installation failed (exit $status; serial decompression enabled); inspect apt/dpkg diagnostics and allocation memory limits\" \u003e\u00262\nexit \"$status\"\nfi\n'",
+      "sudo percona-release setup -y ppg-16",
+      "printf 'Package: percona-postgresql-16\\nPin: version 2:16.15-1.noble\\nPin-Priority: 1001\\n' | sudo tee /etc/apt/preferences.d/karakoram-postgresql-16 \u003e/dev/null",
+      "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d \u0026\u0026 sudo apt-get install -y postgresql-common \u0026\u0026 printf 'create_main_cluster = false\\n' | sudo tee /etc/postgresql-common/createcluster.conf \u003e/dev/null",
+      "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y percona-postgresql-16='2:16.15-1.noble' percona-postgresql-contrib='1:293-1.noble' percona-patroni='1:4.1.5-1.noble' percona-pgbackrest='1:2.59.1-1.noble' etcd-server='1:3.5.33-1.noble' etcd-client='1:3.5.33-1.noble' python3-etcd3gw python3-psycopg2",
+      "sudo apt-get update \u0026\u0026 sudo apt-get install -y percona-postgresql-16-pgvector='1:0.8.6-1.noble'"
+    ],
+    "env": {
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/srv/volumes/demop0v",
+      "KARAKORAM_ENGINE": "postgres",
+      "KARAKORAM_INTERNAL_CA": "",
+      "KARAKORAM_MEMBER": "demop0",
+      "KARAKORAM_URL": ""
+    },
+    "args": [
+      "agent"
+    ],
+    "ports": [
+      {
+        "port": 5432,
+        "protocol": "tcp"
+      },
+      {
+        "port": 9443,
+        "protocol": "tcp"
+      }
+    ],
+    "volume": "demop0v",
+    "readiness": {
+      "args": [
+        "agent",
+        "readiness",
+        "--startup",
+        "--data-dir=/srv/volumes/demop0v"
+      ],
+      "failureTimeout": 300000000000,
+      "retryPeriod": 10000000000
+    },
+    "stopBeforeStart": true
+  },
+  "Secrets": {
+    "postgres/profile-bootstrap-digest": "NTdmZjZmOGY2NzBiN2ZlYWQyYmUyMDRhMjZiMzE0OGVmMmVlM2YzYWVhMGM1YzBhYmU3NGQ1MjZhNTFlM2U2NA==",
+    "tls/agents/demop0.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJyakNDQVZPZ0F3SUJBZ0lSQVBtNDl6bjVtRjFsZ3VEYnUwSmZEWWN3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE13TkRKYUZ3MHlOekV5TURjeU1ETTFOREphTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5d01EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJOTmpyWXgrCnFzZVV0ZFpQS1dIU21uTXJ2N1NKbytJb2lMNXZMMDBtSzJyVmJOdUdad1Z4YnMyWWhnUXVwNkY4eGorcDVFVkUKMVNPdVlMMkhCcUNwTGlLamdZMHdnWW93RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVWxGQ2ttRFVXR1FlUVUyYkMxRy9rCm1ic0R4dG93TkFZRFZSMFJCQzB3SzRJR1pHVnRiM0F3Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFFd0NnWUlLb1pJemowRUF3SURTUUF3UmdJaEFLUERHNjkwSU9RVUx3a25NNTRPYVFJMQpWWnNXWjhBTUEvUUNIVFRlbWlJeUFpRUErUC9wSVQ2QzEwWVdkSWllYmRqenZXS2VnVkdpT1NiVWljK0xPdGtnCk1yRT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=",
+    "tls/agents/demop0.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnUzd6NnprVzRlMUFaUjNPMQpSVFd0WnR1M0ZhWEY4TnFKa3BzdTFsdzlTZEdoUkFOQ0FBVFRZNjJNZnFySGxMWFdUeWxoMHBweks3KzBpYVBpCktJaStieTlOSml0cTFXemJobWNGY1c3Tm1JWUVMcWVoZk1ZL3FlUkZSTlVqcm1DOWh3YWdxUzRpCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/agents/demopx.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJyRENDQVZPZ0F3SUJBZ0lSQU82bG92bFJpdlNvc0dVNEF2QnpWTXd3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE13TkRKYUZ3MHlOekV5TURjeU1ETTFOREphTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5d2VEQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJJWFp4RnViCkd0U0Rnem9Pc01IVHZsYlY4L2xxWjBCMzJKejZTb0ZRT0Z0L0NQb1FESDMvK3ExMXA2a3VzdFlDUXQ3RWZwWXUKRWw3MzlXSVpBbUlEVDNPamdZMHdnWW93RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVWxGQ2ttRFVXR1FlUVUyYkMxRy9rCm1ic0R4dG93TkFZRFZSMFJCQzB3SzRJR1pHVnRiM0I0Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFFd0NnWUlLb1pJemowRUF3SURSd0F3UkFJZ1BhN1dZUGhYd2pPaVVyTjFBcjVCeWFJVwpLams2NTFHbjZQdUtaMXZuOXBnQ0lGNGhjLytUZ0xROTZrazcyTTdKYmxHN09pMEw5NlI2dU1LMWdvZ3crbmhOCi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K",
+    "tls/agents/demopx.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnZGVpVzhrWVlUUCtiaTZDdgpLbVZPMnB2QUNOVU42VHYvTWZ1NjhsZWlsZjZoUkFOQ0FBU0YyY1JibXhyVWc0TTZEckRCMDc1VzFmUDVhbWRBCmQ5aWMra3FCVURoYmZ3ajZFQXg5Ly9xdGRhZXBMckxXQWtMZXhINldMaEplOS9WaUdRSmlBMDl6Ci0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/ca.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJYekNDQVFXZ0F3SUJBZ0lSQUpUTlZsOXc2VGR0V050cVV4c0xyT2t3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE13TkRKYUZ3MHpOakV4TURJeU1ETTFOREphTUE4eApEVEFMQmdOVkJBTVRCR1JsYlc4d1dUQVRCZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFRWlNpUHNjQW92Cm81aGw3VkszdGNwcUtxeU9SNHQrNFRYSUwxTkhnRDRqTFVqQ1h1Q1BiSUNQRGdxTVVVbGVoZ3FyK0pGMzZqalIKaDRUSnIzazQyR3g1bzBJd1FEQU9CZ05WSFE4QkFmOEVCQU1DQVlZd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVsRkNrbURVV0dRZVFVMmJDMUcva21ic0R4dG93Q2dZSUtvWkl6ajBFQXdJRFNBQXdSUUloCkFPVW55SVlZNjR0UVlwVlJhMlVXR3BWckdSSEFZV0ZVQldNbW5NdmtaWWh6QWlBUzBKUkN4Wi9sR1FIZnhKNFEKUGlSeGF4NllnSHZpbHYyWHVjT2lUMUFJanc9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==",
+    "tls/ca.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnMU5OblM4UmhPbWdqWmFYawpWYWRLbEJnUkhxSWlyc3RqZTVadURoZjNUOGVoUkFOQ0FBUVpTaVBzY0Fvdm81aGw3VkszdGNwcUtxeU9SNHQrCjRUWElMMU5IZ0Q0akxVakNYdUNQYklDUERncU1VVWxlaGdxcitKRjM2ampSaDRUSnIzazQyR3g1Ci0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/servers/demop0.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ1RENDQVYyZ0F3SUJBZ0lSQUxIdHZ3NE91ZzN0KzNSb2FrdnRLSHN3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE13TkRKYUZ3MHlOekV5TURjeU1ETTFOREphTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5d01EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJDd2RDVzBsCldzRHVkOXlSaW5tSUJzSFUvRzRtWkl1ZWd6Tk9qbVNBd3Z6Q0d4WHh5QnlUbzdqTmpDc29EUFcreWNqeWhjWFcKV0s0eU5UNkZ6MXA0KzJLamdaY3dnWlF3RGdZRFZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUI4R0ExVWRJd1FZTUJhQUZKUlFwSmcxCkZoa0hrRk5td3RSdjVKbTdBOGJhTURRR0ExVWRFUVF0TUN1Q0JtUmxiVzl3TUlJSmJHOWpZV3hvYjNOMGh3Ui8KQUFBQmh4QUFBQUFBQUFBQUFBQUFBQUFBQUFBQk1Bb0dDQ3FHU000OUJBTUNBMGtBTUVZQ0lRREc5V3pzblN0RQpram5OSHp4ZmlIQTBVS3JpaXNQTUdPdm42dkxLN09GaFRnSWhBS1hMVHBqTGk0YnA5YWlNb1M1Mm51SVpwNjlKClI5RzA3M3FrK1YyWlBWRjgKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=",
+    "tls/servers/demop0.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnVlVxYzhPbTV0Kzk3UVNOUgo0NUpLQmhWdFVIT0RBaTNacGR3NmZiYnNVajZoUkFOQ0FBUXNIUWx0SlZyQTduZmNrWXA1aUFiQjFQeHVKbVNMCm5vTXpUbzVrZ01MOHdoc1Y4Y2djazZPNHpZd3JLQXoxdnNuSThvWEYxbGl1TWpVK2hjOWFlUHRpCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/servers/demopx.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ0ekNDQVYyZ0F3SUJBZ0lSQUkrZDExMnUvRnRzTXIvbWdLNVI1dE13Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE13TkRKYUZ3MHlOekV5TURjeU1ETTFOREphTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5d2VEQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJFUjRMNG9mCmE1bTlDUFRva2FwaXV3ejBPWGswOGhZeWxoY2E3Y1pXSG9ScmpjNVByam84S0IrTldTR1BkQUpJRWl3dlRKOFAKY0Voa3V6eFlYRzlIRmJTamdaY3dnWlF3RGdZRFZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUI4R0ExVWRJd1FZTUJhQUZKUlFwSmcxCkZoa0hrRk5td3RSdjVKbTdBOGJhTURRR0ExVWRFUVF0TUN1Q0JtUmxiVzl3ZUlJSmJHOWpZV3hvYjNOMGh3Ui8KQUFBQmh4QUFBQUFBQUFBQUFBQUFBQUFBQUFBQk1Bb0dDQ3FHU000OUJBTUNBMGdBTUVVQ0lBOUcyMEc4dEZEMwppVC93YlVieFFYZThaRUhXZUhhc2tjaGVVTERGSWlGQkFpRUEzMVVKQWhjQmZKeTY2ZDJuWE9oYVFUQXdtREM3CjBVRVovNEhQbjJ5Zy9QVT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=",
+    "tls/servers/demopx.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnN3ZDTTIrcitXRmFML0xXdQpiWm03YTBBRVdFVVNnVExZWlozU1I4QnduVHVoUkFOQ0FBUkVlQytLSDJ1WnZRajA2SkdxWXJzTTlEbDVOUElXCk1wWVhHdTNHVmg2RWE0M09UNjQ2UENnZmpWa2hqM1FDU0JJc0wweWZEM0JJWkxzOFdGeHZSeFcwCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "users/kk_admin": "UVhyeXp3UWh0NEIzeVJ6dWF0V2xrVWZJS1JjMjF0Y3psaXFmZ1BwTQ==",
+    "users/kk_monitor": "S3M3Qld1blFxeWZpTFVDNm5rMHZNN0g4c1F3TXdHSDdPbUhEQzZSTQ==",
+    "users/kk_proxy_admin": "UUxpd2NMQmp0eXBRZmxBa0JKR3VWQzM3aW9FSFhPN2FvcVZrb25Idw==",
+    "users/kk_replicator": "amZDUnBLNGYwSXVNbGZ2Vnc4cFdDV3RCRHdpM1VneEQ0dE01NDBUYg==",
+    "users/kk_rewind": "VjdMaGlmYjBJREl0dEowYkdCc28wUjd5TFN4aFRRaHN4eTd3Q2NRaQ==",
+    "users/postgres": "Z0U0QzdkcmJ0RXpzTlEzNmYwYkxndVVzeWU3TXBhYmhDZ0FmOGd4dg=="
+  },
+  "Services": [
+    {
+      "id": "demop0-id",
+      "hostname": "demop0",
+      "kind": "runtime",
+      "status": "RUNNING",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 1,
+        "minRam": 2,
+        "maxRam": 2,
+        "minDisk": 5,
+        "maxDisk": 5
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    },
+    {
+      "id": "demop0v-id",
+      "hostname": "demop0v",
+      "kind": "volume",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "",
+        "minCpu": 0,
+        "maxCpu": 0,
+        "minRam": 0,
+        "maxRam": 0,
+        "minDisk": 5,
+        "maxDisk": 5
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    },
+    {
+      "id": "demopx-id",
+      "hostname": "demopx",
+      "kind": "runtime",
+      "status": "RUNNING",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 1,
+        "minRam": 1,
+        "maxRam": 1,
+        "minDisk": 1,
+        "maxDisk": 1
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    }
+  ],
+  "Tokens": {
+    "demop0": "kk_WUxd5sfPPA3IXOGoXgsjVzCaluewSHFAVhwdOmc6Pm4WWNK2",
+    "demopx": "kk_yRUEpkbvFtLwFgdXpEEhIEwBaebESKlqK1LbPlYhtgTarKcf"
+  }
+}

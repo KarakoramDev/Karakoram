@@ -326,7 +326,7 @@ WHERE e.extname = $1`, name).Scan(&current, &target)
 			return safeError("checking Supabase extension "+name, err)
 		}
 		if target == "" {
-			return fmt.Errorf("Supabase extension %s has no installed default version", name)
+			return fmt.Errorf("supabase extension %s has no installed default version", name)
 		}
 		if current == target {
 			continue

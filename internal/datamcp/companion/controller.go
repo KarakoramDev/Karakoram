@@ -1,4 +1,11 @@
 // Package companion manages the stateless data MCP member independently of provider state.
+//
+// Lock changes automatically submit a prepared companion rollout, including
+// same-version rebuilds. Configuration activates only after submission accepts
+// the preparation; the admitted artifact is retained across pending receipts.
+// Submission/terminal-receipt failures share a durable four-attempt budget per
+// desired runtime and retry epoch. Exhaustion requires retry-deployments (or a
+// changed desired runtime), not another control-plane reconciliation.
 package companion
 
 import (
@@ -21,6 +28,7 @@ import (
 
 const stateKey = "datamcp/state"
 const configKey = "datamcp/config"
+const deploymentAttemptLimit = 4
 
 // State is sealed separately from Cluster.Internal: provider serializers may
 // replace their entire internal document and must never erase import receipts.
@@ -32,6 +40,15 @@ type state struct {
 	RuntimeHash string             `json:"runtimeHash,omitempty"`
 	SpecHash    string             `json:"specHash,omitempty"`
 	Reload      bool               `json:"reload,omitempty"`
+	// Artifact is admitted only after a deployment accepts its preparation.
+	// Persist it with the receipt so a CP upgrade cannot publish a newer lock
+	// while an older deployment is still pending.
+	Artifact         *nativeartifacts.Artifact `json:"artifact,omitempty"`
+	AttemptHash      string                    `json:"attemptHash,omitempty"`
+	Attempts         int                       `json:"attempts,omitempty"`
+	RetryEpoch       int64                     `json:"retryEpoch,omitempty"`
+	LastError        string                    `json:"lastError,omitempty"`
+	RolloutEventHash string                    `json:"rolloutEventHash,omitempty"`
 }
 
 type Controller struct {
@@ -160,13 +177,34 @@ func (c *Controller) Sync(ctx context.Context, rc *engine.Context) (engine.Resul
 		return wait(), save(ctx, rc, s)
 	}
 	if s.Pending != nil {
+		if s.Stage == "deploy" && s.Artifact != nil {
+			if err = recordRollout(ctx, rc, s); err != nil {
+				return wait(), err
+			}
+			if _, err = publish(ctx, rc, p, b, s); err != nil {
+				return wait(), err
+			}
+			if err = save(ctx, rc, s); err != nil {
+				return wait(), err
+			}
+		}
 		status, err := rc.Backend.OpStatus(ctx, *s.Pending)
 		if err != nil {
 			return wait(), err
 		}
 		if status.Failed {
 			s.Pending = nil
-			return wait(), errors.Join(fmt.Errorf("data MCP %s failed: %s", s.Stage, status.Status), save(ctx, rc, s))
+			s.LastError = status.Message
+			if s.Stage == "deploy" && status.Status == "DeploymentRetriesExhausted" {
+				runtime, runtimeErr := c.runtime(rc, b)
+				if runtimeErr != nil {
+					return wait(), runtimeErr
+				}
+				err = engine.RecordDeploymentExhausted(ctx, rc, m, runtime, &infra.DeploymentExhaustedError{Service: m, Attempts: s.Attempts, LastError: status.Message})
+			} else {
+				err = fmt.Errorf("data MCP %s failed: %s", s.Stage, status.Status)
+			}
+			return wait(), errors.Join(err, save(ctx, rc, s))
 		}
 		if !status.Done {
 			return wait(), nil
@@ -215,6 +253,61 @@ func (c *Controller) Sync(ctx context.Context, rc *engine.Context) (engine.Resul
 		s.Pending = &op
 		return wait(), save(ctx, rc, s)
 	}
+	// Prepare before publishing a changed artifact path. A failed submission
+	// leaves the running companion's configuration untouched.
+	runtime, err := c.runtime(rc, b)
+	if err != nil {
+		return wait(), err
+	}
+	raw, _ := json.Marshal(runtime)
+	hash := secrets.Hash(string(raw))
+	if s.Stage == "deploy" || hash != s.RuntimeHash {
+		if s.AttemptHash != hash || s.RetryEpoch != rc.Cluster.Spec.RetryEpoch {
+			s.AttemptHash, s.RetryEpoch, s.Attempts, s.LastError = hash, rc.Cluster.Spec.RetryEpoch, 0, ""
+		}
+		if s.Attempts >= deploymentAttemptLimit {
+			err = &infra.DeploymentExhaustedError{Service: m, Attempts: s.Attempts, LastError: s.LastError}
+			return wait(), engine.RecordDeploymentExhausted(ctx, rc, m, runtime, err)
+		}
+		// Initial creation and already admitted deployments can finish outside
+		// the window; a new automatic replacement of a running companion cannot.
+		if s.Stage == "ready" {
+			if window := rc.WaitForWindow(); window.RequeueAfter != 0 {
+				return window, nil
+			}
+		}
+		// Charge before submission: a lost response or CP restart cannot
+		// mint another unbounded sequence of platform deployments.
+		s.Attempts++
+		if err = save(ctx, rc, s); err != nil {
+			return wait(), err
+		}
+		op, err := engine.Deploy(ctx, rc, m, runtime)
+		if err != nil {
+			var waiting *engine.PlatformRetryWait
+			if errors.As(err, &waiting) {
+				s.Attempts--
+			}
+			s.LastError = infra.SafeDetail(err)
+			return wait(), errors.Join(err, save(ctx, rc, s))
+		}
+		a, err := nativeartifacts.Get(b.Upstream)
+		if err != nil {
+			return wait(), err
+		}
+		s.Artifact = &a
+		s.Pending = &op
+		s.Stage = "deploy"
+		s.RuntimeHash = hash
+		if err = save(ctx, rc, s); err != nil {
+			return wait(), err
+		}
+		if err = recordRollout(ctx, rc, s); err != nil {
+			return wait(), err
+		}
+		_, err = publish(ctx, rc, p, b, s)
+		return wait(), errors.Join(err, save(ctx, rc, s))
+	}
 	changed, err := publish(ctx, rc, p, b, s)
 	if err != nil {
 		return wait(), err
@@ -224,22 +317,6 @@ func (c *Controller) Sync(ctx context.Context, rc *engine.Context) (engine.Resul
 		if err = save(ctx, rc, s); err != nil {
 			return wait(), err
 		}
-	}
-	runtime, err := c.runtime(rc, b)
-	if err != nil {
-		return wait(), err
-	}
-	raw, _ := json.Marshal(runtime)
-	hash := secrets.Hash(string(raw))
-	if s.Stage == "deploy" || hash != s.RuntimeHash {
-		op, err := engine.Deploy(ctx, rc, m, runtime)
-		if err != nil {
-			return wait(), err
-		}
-		s.Pending = &op
-		s.Stage = "deploy"
-		s.RuntimeHash = hash
-		return wait(), save(ctx, rc, s)
 	}
 	if s.Reload {
 		client, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m)
@@ -257,7 +334,29 @@ func (c *Controller) Sync(ctx context.Context, rc *engine.Context) (engine.Resul
 	if err = ready(ctx, rc); err != nil {
 		return engine.Result{RequeueAfter: engine.ReadinessInterval}, nil
 	}
+
 	return engine.Result{}, nil
+}
+
+// Keep the rollout notification with the admitted receipt: retrying config
+// publication after a CP restart must not silently lose the event.
+func recordRollout(ctx context.Context, rc *engine.Context, s *state) error {
+	if rc.Events == nil || s.RolloutEventHash == s.RuntimeHash {
+		return nil
+	}
+	version := ""
+	if s.Artifact != nil {
+		version = s.Artifact.Version
+	}
+	if err := rc.Events.Record(ctx, domain.Event{
+		Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name,
+		Type: "Normal", Reason: "DataMcpCompanionRollout",
+		Message: fmt.Sprintf("Redeploying stateless Data MCP companion %s at version %s with locked artifact preparation; Data MCP is briefly unavailable for this cluster", Member(rc.Cluster.Name), version),
+	}); err != nil {
+		return err
+	}
+	s.RolloutEventHash = s.RuntimeHash
+	return save(ctx, rc, s)
 }
 
 // Cleanup retains sealed identity until deletion has completed, including when

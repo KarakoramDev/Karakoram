@@ -1,0 +1,598 @@
+{
+  "Revision": "ed9541a6",
+  "Cluster": {
+    "namespace": "default",
+    "name": "demo",
+    "spec": {
+      "provider": "rabbitmq",
+      "version": "4.3.6",
+      "topology": {
+        "type": "cluster"
+      },
+      "components": {
+        "engine": {
+          "replicas": 3,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 1,
+            "minRam": 1,
+            "maxRam": 1,
+            "minDisk": 5,
+            "maxDisk": 5
+          }
+        },
+        "configServer": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "router": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        }
+      },
+      "backup": {
+        "schedules": null,
+        "pitr": {
+          "enabled": false,
+          "oplogSpanMinutes": 0
+        }
+      },
+      "tls": {
+        "mode": "requireTLS",
+        "ca": "selfSigned"
+      },
+      "exposure": {
+        "public": false,
+        "ipType": "IPV6",
+        "allowlist": null
+      },
+      "monitoring": {
+        "enabled": false
+      }
+    },
+    "status": {
+      "phase": "Creating",
+      "message": "Creating: queued platform provisioning",
+      "conditions": null,
+      "observedGeneration": 1,
+      "observedAt": "0001-01-01T00:00:00Z",
+      "members": null,
+      "connection": {
+        "hosts": null,
+        "uri": "",
+        "publicHosts": null
+      },
+      "backup": {},
+      "placement": {
+        "guaranteedAntiAffinity": false,
+        "groups": null
+      }
+    },
+    "generation": 1,
+    "deleting": false,
+    "deleteOptions": {
+      "keepVolumes": false,
+      "keepBackups": false
+    },
+    "createdAt": "2026-11-05T20:42:34.287858541Z",
+    "updatedAt": "2026-11-05T20:42:34.287858541Z"
+  },
+  "Internal": {
+    "bootstrapped": true,
+    "cleanupBackups": false,
+    "cleanupSecrets": false,
+    "configVersion": 1,
+    "creationGateChecked": true,
+    "creationSeed": "demom0",
+    "distributionSet": true,
+    "exposureAdmission": {
+      "admitted": {
+        "public": false,
+        "ipType": "IPV6",
+        "allowlist": null
+      }
+    },
+    "featureFlags": false,
+    "interNodeTLS": true,
+    "members": [
+      {
+        "name": "demom0",
+        "runtimeRecovery": {
+          "retryRecordedAt": "0001-01-01T00:00:00Z",
+          "retryAt": "0001-01-01T00:00:00Z",
+          "initialized": true,
+          "deployed": true
+        },
+        "volume": "demom0v",
+        "index": 0,
+        "stage": "ready",
+        "serviceId": "demom0",
+        "volumeId": "demom0v",
+        "initialFormation": true,
+        "formationVerified": true,
+        "formationChecked": true,
+        "formationGate": true,
+        "version": "4.3.6",
+        "desiredVersion": "4.3.6",
+        "configVersion": 1,
+        "tlsMode": "requireTLS",
+        "engineConfig": "",
+        "resources": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 1,
+          "maxDisk": 3
+        },
+        "disk": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 5,
+          "maxDisk": 5
+        },
+        "configResources": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 1,
+          "maxDisk": 3
+        },
+        "configDisk": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 5,
+          "maxDisk": 5
+        },
+        "cpuModeChangedAt": "0001-01-01T00:00:00Z",
+        "removing": false,
+        "publicHash": "8b1df6eeb7368229fdddd92e818872c024f6a0aff39a95e4bb46e4c150354162",
+        "managementPublic": false,
+        "managementAdmission": {
+          "admitted": {
+            "public": false,
+            "ipType": "",
+            "allowlist": null
+          }
+        },
+        "growIndex": 0,
+        "changeDisruptedAt": "0001-01-01T00:00:00Z",
+        "targetResources": {
+          "cpuMode": "",
+          "minCpu": 0,
+          "maxCpu": 0,
+          "minRam": 0,
+          "maxRam": 0,
+          "minDisk": 0,
+          "maxDisk": 0
+        }
+      },
+      {
+        "name": "demom1",
+        "runtimeRecovery": {
+          "retryRecordedAt": "0001-01-01T00:00:00Z",
+          "retryAt": "0001-01-01T00:00:00Z",
+          "initialized": true,
+          "deployed": true
+        },
+        "volume": "demom1v",
+        "index": 1,
+        "stage": "ready",
+        "serviceId": "demom1",
+        "volumeId": "demom1v",
+        "initialFormation": true,
+        "formationVerified": true,
+        "formationChecked": true,
+        "formationGate": true,
+        "version": "4.3.6",
+        "desiredVersion": "4.3.6",
+        "configVersion": 1,
+        "tlsMode": "requireTLS",
+        "engineConfig": "",
+        "resources": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 1,
+          "maxDisk": 3
+        },
+        "disk": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 5,
+          "maxDisk": 5
+        },
+        "configResources": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 1,
+          "maxDisk": 3
+        },
+        "configDisk": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 5,
+          "maxDisk": 5
+        },
+        "cpuModeChangedAt": "0001-01-01T00:00:00Z",
+        "removing": false,
+        "publicHash": "8b1df6eeb7368229fdddd92e818872c024f6a0aff39a95e4bb46e4c150354162",
+        "managementPublic": false,
+        "managementAdmission": {
+          "admitted": {
+            "public": false,
+            "ipType": "",
+            "allowlist": null
+          }
+        },
+        "growIndex": 0,
+        "changeDisruptedAt": "0001-01-01T00:00:00Z",
+        "targetResources": {
+          "cpuMode": "",
+          "minCpu": 0,
+          "maxCpu": 0,
+          "minRam": 0,
+          "maxRam": 0,
+          "minDisk": 0,
+          "maxDisk": 0
+        }
+      },
+      {
+        "name": "demom2",
+        "runtimeRecovery": {
+          "retryRecordedAt": "0001-01-01T00:00:00Z",
+          "retryAt": "0001-01-01T00:00:00Z",
+          "initialized": true,
+          "deployed": true
+        },
+        "volume": "demom2v",
+        "index": 2,
+        "stage": "ready",
+        "serviceId": "demom2",
+        "volumeId": "demom2v",
+        "initialFormation": true,
+        "formationVerified": true,
+        "formationChecked": true,
+        "formationGate": true,
+        "version": "4.3.6",
+        "desiredVersion": "4.3.6",
+        "configVersion": 1,
+        "tlsMode": "requireTLS",
+        "engineConfig": "",
+        "resources": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 1,
+          "maxDisk": 3
+        },
+        "disk": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 5,
+          "maxDisk": 5
+        },
+        "configResources": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 1,
+          "maxDisk": 3
+        },
+        "configDisk": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 5,
+          "maxDisk": 5
+        },
+        "cpuModeChangedAt": "0001-01-01T00:00:00Z",
+        "removing": false,
+        "publicHash": "8b1df6eeb7368229fdddd92e818872c024f6a0aff39a95e4bb46e4c150354162",
+        "managementPublic": false,
+        "managementAdmission": {
+          "admitted": {
+            "public": false,
+            "ipType": "",
+            "allowlist": null
+          }
+        },
+        "growIndex": 0,
+        "changeDisruptedAt": "0001-01-01T00:00:00Z",
+        "targetResources": {
+          "cpuMode": "",
+          "minCpu": 0,
+          "maxCpu": 0,
+          "minRam": 0,
+          "maxRam": 0,
+          "minDisk": 0,
+          "maxDisk": 0
+        }
+      }
+    ],
+    "nextIndex": 3,
+    "phase": "ready",
+    "rebalance": false,
+    "replaceActive": false,
+    "suspended": false,
+    "systemUsersError": "",
+    "systemUsersReconciledAt": "2026-11-05T20:42:34.289472558Z",
+    "uid": "kk_X98De31dEDM6w0lyMsWpzdMntIVhq89bX4qYKVY8VVDJ7p82"
+  },
+  "Secrets": {
+    "erlang-cookie": "Skg2Q0VWS0xEVUNaWlhDNUhDWVpFRFRFWlVDWFpSUkJYNVQ0VTRMNFJJQ1pIWURPQkMzQQ==",
+    "tls/agents/demom0.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ4RENDQVd1Z0F3SUJBZ0lSQUkxN0Y4T2dLdDBvTThCQ1k1RXBvL2d3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE0zTXpSYUZ3MHlOekV4TURVeU1EUXlNelJhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dE1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJPZlNhZzUwCkJzTVBqSElna3M4a0thSTBzQnNJTG1jTUdZdG9Fb0dsdjZSOHRlZEVCVUtiUFhzVHNRTnpxU3paWFJ4S28zRGgKb1RWZWhEUE41aUF4VUdpamdhVXdnYUl3RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVWNsQ3hxM1FKOXpZTG15Mmt0ZEFpCnJqUWVwN3N3VEFZRFZSMFJCRVV3UTRJR1pHVnRiMjB3Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFHSEVDQUJEYmdBQUFBQUFBQUFBQUFBQUFHSEJNQUFBZ0V3Q2dZSUtvWkl6ajBFQXdJRApSd0F3UkFJZ0UxUWJTR2Fzd0hXWllDNkJ3ZEkxVTJ5dUxCaEhBeEM4K0ZVbVo3ZFkxL2tDSUQ4UTRYTVZNT200CkIzL2dVdVIyRDcxWEY1ZEJ6RlArN3VQRGttU1l1Y0hiCi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0KLS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnUXp3ZUhFOXV3ZkthMFoyNwpub3JWdS9mM2h1YWQ2YVJRV0s3SEhCaXdZR0doUkFOQ0FBVG4wbW9PZEFiREQ0eHlJSkxQSkNtaU5MQWJDQzVuCkRCbUxhQktCcGIra2ZMWG5SQVZDbXoxN0U3RURjNmtzMlYwY1NxTnc0YUUxWG9RenplWWdNVkJvCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/agents/demom1.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ4akNDQVd1Z0F3SUJBZ0lSQU03TWJBVHJhMHJHd1kwYzhZR2Jqd2d3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE0zTXpSYUZ3MHlOekV4TURVeU1EUXlNelJhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dE1UQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJFVFRDZUR5CmRVcFpNaWgvSmJocFNicHd2eXpJU29mREt2N0htRTk3NTFPOVB6cGtUYVJ0a1dQN3FzVEVwWXNrVlVPVFlWcHcKSGNtWGhzd1JVclJXNTQyamdhVXdnYUl3RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVWNsQ3hxM1FKOXpZTG15Mmt0ZEFpCnJqUWVwN3N3VEFZRFZSMFJCRVV3UTRJR1pHVnRiMjB4Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFHSEVDQUJEYmdBQUFBQUFBQUFBQUFBQUFHSEJNQUFBZ0V3Q2dZSUtvWkl6ajBFQXdJRApTUUF3UmdJaEFKZ3J6ZWpOMHlIeFljWitEKzFqQVBRUGdHeFRkZmVXeStLb21jamJuVldQQWlFQXpoQURXMlJ2CnB0NEpDMzlhaHlRRERyVXhTYkV0V0xiRFZZWVk0NTdlczFJPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCi0tLS0tQkVHSU4gS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ3JLN3UxZFpIN2dIdENCMWgKZnlVemhKTEl2eDhGVHcrbytVZitlSWJEckFLaFJBTkNBQVJFMHduZzhuVktXVElvZnlXNGFVbTZjTDhzeUVxSAp3eXIreDVoUGUrZFR2VDg2WkUya2JaRmorNnJFeEtXTEpGVkRrMkZhY0IzSmw0Yk1FVkswVnVlTgotLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0K",
+    "tls/agents/demom2.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ4VENDQVd1Z0F3SUJBZ0lSQU5nclhONnNZMWpVdkRLWDl3NmxIQ2N3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE0zTXpSYUZ3MHlOekV4TURVeU1EUXlNelJhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dE1qQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJOa2VaanBaClRSa2dONGV5MStWWFpTWWJtaWd6Q0M4NEpLVWUrNTkyaGdDbCsrMENvam90NjlvMWl5Y0JhTzMyZElTeXhzMmEKUVdxNU9GSjVwbitDOEY2amdhVXdnYUl3RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVWNsQ3hxM1FKOXpZTG15Mmt0ZEFpCnJqUWVwN3N3VEFZRFZSMFJCRVV3UTRJR1pHVnRiMjB5Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFHSEVDQUJEYmdBQUFBQUFBQUFBQUFBQUFHSEJNQUFBZ0V3Q2dZSUtvWkl6ajBFQXdJRApTQUF3UlFJaEFQL2FPWTczTVQvTmVXbDFSQ2xtalk3ZzNpWXVrSVM5QmxQcnJDN0ZtME4xQWlBR1hVbUhNa0ZqCnZQZjZKM3ZNdWNLRjd4NzUxMTg3NDJyVmRZdlpZcHRyd2c9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCi0tLS0tQkVHSU4gS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ21CYWN5ZUhxTkZhK0doczYKS3hJUk1WbzdKSUNtbEhGMVpQQkFvREZVNHBDaFJBTkNBQVRaSG1ZNldVMFpJRGVIc3RmbFYyVW1HNW9vTXdndgpPQ1NsSHZ1ZmRvWUFwZnZ0QXFJNkxldmFOWXNuQVdqdDluU0Vzc2JObWtGcXVUaFNlYVovZ3ZCZQotLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0K",
+    "tls/ca.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJZRENDQVFXZ0F3SUJBZ0lSQU9nYTBHSGswYUJOaW5MVHNmdTRzWnd3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE0zTXpSYUZ3MHpOakV4TURJeU1EUXlNelJhTUE4eApEVEFMQmdOVkJBTVRCR1JsYlc4d1dUQVRCZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFRdFkzcVBJMVluCkdPdkdSVkhKenNySkRKWnNBSUwwUEJGbldIQjMvUkd4WjBpb3Y3MVF2SDE3aXAvS01uM2lhdzE5YTJnMXcyLzIKOGZYNERCa1NieG9ObzBJd1FEQU9CZ05WSFE4QkFmOEVCQU1DQVlZd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVjbEN4cTNRSjl6WUxteTJrdGRBaXJqUWVwN3N3Q2dZSUtvWkl6ajBFQXdJRFNRQXdSZ0loCkFORERxc25DV3NUaWYyU2lVOVRncURBbG1rN2t4OXF1RTJhVzU3NEQxL1pBQWlFQTVGYXozeXBrUU9ZaElnUGYKblY4b2lwa0Y2bVZiOXM4N1crOGhndzByWEIwPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==",
+    "tls/ca.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnRFpIQTV3SEovN2tuMVNNVQpNZXdRVDduTWRySkNhY1R5RWdHTTVMTDN0ZTZoUkFOQ0FBUXRZM3FQSTFZbkdPdkdSVkhKenNySkRKWnNBSUwwClBCRm5XSEIzL1JHeFowaW92NzFRdkgxN2lwL0tNbjNpYXcxOWEyZzF3Mi8yOGZYNERCa1NieG9OCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/members/demom0.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ6ekNDQVhXZ0F3SUJBZ0lSQUlWbm1OcG5ya3JQVXJtYjlXVU4zSEV3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE0zTXpSYUZ3MHlOekV4TURVeU1EUXlNelJhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dE1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJJdmpOdW1lClp2VlBGdWxoRVoyTDEwSVgyellPZ3NrbVg1MmFiZXVpalZnL09kV01TRlNrdkd1UWZJdGFOMi92RVdtU1ZjcE8KMEs1SW5wQmJ3c0Q4M2dLamdhOHdnYXd3RGdZRFZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUI4R0ExVWRJd1FZTUJhQUZISlFzYXQwCkNmYzJDNXN0cExYUUlxNDBIcWU3TUV3R0ExVWRFUVJGTUVPQ0JtUmxiVzl0TUlJSmJHOWpZV3hvYjNOMGh3Ui8KQUFBQmh4QUFBQUFBQUFBQUFBQUFBQUFBQUFBQmh4QWdBUTI0QUFBQUFBQUFBQUFBQUFBQmh3VEFBQUlCTUFvRwpDQ3FHU000OUJBTUNBMGdBTUVVQ0lRQ1BLdnlaSjZiSlduNGhsS1dmSGo4U3lyNXdjb0hZY1RzZ3ZLNzkxenNpCjdnSWdORzdwUTdUSWJiclFjbVhDVk1sS0lNRnVOaHJnS0FWekRvWFlma1BZL1hZPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCi0tLS0tQkVHSU4gS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ1hhbTdCTGpWQk81NlYzZnIKU3VXbnpNVnJ4eEpCTU9ES3FSd1BKczFsNG5paFJBTkNBQVNMNHpicG5tYjFUeGJwWVJHZGk5ZENGOXMyRG9MSgpKbCtkbW0zcm9vMVlQem5WakVoVXBMeHJrSHlMV2pkdjd4RnBrbFhLVHRDdVNKNlFXOExBL040QwotLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0K",
+    "tls/members/demom1.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUIwRENDQVhXZ0F3SUJBZ0lSQUs3QUZJTUNtb2cwRU1naGlMVUR4WkF3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE0zTXpSYUZ3MHlOekV4TURVeU1EUXlNelJhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dE1UQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJBTk1EVlA4CmZvK2xHV3pCNC9SWjFPR2tQRW5talRNMW5qdXhIcmtMcTVlT1IyK0VHYUNDYkVGU1NNVDZJemNRYnEwaitzbFUKWDg4WUs2WjZ3OVdSZklhamdhOHdnYXd3RGdZRFZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUI4R0ExVWRJd1FZTUJhQUZISlFzYXQwCkNmYzJDNXN0cExYUUlxNDBIcWU3TUV3R0ExVWRFUVJGTUVPQ0JtUmxiVzl0TVlJSmJHOWpZV3hvYjNOMGh3Ui8KQUFBQmh4QUFBQUFBQUFBQUFBQUFBQUFBQUFBQmh4QWdBUTI0QUFBQUFBQUFBQUFBQUFBQmh3VEFBQUlCTUFvRwpDQ3FHU000OUJBTUNBMGtBTUVZQ0lRQ1A0dzlCWGxWSXdNVGlnOTF3RmRpbkxiWndIMHIxWDFGNHpWMXFNRk5SCmhRSWhBTTlXbnpLL3NhbmJLWmdCQysvcjVoV3ViZ3AwMVNobEdtcmYwSHlNNjBaTgotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCi0tLS0tQkVHSU4gS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ0hrdkhRbWpjVlF0SmJVd3cKRmxQeTY5MTYxdkVUSHJKYktQenJLTzM2aUtlaFJBTkNBQVFEVEExVC9INlBwUmxzd2VQMFdkVGhwRHhKNW8wegpOWjQ3c1I2NUM2dVhqa2R2aEJtZ2dteEJVa2pFK2lNM0VHNnRJL3JKVkYvUEdDdW1lc1BWa1h5RwotLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0K",
+    "tls/members/demom2.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUIwRENDQVhXZ0F3SUJBZ0lSQUxyNFgzU1VORXl2clFqdDMzcktuTFl3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE0zTXpSYUZ3MHlOekV4TURVeU1EUXlNelJhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dE1qQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJBdGNlbGN1CkdubmkzUzdlaHd6ait5WTJJNjJHdnFuMFNSVEpKVVFyU3phaDN6K250Q0ZTR0hBdnFOZThhZS9HNDNpd3lHd1cKK0RXSTBmUVVmRTlOTjhPamdhOHdnYXd3RGdZRFZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUI4R0ExVWRJd1FZTUJhQUZISlFzYXQwCkNmYzJDNXN0cExYUUlxNDBIcWU3TUV3R0ExVWRFUVJGTUVPQ0JtUmxiVzl0TW9JSmJHOWpZV3hvYjNOMGh3Ui8KQUFBQmh4QUFBQUFBQUFBQUFBQUFBQUFBQUFBQmh4QWdBUTI0QUFBQUFBQUFBQUFBQUFBQmh3VEFBQUlCTUFvRwpDQ3FHU000OUJBTUNBMGtBTUVZQ0lRRFZDTDl6VTY4dlN0Vko2Sm53L2MwV2NZQ1lIeG1vSVlVYXY5OWxSVmdRCnRRSWhBSWRPbHhjalVCbVA0ZVVSS1Z3Skw2UUgrQVd2SXRlWmRHL1E3blRHd0MzKwotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCi0tLS0tQkVHSU4gS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ3p2eDJ0c21uMm1kdUYxc3EKWW1WNk1hWTZQeWlIUUF5cEM3MGpxNks3L0hxaFJBTkNBQVFMWEhwWExocDU0dDB1M29jTTQvc21OaU90aHI2cAo5RWtVeVNWRUswczJvZDgvcDdRaFVoaHdMNmpYdkdudnh1TjRzTWhzRnZnMWlOSDBGSHhQVFRmRAotLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0K",
+    "users/admin": "T3N4V0VBU1gyd3kwVFBZTjA3WEc2ZjBvMERRUmNUeUtjTmZ4b01JMw==",
+    "users/karakoram": "OTZxSHpVdnhmUVJvNjVDTmtjbFR0TnB1SUdTMVlsZmpoeG1GbUFUMg==",
+    "users/monitor": "bDFoaDdVMEVhYklUTkhTVnZmalJ3NG5sZFBGSG43dThFMkQ3cGFacA=="
+  },
+  "Tokens": {
+    "demom0": "kk_nxtVF7VEY3KThHyM632z5GDxkrXFyhVWeclCu6B75Dba0Vga",
+    "demom1": "kk_b3eIuurJF2e72vrSKCqboX6E5yStpJYnfyIeSIG5AKyAinL9",
+    "demom2": "kk_Xi8tIxMCFhOdCza8OqE2CtgfrxnteQuCgdID0BiZIsT3PfvD"
+  },
+  "Services": [
+    {
+      "id": "demom2",
+      "hostname": "demom2",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 1,
+        "minRam": 1,
+        "maxRam": 1,
+        "minDisk": 1,
+        "maxDisk": 3
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    },
+    {
+      "id": "demom0v",
+      "hostname": "demom0v",
+      "kind": "volume",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "",
+        "minCpu": 0,
+        "maxCpu": 0,
+        "minRam": 0,
+        "maxRam": 0,
+        "minDisk": 5,
+        "maxDisk": 5
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    },
+    {
+      "id": "demom0",
+      "hostname": "demom0",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 1,
+        "minRam": 1,
+        "maxRam": 1,
+        "minDisk": 1,
+        "maxDisk": 3
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    },
+    {
+      "id": "demom1v",
+      "hostname": "demom1v",
+      "kind": "volume",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "",
+        "minCpu": 0,
+        "maxCpu": 0,
+        "minRam": 0,
+        "maxRam": 0,
+        "minDisk": 5,
+        "maxDisk": 5
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    },
+    {
+      "id": "demom1",
+      "hostname": "demom1",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 1,
+        "minRam": 1,
+        "maxRam": 1,
+        "minDisk": 1,
+        "maxDisk": 3
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    },
+    {
+      "id": "demom2v",
+      "hostname": "demom2v",
+      "kind": "volume",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "",
+        "minCpu": 0,
+        "maxCpu": 0,
+        "minRam": 0,
+        "maxRam": 0,
+        "minDisk": 5,
+        "maxDisk": 5
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    }
+  ],
+  "Ownership": {
+    "demom0": {
+      "KARAKORAM_AGENT_TOKEN": "kk_nxtVF7VEY3KThHyM632z5GDxkrXFyhVWeclCu6B75Dba0Vga",
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/mnt/demom0v",
+      "KARAKORAM_MEMBER": "demom0",
+      "KARAKORAM_OWNER": "v1.2071106b0265c64b718756d017e7a51602d88f576f979a4fca598928710709ac"
+    },
+    "demom0v": {
+      "KARAKORAM_AGENT_TOKEN": "kk_nxtVF7VEY3KThHyM632z5GDxkrXFyhVWeclCu6B75Dba0Vga",
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_MEMBER": "demom0",
+      "KARAKORAM_OWNER": "v1.120cc256465cf38f6525ee7cc959421095e3054f2442b71b990b984034440215"
+    },
+    "demom1": {
+      "KARAKORAM_AGENT_TOKEN": "kk_b3eIuurJF2e72vrSKCqboX6E5yStpJYnfyIeSIG5AKyAinL9",
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/mnt/demom1v",
+      "KARAKORAM_MEMBER": "demom1",
+      "KARAKORAM_OWNER": "v1.634cac37fba530de2776b37e80c48f9957935c07ec34d8b6bdb7e123ce1b3d32"
+    },
+    "demom1v": {
+      "KARAKORAM_AGENT_TOKEN": "kk_b3eIuurJF2e72vrSKCqboX6E5yStpJYnfyIeSIG5AKyAinL9",
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_MEMBER": "demom1",
+      "KARAKORAM_OWNER": "v1.9a41ba264596d107be671e7b4ffaf691734c01bb3f130118314f930a79559dc0"
+    },
+    "demom2": {
+      "KARAKORAM_AGENT_TOKEN": "kk_Xi8tIxMCFhOdCza8OqE2CtgfrxnteQuCgdID0BiZIsT3PfvD",
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/mnt/demom2v",
+      "KARAKORAM_MEMBER": "demom2",
+      "KARAKORAM_OWNER": "v1.f8fd6236ada5030537ce34f0b7c80b05a974c6c6c85b308724180e6e86f13c8c"
+    },
+    "demom2v": {
+      "KARAKORAM_AGENT_TOKEN": "kk_Xi8tIxMCFhOdCza8OqE2CtgfrxnteQuCgdID0BiZIsT3PfvD",
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_MEMBER": "demom2",
+      "KARAKORAM_OWNER": "v1.7f55bc4379c2c4ae4402393def7c9782319d73ec72238f35c1bdc9a21197b944"
+    }
+  },
+  "Runtime": {
+    "base": "ubuntu-24.04",
+    "prepare": [
+      "sudo apt-get update",
+      "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg",
+      "curl -fsSL https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA | sudo gpg --dearmor -o /usr/share/keyrings/com.rabbitmq.team.gpg",
+      "printf '%s\\n' 'deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-erlang/ubuntu/noble noble main' 'deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-server/ubuntu/noble noble main' 'deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-erlang/ubuntu/noble noble main' 'deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-server/ubuntu/noble noble main' | sudo tee /etc/apt/sources.list.d/rabbitmq.list",
+      "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u0026\u0026 sudo chmod 755 /usr/sbin/policy-rc.d",
+      "printf '%s\\n' 'Package: erlang*' 'Pin: version 1:27.3.4.17-1' 'Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/erlang",
+      "sudo apt-get update",
+      "sudo apt-get install -y --no-install-recommends rabbitmq-server=4.3.6-1 erlang-base=1:27.3.4.17-1 erlang-asn1=1:27.3.4.17-1 erlang-crypto=1:27.3.4.17-1 erlang-eldap=1:27.3.4.17-1 erlang-inets=1:27.3.4.17-1 erlang-mnesia=1:27.3.4.17-1 erlang-os-mon=1:27.3.4.17-1 erlang-parsetools=1:27.3.4.17-1 erlang-public-key=1:27.3.4.17-1 erlang-runtime-tools=1:27.3.4.17-1 erlang-ssl=1:27.3.4.17-1 erlang-syntax-tools=1:27.3.4.17-1 erlang-tools=1:27.3.4.17-1 erlang-xmerl=1:27.3.4.17-1"
+    ],
+    "env": {
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/mnt/demom0v",
+      "KARAKORAM_ENGINE": "rabbitmq",
+      "KARAKORAM_INTERNAL_CA": "control-plane-ca",
+      "KARAKORAM_MEMBER": "demom0",
+      "KARAKORAM_URL": "https://control-plane.test"
+    },
+    "args": [
+      "agent"
+    ],
+    "ports": [
+      {
+        "port": 5672,
+        "protocol": "tcp"
+      },
+      {
+        "port": 5671,
+        "protocol": "tcp"
+      },
+      {
+        "port": 15672,
+        "protocol": "tcp"
+      },
+      {
+        "port": 15671,
+        "protocol": "tcp"
+      },
+      {
+        "port": 15692,
+        "protocol": "tcp"
+      },
+      {
+        "port": 4369,
+        "protocol": "tcp"
+      },
+      {
+        "port": 25672,
+        "protocol": "tcp"
+      }
+    ],
+    "volume": "demom0v",
+    "readiness": {
+      "args": [
+        "agent",
+        "readiness",
+        "--startup",
+        "--data-dir=/mnt/demom0v"
+      ],
+      "failureTimeout": 300000000000,
+      "retryPeriod": 10000000000
+    },
+    "stopBeforeStart": true
+  }
+}

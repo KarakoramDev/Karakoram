@@ -79,15 +79,20 @@ type componentMember struct {
 	NativeReadiness *bool                 `json:"nativeReadiness,omitempty"`
 	Observed        tspec.Status          `json:"observed"`
 	RestartNonce    string                `json:"restartNonce,omitempty"`
+
+	DeploymentFailure *componentDeploymentFailure `json:"deploymentFailure,omitempty"`
 }
 
 type componentPending struct {
-	Component string           `json:"component"`
-	Action    string           `json:"action"`
-	Op        infra.Op         `json:"op"`
-	Replicas  int              `json:"replicas,omitempty"`
-	Resources domain.Resources `json:"resources"`
-	Public    bool             `json:"public,omitempty"`
+	Component   string           `json:"component"`
+	Action      string           `json:"action"`
+	Op          infra.Op         `json:"op"`
+	Version     string           `json:"version,omitempty"`
+	ConfigHash  string           `json:"configHash,omitempty"`
+	RetryIntent string           `json:"retryIntent,omitempty"`
+	Replicas    int              `json:"replicas,omitempty"`
+	Resources   domain.Resources `json:"resources"`
+	Public      bool             `json:"public,omitempty"`
 }
 
 func loadState(c *domain.Cluster) (*componentState, error) {

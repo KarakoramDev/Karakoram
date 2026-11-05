@@ -125,6 +125,7 @@ type fakeAgents struct {
 	unready        string
 	builds         map[string]string
 	buildForStatus func(string) string
+	componentReady func(string, tspec.Spec) bool
 }
 
 func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, member string) (*agentapi.Client, error) {
@@ -201,9 +202,13 @@ func fixture(t *testing.T, topology string) (*Provider, *engine.Context, *fakeBi
 		json.Unmarshal(config.EngineSpec, &sp)
 		switch parts[len(parts)-1] {
 		case tspec.ActionStatus:
+			ready := sp.Component != agents.unready
+			if agents.componentReady != nil {
+				ready = ready && agents.componentReady(member, sp)
+			}
 			json.NewEncoder(w).Encode(tspec.Status{
 				Component: sp.Component, Version: sp.Version, RestartToken: sp.RestartToken,
-				Ready: sp.Component != agents.unready, SchemaVersion: "1.0", VisibilitySchemaVersion: "1.1",
+				Ready: ready, SchemaVersion: "1.0", VisibilitySchemaVersion: "1.1",
 			})
 		case tspec.ActionEnsureNamespaces:
 			var desired []tspec.Namespace

@@ -1,0 +1,208 @@
+{
+  "Cluster": {
+    "namespace": "default",
+    "name": "demo",
+    "spec": {
+      "provider": "neo4j",
+      "version": "2026.10.0",
+      "topology": {
+        "type": "single"
+      },
+      "components": {
+        "engine": {
+          "replicas": 1,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 1,
+            "minRam": 2,
+            "maxRam": 2,
+            "minDisk": 10,
+            "maxDisk": 10
+          }
+        },
+        "configServer": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "router": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        }
+      },
+      "backup": {
+        "schedules": null,
+        "pitr": {
+          "enabled": false,
+          "oplogSpanMinutes": 0
+        }
+      },
+      "tls": {
+        "mode": "requireTLS",
+        "ca": "selfSigned"
+      },
+      "exposure": {
+        "public": false,
+        "ipType": "IPV6",
+        "allowlist": null
+      },
+      "monitoring": {
+        "enabled": true
+      }
+    },
+    "status": {
+      "phase": "Ready",
+      "conditions": [],
+      "observedGeneration": 1,
+      "observedAt": "2026-11-05T20:35:28.346235149Z",
+      "version": "2026.10.0",
+      "members": [
+        {
+          "name": "demon0",
+          "set": "engine",
+          "role": "single",
+          "state": "ready",
+          "health": true,
+          "version": "2026.10.0",
+          "lagSeconds": 0,
+          "optime": "0001-01-01T00:00:00Z",
+          "uptime": 0,
+          "cpuUsage": 0,
+          "ramUsage": 0,
+          "diskUsage": 0,
+          "agent": {
+            "version": "agent-version",
+            "commit": "agent-commit",
+            "build": "agent-build",
+            "healthy": true,
+            "configVersion": 4,
+            "lastSeen": "2026-11-05T20:35:28.348473761Z"
+          }
+        }
+      ],
+      "connection": {
+        "hosts": [
+          "demon0:7687"
+        ],
+        "uri": "neo4j+s://demon0:7687",
+        "publicHosts": [],
+        "endpoints": [
+          {
+            "name": "bolt",
+            "url": "neo4j+s://demon0:7687",
+            "public": false
+          },
+          {
+            "name": "https",
+            "url": "https://demon0:7473",
+            "public": false
+          }
+        ]
+      },
+      "backup": {},
+      "placement": {
+        "guaranteedAntiAffinity": false,
+        "groups": {}
+      }
+    },
+    "generation": 1,
+    "deleting": false,
+    "deleteOptions": {
+      "keepVolumes": false,
+      "keepBackups": false
+    },
+    "createdAt": "2026-11-05T20:35:28.310359308Z",
+    "updatedAt": "2026-11-05T20:35:28.310359308Z"
+  },
+  "Secrets": {
+    "tls/agents/demon0.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJyVENDQVZPZ0F3SUJBZ0lSQU41a1RhNk9mQnNFczFnWHNEazcrRU13Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE13TWpoYUZ3MHlOekV5TURjeU1ETTFNamhhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dU1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJBbW1UaWQ0CnVRR3JFMDYzYTM5L1Jaa1dmK3l4VVY5azBSSTNQU09tYkRjdk4rT3dEMllibitiMFNRVk5uSG0wL0x0Z2ppYXUKYndQTVhQckpybFVRbXFtamdZMHdnWW93RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVVJmcDB5YUtIYWp0Y0tkS1dtSGNFCjBBaGw1UVl3TkFZRFZSMFJCQzB3SzRJR1pHVnRiMjR3Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFFd0NnWUlLb1pJemowRUF3SURTQUF3UlFJZ0hOTGFyRFVpSE5nMlNHdWI3N3p6YUg5TQpobHNtNnZsd1NtNTdQOFpzTGpBQ0lRQytESk1NKzBCcStzOEtjcktubHdqWDNra1VuaXNWRThwa0N6TVNqeGpiCmt3PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=",
+    "tls/agents/demon0.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFndEFGRmlIb25zMnBwSFRnNApXR00veWJhL1FhYnE4TjNWSlpPb2dnSW4vWTJoUkFOQ0FBUUpwazRuZUxrQnF4Tk90MnQvZjBXWkZuL3NzVkZmClpORVNOejBqcG13M0x6ZmpzQTltRzUvbTlFa0ZUWng1dFB5N1lJNG1ybThEekZ6NnlhNVZFSnFwCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/ca.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJZRENDQVFXZ0F3SUJBZ0lSQU9IK0wyalZwZmdsUVhyY1pvbXlFRzB3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE13TWpoYUZ3MHpOakV4TURJeU1ETTFNamhhTUE4eApEVEFMQmdOVkJBTVRCR1JsYlc4d1dUQVRCZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFTQ1BPeHNRM1Y1CloveExpeW5XM05aclNOMkQ3SkJVT0ZNMlJvcFJBL3ArRTh3eS9na1JOdGh5dTBtWStCQnN0d3RTNEozY0lLTTQKZlprOWtUckg1dzcybzBJd1FEQU9CZ05WSFE4QkFmOEVCQU1DQVlZd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVSZnAweWFLSGFqdGNLZEtXbUhjRTBBaGw1UVl3Q2dZSUtvWkl6ajBFQXdJRFNRQXdSZ0loCkFOZVVGZnllbUphdWdZN0k3V3JiUkZndUd3TTFoRmN1dFRmb3d2djdRQzgzQWlFQW1ja0xxcU0zNktwZkpFNmsKTlZVMC9ldG1LZEEzeDBLYkgydkxraS9aeVM0PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==",
+    "tls/ca.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnWmdrK2FKMkdMQ2orYm9SZgo0NmZhK2ZoN0QxQWo5VnJXQWF5UUszMnJyRkdoUkFOQ0FBU0NQT3hzUTNWNVoveExpeW5XM05aclNOMkQ3SkJVCk9GTTJSb3BSQS9wK0U4d3kvZ2tSTnRoeXUwbVkrQkJzdHd0UzRKM2NJS000ZlprOWtUckg1dzcyCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/servers/demon0.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJyVENDQVZPZ0F3SUJBZ0lSQUlpaUR3ZW9IRGNtRm1jUUUxYnhoQjB3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE13TWpoYUZ3MHlOekV5TURjeU1ETTFNamhhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dU1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJGT1JxdFpmCnljR05kSzhVTWtkVERGVWxDMU1hQnNxRjlhMTBya1BiUXVFaU8rUHRBLy9TMjZma21BVkJyUHVJbHdqcjViOHIKTkRqNHZvNVBiR2twbzllamdZMHdnWW93RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVVJmcDB5YUtIYWp0Y0tkS1dtSGNFCjBBaGw1UVl3TkFZRFZSMFJCQzB3SzRJR1pHVnRiMjR3Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFFd0NnWUlLb1pJemowRUF3SURTQUF3UlFJZ0hHbVdJeDJwTS9pUFREaU54YjRnQ21Bbgo4YTF3UFZoZWYxY1FZbFZDbllvQ0lRRDBONEs3RE5NVGlSdDZuZ3A3VmNadFlXbU85T3dCYlZGNFZJdXp6eFRJCm9RPT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=",
+    "tls/servers/demon0.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnOS9FWjAybVowY0tET2J1YQpXMDZuT1lzUTcrbjEyVi8zMmwvNGJJN1NlRXVoUkFOQ0FBUlRrYXJXWDhuQmpYU3ZGREpIVXd4VkpRdFRHZ2JLCmhmV3RkSzVEMjBMaElqdmo3UVAvMHR1bjVKZ0ZRYXo3aUpjSTYrVy9LelE0K0w2T1QyeHBLYVBYCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "users/neo4j": "c1RCTkVoUW12NndsejhZN2hLb0Vmd05abFVUcEhobVZuQnhNYWVQQg=="
+  },
+  "Token": {
+    "namespace": "default",
+    "cluster": "demo",
+    "member": "demon0"
+  },
+  "Internal": {
+    "neo4j": {
+      "uid": "kk_q4FE8r8B1Fw30EaENZDkQCO7Fdc9Gx0VQURA7svIZ0YgQT7C",
+      "configVersion": 4,
+      "configHash": "e4ef2f64900d64101a06abc59d45cfd006c1a502bdb7df88e8f5d185f9323fdc",
+      "configOptions": {},
+      "member": {
+        "name": "demon0",
+        "volume": "demon0v",
+        "serviceId": "service-2",
+        "volumeId": "service-1",
+        "stage": "ready",
+        "version": "2026.10.0",
+        "resources": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 2,
+          "maxRam": 2,
+          "minDisk": 10,
+          "maxDisk": 10
+        },
+        "disk": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 2,
+          "maxRam": 2,
+          "minDisk": 10,
+          "maxDisk": 10
+        },
+        "pendingVersion": "2026.10.0",
+        "pendingResources": {
+          "cpuMode": "",
+          "minCpu": 0,
+          "maxCpu": 0,
+          "minRam": 0,
+          "maxRam": 0,
+          "minDisk": 0,
+          "maxDisk": 0
+        },
+        "runtimeRecovery": {
+          "retryRecordedAt": "0001-01-01T00:00:00Z",
+          "retryAt": "0001-01-01T00:00:00Z",
+          "initialized": true
+        },
+        "exposure": {
+          "public": false,
+          "ipType": "IPV6",
+          "allowlist": null
+        }
+      },
+      "exposureAdmission": {
+        "admitted": {
+          "public": false,
+          "ipType": "IPV6",
+          "allowlist": null
+        }
+      }
+    }
+  }
+}

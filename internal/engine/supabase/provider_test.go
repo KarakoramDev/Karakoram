@@ -109,15 +109,16 @@ func TestOptionsRejectUnknownAndUnsafeInput(t *testing.T) {
 
 type testBackend struct {
 	infra.Backend
-	services     map[string]*infra.Service
-	deployed     map[string]bool
-	lookupErrors map[string]error
-	stopped      map[string]bool
-	gatewayHosts map[string]int
-	nativeStatus map[string]pgspec.StatusResponse
-	prepares     map[string][]string
-	agentBuilds  map[string]string
-	imports      []infra.ServiceSpec
+	services       map[string]*infra.Service
+	deployed       map[string]bool
+	lookupErrors   map[string]error
+	stopped        map[string]bool
+	gatewayHosts   map[string]int
+	nativeStatus   map[string]pgspec.StatusResponse
+	prepares       map[string][]string
+	agentBuilds    map[string]string
+	imports        []infra.ServiceSpec
+	componentReady func(string, agentapi.MemberConfig) bool
 }
 
 func (*testBackend) Name() string { return "test" }
@@ -266,6 +267,9 @@ func setupProvider(t *testing.T) (*Provider, *engine.Context, *testBackend) {
 			json.NewEncoder(w).Encode([]pgspec.ExtensionUpdateResult{})
 		case "/v1/supabase/status":
 			status := sbspec.Status{Ready: true}
+			if backend.componentReady != nil {
+				status.Ready = backend.componentReady(name, config)
+			}
 			if strings.HasSuffix(name, codes["gateway"]) {
 				status.GatewayUpstreamHosts = backend.gatewayHosts
 			}

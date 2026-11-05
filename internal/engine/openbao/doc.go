@@ -43,6 +43,10 @@
 // Formation retains ownership of new followers, and rolling wait retains its
 // current runtime until it recovers. Lost-volume replacement alone owns the
 // affected member's recovery gate while its new peer joins before retirement.
+// A control-plane lock update is not rollout intent: existing members retain
+// their server version and installed plugin declarations, including across native
+// restart/unseal. New plugin revisions ride the next explicit server or agent
+// rollout and activate per member only after its successful preparation receipt.
 //
 // Raft snapshots stream directly between the CA-verified native API and guarded
 // S3 storage, bounded to 4 GiB. Immutable UID-scoped object locations and upload

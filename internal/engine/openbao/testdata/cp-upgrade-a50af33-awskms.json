@@ -1,0 +1,219 @@
+{
+  "Cluster": {
+    "namespace": "default",
+    "name": "demo",
+    "spec": {
+      "provider": "openbao",
+      "version": "2.7.1",
+      "topology": {
+        "type": "cluster"
+      },
+      "components": {
+        "engine": {
+          "replicas": 1,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 1,
+            "minRam": 1,
+            "maxRam": 1,
+            "minDisk": 5,
+            "maxDisk": 5
+          }
+        },
+        "configServer": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "router": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        }
+      },
+      "engineOptions": {
+        "seal": {
+          "type": "awskms",
+          "awskms": {
+            "region": "eu-west-1",
+            "kmsKeyId": "test-key"
+          }
+        }
+      },
+      "backup": {
+        "schedules": null,
+        "pitr": {
+          "enabled": false,
+          "oplogSpanMinutes": 0
+        }
+      },
+      "tls": {
+        "mode": "requireTLS",
+        "ca": "selfSigned"
+      },
+      "exposure": {
+        "public": false,
+        "ipType": "IPV6",
+        "allowlist": null
+      },
+      "monitoring": {
+        "enabled": false
+      }
+    },
+    "status": {
+      "phase": "Creating",
+      "message": "Creating: queued platform provisioning",
+      "conditions": null,
+      "observedGeneration": 1,
+      "observedAt": "0001-01-01T00:00:00Z",
+      "members": null,
+      "connection": {
+        "hosts": null,
+        "uri": "",
+        "publicHosts": null
+      },
+      "backup": {},
+      "placement": {
+        "guaranteedAntiAffinity": false,
+        "groups": null
+      }
+    },
+    "generation": 1,
+    "deleting": false,
+    "deleteOptions": {
+      "keepVolumes": false,
+      "keepBackups": false
+    },
+    "createdAt": "2026-11-05T20:38:34.09147082Z",
+    "updatedAt": "2026-11-05T20:38:34.09147082Z"
+  },
+  "Secrets": {
+    "openbao/init-key": "eyJyZWNlaXB0SWQiOiI0NGE0YzliNWE5MDM4ZTA3M2JlNzEwYTliZjIwNDFlMzEyZmIzYWJiZjdjYzBlNTgiLCJwcml2YXRlS2V5IjoiOHZia1g1Z3lKU3ZCWkt3YUF0TC9yQUNQR2ZDVzV4Tk55QW4xdEkyYnVwND0ifQ==",
+    "openbao/management-token": "bWFuYWdlbWVudC10b2tlbi0w",
+    "openbao/seal/aws-access-key-id": "dGVzdC1vbmx5LWF3cy1jcmVkZW50aWFs",
+    "openbao/seal/aws-secret-access-key": "dGVzdC1vbmx5LWF3cy1jcmVkZW50aWFs",
+    "openbao/unseal": "eyJzaGFyZXMiOlsiYzJWamNtVjBMWE5vWVhKbExUQXRkVzVwY1hWbExXMWhkR1Z5YVdGcyIsImMyVmpjbVYwTFhOb1lYSmxMVEV0ZFc1cGNYVmxMVzFoZEdWeWFXRnMiLCJjMlZqY21WMExYTm9ZWEpsTFRJdGRXNXBjWFZsTFcxaGRHVnlhV0ZzIiwiYzJWamNtVjBMWE5vWVhKbExUTXRkVzVwY1hWbExXMWhkR1Z5YVdGcyIsImMyVmpjbVYwTFhOb1lYSmxMVFF0ZFc1cGNYVmxMVzFoZEdWeWFXRnMiXSwidGhyZXNob2xkIjozLCJzZWFsVHlwZSI6ImF3c2ttcyIsInJlY292ZXJ5Ijp0cnVlLCJyb290VG9rZW4iOiJpbml0aWFsLXJvb3Qtc2VjcmV0LXRva2VuIiwiaW5pdGlhbGl6ZWRBdCI6IjIwMjYtMTEtMDVUMjA6Mzg6MzQuMDkyNzA2OTJaIn0=",
+    "tls/agents/demom0.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ1RENDQVYyZ0F3SUJBZ0lSQUxNVDFlYzI4dTB6MXBkeEpiekxLc0l3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE16TXpSYUZ3MHlOekV4TURVeU1ETTRNelJhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dE1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJLQ3ZtSEhhCktFOWtVczVQYjRPcHhSMHZNRUVxeFJTNXN3Nmp1NThPYVVpeFZRTkk2UUZEUS8rWlRCM0I5OUlzVGJRYXgzOW4KSkhQbUtwWnp2bmVCRS9lamdaY3dnWlF3RGdZRFZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUI4R0ExVWRJd1FZTUJhQUZKcFpHNTB1CjFiZDJpNXZKMlRYVjJ3MU9vTHQ5TURRR0ExVWRFUVF0TUN1Q0JtUmxiVzl0TUlJSmJHOWpZV3hvYjNOMGh3Ui8KQUFBQmh4QUFBQUFBQUFBQUFBQUFBQUFBQUFBQk1Bb0dDQ3FHU000OUJBTUNBMGtBTUVZQ0lRRGdDWGNuT01kUgprYnFxZmV6OEhEcjM4VGRDd1c5NjQ1MUc0bnl5bzBKMkt3SWhBT0o5eStrZnczbVdUNmc4ZWFoZUhFMWRHdzdoCnRVNzJSbkdNZU56amtMamkKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQotLS0tLUJFR0lOIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQpNSUdIQWdFQU1CTUdCeXFHU000OUFnRUdDQ3FHU000OUF3RUhCRzB3YXdJQkFRUWdsc1loTE50dDlFN3I2TTE2CkpxV004cndBZmV5NWVSR24rVklDcy9xeVkxU2hSQU5DQUFTZ3I1aHgyaWhQWkZMT1QyK0RxY1VkTHpCQktzVVUKdWJNT283dWZEbWxJc1ZVRFNPa0JRMFAvbVV3ZHdmZlNMRTIwR3NkL1p5Uno1aXFXYzc1M2dSUDMKLS0tLS1FTkQgS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCg==",
+    "tls/ca.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJYekNDQVFXZ0F3SUJBZ0lSQUpYbjhYOXpoanpPeFRxSjNvM1ZTMXd3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE16TXpSYUZ3MHpOakV4TURJeU1ETTRNelJhTUE4eApEVEFMQmdOVkJBTVRCR1JsYlc4d1dUQVRCZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFUSUM4cmhqMnRyCmh1Nmp0SWNIQzlQYVZiWkJHdkZNWlU4Vk9PWHA5VnpuUkt1RWxPMm8ydTZzNGUzOTh3MTdSeG9XbmkxOUk3bVYKOEdBbDA4TnUvdnA3bzBJd1FEQU9CZ05WSFE4QkFmOEVCQU1DQVlZd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVtbGtiblM3VnQzYUxtOG5aTmRYYkRVNmd1MzB3Q2dZSUtvWkl6ajBFQXdJRFNBQXdSUUloCkFKZVZYQTRvNUdWMGRzME1hNXFWaDN1RVBWMjcxRzJoZnloS01HbmJjejJQQWlCSHRWK3ZENC9OK3lTUEFiMU4KczlsZW42dnU0S3AxSWoxUXhGOFQ3bjZCUGc9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==",
+    "tls/ca.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFncHB5aUd4M0d5ZXMrTlR4UgpFbHphVHE2ZmdDakxsVTRUcUg0T3dIMlZMQ3VoUkFOQ0FBVElDOHJoajJ0cmh1Nmp0SWNIQzlQYVZiWkJHdkZNClpVOFZPT1hwOVZ6blJLdUVsTzJvMnU2czRlMzk4dzE3UnhvV25pMTlJN21WOEdBbDA4TnUvdnA3Ci0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/members/demom0.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ0ekNDQVYyZ0F3SUJBZ0lSQU9WT0NsMCtpcnUxQ1ErWXZURmF3ckF3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRE16TXpSYUZ3MHlOekV4TURVeU1ETTRNelJhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dE1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJLd08zMXZ1CmlCeVFZUld3QUZLd05Ra0NOQlJPeXUwVTAyV1lCVjkxRkd6b1haYkxCYytYbDRIL0gwUVBYNnZ5c2RpZjFxUmwKL2pwb0VVNHFHNDJqQnNXamdaY3dnWlF3RGdZRFZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUI4R0ExVWRJd1FZTUJhQUZKcFpHNTB1CjFiZDJpNXZKMlRYVjJ3MU9vTHQ5TURRR0ExVWRFUVF0TUN1Q0JtUmxiVzl0TUlJSmJHOWpZV3hvYjNOMGh3Ui8KQUFBQmh4QUFBQUFBQUFBQUFBQUFBQUFBQUFBQk1Bb0dDQ3FHU000OUJBTUNBMGdBTUVVQ0lRRGRGcXFZcUxrTApQNXJoQlYvMEVhbzdMYTdlYmtOUDM5NVZwbUo4QkRGVXlRSWdZb1dkb2ZBcW9JYlhwV0xrRjhYSnE2N1NVMXl5CkR2VzUwQitwalJqVVpraz0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQotLS0tLUJFR0lOIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQpNSUdIQWdFQU1CTUdCeXFHU000OUFnRUdDQ3FHU000OUF3RUhCRzB3YXdJQkFRUWd5Vm5qT2hYeW9MRkZBZkpjCmRZRzVobkJrQVE2dWR1QUlKVHB5SlZaVnhLMmhSQU5DQUFTc0R0OWI3b2dja0dFVnNBQlNzRFVKQWpRVVRzcnQKRk5ObG1BVmZkUlJzNkYyV3l3WFBsNWVCL3g5RUQxK3I4ckhZbjlha1pmNDZhQkZPS2h1Tm93YkYKLS0tLS1FTkQgS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCg==",
+    "tls/recovery/ca.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJjakNDQVJlZ0F3SUJBZ0lSQU5ISVI2YlVrVUR1QkpmdG9hbUxHOTB3Q2dZSUtvWkl6ajBFQXdJd0dERVcKTUJRR0ExVUVBeE1OWkdWdGJ5MXlaV052ZG1WeWVUQWVGdzB5TmpFeE1EVXlNRE16TXpSYUZ3MHpOakV4TURJeQpNRE00TXpSYU1CZ3hGakFVQmdOVkJBTVREV1JsYlc4dGNtVmpiM1psY25rd1dUQVRCZ2NxaGtqT1BRSUJCZ2dxCmhrak9QUU1CQndOQ0FBU29OOEJxdXo3QzVIVXpTZHB3YkRGdTRpY0NINURwZTIrOFpHNkhKTGFaeWZ0Zkc0ZzkKTDBIQ2kyRjAwT3RvSkZXZnZVdFlHZzBIVGFaUEhPVHErQUdIbzBJd1FEQU9CZ05WSFE4QkFmOEVCQU1DQVlZdwpEd1lEVlIwVEFRSC9CQVV3QXdFQi96QWRCZ05WSFE0RUZnUVVlTXE1S013cnhkenVyaXhhUDBMSXYrSkh3UFV3CkNnWUlLb1pJemowRUF3SURTUUF3UmdJaEFJQlRscExtelM2c3pDek1yeGIyUTRJSVBKRE5sRzBIOEtVbGt2R28KbjBzVEFpRUFyRkwzVmxBRzJWa0RLNTRnL3p0amlwT1dpeHBkdFEwZ0ZmRFhoYlRWNDNnPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCi0tLS0tQkVHSU4gS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZzE1bWcxQ28vU3dFVEpMT3IKZ3FlZ2JLS2xNcDdwLytBdTl4dU5PcVhzc0NXaFJBTkNBQVNvTjhCcXV6N0M1SFV6U2Rwd2JERnU0aWNDSDVEcAplMis4Wkc2SEpMYVp5ZnRmRzRnOUwwSENpMkYwME90b0pGV2Z2VXRZR2cwSFRhWlBIT1RxK0FHSAotLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0K",
+    "tls/recovery/client.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJrakNDQVRpZ0F3SUJBZ0lSQU9kK0c0ck05eklnQTVYbmg1WHc2Qkl3Q2dZSUtvWkl6ajBFQXdJd0dERVcKTUJRR0ExVUVBeE1OWkdWdGJ5MXlaV052ZG1WeWVUQWVGdzB5TmpFeE1EVXlNRE16TXpSYUZ3MHlOekV4TURVeQpNRE00TXpSYU1DVXhJekFoQmdOVkJBTVRHbXRoY21GcmIzSmhiUzF2Y0dWdVltRnZMWEpsWTI5MlpYSjVNRmt3CkV3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFdkVDWEZZekoxM05XYUhEMGpieDV0ME9jdVhtV3hWcFEKVExQYW9hWjdzelh3K012a0VYNUtkMW95M0RuR3IwbUczUmNxY25VVk9EQXNZV2Y5QWJUMnZxTldNRlF3RGdZRApWUjBQQVFIL0JBUURBZ1dnTUJNR0ExVWRKUVFNTUFvR0NDc0dBUVVGQndNQ01Bd0dBMVVkRXdFQi93UUNNQUF3Ckh3WURWUjBqQkJnd0ZvQVVlTXE1S013cnhkenVyaXhhUDBMSXYrSkh3UFV3Q2dZSUtvWkl6ajBFQXdJRFNBQXcKUlFJaEFONzA5Z0RpR3MwOVlreGNuQXIzc2lLUk83b1AzVWd6eXNhWGJKckwxU3ZyQWlBbEVOOG1XQ1JGcnZwRQpQUXFDT1VyOWNpQzNGUmg2R1NQamthY1hnd1Yvcnc9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCi0tLS0tQkVHSU4gS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ2VyNkFSeDRNTmhSMnkzSHoKNVI2SjhoNisvR212MXVEOGdPOVUySWVON051aFJBTkNBQVM4UUpjVmpNblhjMVpvY1BTTnZIbTNRNXk1ZVpiRgpXbEJNczlxaHBudXpOZkQ0eStRUmZrcDNXakxjT2NhdlNZYmRGeXB5ZFJVNE1DeGhaLzBCdFBhKwotLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0K"
+  },
+  "Tokens": {
+    "demom0": {
+      "namespace": "default",
+      "cluster": "demo",
+      "member": "demom0"
+    }
+  },
+  "At": "2026-11-05T20:38:34.09270692Z",
+  "Internal": {
+    "configVersion": 3,
+    "exposureAdmission": {
+      "admitted": {
+        "public": false,
+        "ipType": "IPV6",
+        "allowlist": null
+      }
+    },
+    "initOwner": "demom0",
+    "initialized": true,
+    "members": [
+      {
+        "name": "demom0",
+        "volume": "demom0v",
+        "index": 0,
+        "stage": "ready",
+        "serviceId": "demom0",
+        "volumeId": "demom0v",
+        "runtimeRecovery": {
+          "retryRecordedAt": "0001-01-01T00:00:00Z",
+          "retryAt": "0001-01-01T00:00:00Z",
+          "initialized": true,
+          "deployed": true
+        },
+        "version": "2.7.1",
+        "desiredVersion": "2.7.1",
+        "configVersion": 3,
+        "appliedConfigVersion": 3,
+        "processGeneration": 1,
+        "restartFingerprint": "e41d4e228c3e70b96875f43d89d1262c1aab1f8e47e131171d16378225adc805",
+        "engineOptions": {
+          "seal": {
+            "type": "awskms",
+            "awskms": {
+              "region": "eu-west-1",
+              "kmsKeyId": "test-key"
+            }
+          }
+        },
+        "tlsMode": "requireTLS",
+        "resources": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 1,
+          "maxDisk": 3
+        },
+        "disk": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 5,
+          "maxDisk": 5
+        },
+        "configResources": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 1,
+          "maxDisk": 3
+        },
+        "configDisk": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 5,
+          "maxDisk": 5
+        },
+        "publicHash": "{\"Exposure\":{\"public\":false,\"ipType\":\"IPV6\",\"allowlist\":null},\"Target\":8200}",
+        "initialized": true,
+        "observed": true,
+        "sealed": false,
+        "active": true,
+        "standby": false,
+        "voter": true,
+        "healthy": true,
+        "leaderAddress": "https://demom0:8200"
+      }
+    ],
+    "nextIndex": 1,
+    "phase": "ready",
+    "uid": "kk_9rSTdxtjxe0xO7BAWuroSlb1RwNDoBZsyBUHHjPW1So7WwIK"
+  },
+  "EngineOptions": "{\"seal\":{\"type\":\"awskms\",\"awskms\":{\"region\":\"eu-west-1\",\"kmsKeyId\":\"test-key\"}}}"
+}

@@ -1,0 +1,176 @@
+{
+  "Revision": "eea8bd7",
+  "Cluster": {
+    "namespace": "default",
+    "name": "demo",
+    "spec": {
+      "provider": "test",
+      "version": "",
+      "topology": {
+        "type": ""
+      },
+      "components": {
+        "engine": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "configServer": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "router": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        }
+      },
+      "backup": {
+        "schedules": null,
+        "pitr": {
+          "enabled": false,
+          "oplogSpanMinutes": 0
+        }
+      },
+      "tls": {
+        "mode": "",
+        "ca": ""
+      },
+      "exposure": {
+        "public": false,
+        "ipType": "",
+        "allowlist": null
+      },
+      "monitoring": {
+        "enabled": false
+      },
+      "dataMcp": {
+        "enabled": true,
+        "access": "readWrite",
+        "scope": {},
+        "tools": {}
+      }
+    },
+    "status": {
+      "phase": "Creating",
+      "message": "Creating: queued platform provisioning",
+      "conditions": null,
+      "observedGeneration": 0,
+      "observedAt": "0001-01-01T00:00:00Z",
+      "members": null,
+      "connection": {
+        "hosts": null,
+        "uri": "",
+        "publicHosts": null
+      },
+      "backup": {},
+      "placement": {
+        "groups": null
+      }
+    },
+    "generation": 1,
+    "deleting": false,
+    "deleteOptions": {
+      "keepVolumes": false,
+      "keepBackups": false
+    },
+    "createdAt": "2026-11-05T20:43:14.273346114Z",
+    "updatedAt": "2026-11-05T20:43:14.273346114Z"
+  },
+  "Internal": {
+    "provider": "unchanged"
+  },
+  "Secrets": {
+    "datamcp/config": "eyJjbHVzdGVyIjoiZGVtbyIsIm1lbWJlciI6ImRlbW9tY3AiLCJlbmdpbmUiOiJkYXRhbWNwIiwiZW5naW5lU3BlYyI6eyJ1cHN0cmVhbSI6InBnZWRnZS1wb3N0Z3Jlcy1tY3AiLCJ2ZXJzaW9uIjoiMS4xLjAiLCJpbnN0YWxsRGlyIjoiL29wdC9rYXJha29yYW0vcGdlZGdlLXBvc3RncmVzLW1jcC0xLjEuMCIsInByb2Nlc3NlcyI6W3sibGV2ZWwiOiJyZWFkIiwicG9ydCI6MTgwODAsInVzZXJuYW1lIjoia2FyYWtvcmFtLW1jcC1ybyIsInBhc3N3b3JkIjoiZmlyc3QiLCJob3N0cyI6bnVsbCwidXJpIjoibW9uZ29kYjovL2RiOjI3MDE3IiwidGxzIjpmYWxzZSwibWF4RG9jdW1lbnRzIjoxMDAsIm1heFRpbWVNcyI6MzAwMDB9LHsibGV2ZWwiOiJyZWFkV3JpdGUiLCJwb3J0IjoxODA4MSwidXNlcm5hbWUiOiJrYXJha29yYW0tbWNwLXJ3IiwicGFzc3dvcmQiOiJmaXJzdCIsImhvc3RzIjpudWxsLCJ1cmkiOiJtb25nb2RiOi8vZGI6MjcwMTciLCJ0bHMiOmZhbHNlLCJtYXhEb2N1bWVudHMiOjEwMCwibWF4VGltZU1zIjozMDAwMH1dfSwicm9sZSI6ImRhdGFtY3AiLCJyZXBsU2V0TmFtZSI6IiIsInBvcnQiOjAsImVuZ2luZVZlcnNpb24iOiIxLjEuMCIsImVuZ2luZUNvbmZpZyI6IiIsImtleWZpbGUiOiIiLCJ0bHMiOnsibW9kZSI6IiIsImNhUEVNIjoiIiwiY2VydFBFTSI6IiIsImtleVBFTSI6IiJ9LCJhZ2VudFRMUyI6eyJjZXJ0UEVNIjoiLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tXG5NSUlCc2pDQ0FWaWdBd0lCQWdJUkFNOWg1aGlHOFpEUHhzOEJnSnpWMnlJd0NnWUlLb1pJemowRUF3SXdFakVRXG5NQTRHQTFVRUF4TUhZMngxYzNSbGNqQWVGdzB5TmpFeE1EVXlNRE00TVRSYUZ3MHlOekV5TURjeU1EUXpNVFJhXG5NQkl4RURBT0JnTlZCQU1UQjJSbGJXOXRZM0F3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVRoXG5jOGh6Y3lrN1ducWkrTHJEdENzRXBhR00rOFdTOUZvSnFtNDRIcE1vZnFIYU94TWJYZ0NWMTVJQ3hnWlowc3QwXG52alNEblVPWlhkUFVWaDc2Z25oZW80R09NSUdMTUE0R0ExVWREd0VCL3dRRUF3SUZvREFUQmdOVkhTVUVEREFLXG5CZ2dyQmdFRkJRY0RBVEFNQmdOVkhSTUJBZjhFQWpBQU1COEdBMVVkSXdRWU1CYUFGTWpEOTNFb0xieXFMcHo5XG5VM0F3MkdrM2RxS3hNRFVHQTFVZEVRUXVNQ3lDQjJSbGJXOXRZM0NDQ1d4dlkyRnNhRzl6ZEljRWZ3QUFBWWNRXG5BQUFBQUFBQUFBQUFBQUFBQUFBQUFUQUtCZ2dxaGtqT1BRUURBZ05JQURCRkFpQVErSEptOUxBd3NmamZmUmJGXG44My9OejY0TW1WRUtoR0VqZ25uTml3OEY2Z0loQU9Kd2NMRXlyQXd1UGJSY2JPRVkzaERvazdJdnVvTlJoSjhEXG5LdEJld3BLaVxuLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLVxuIiwia2V5UEVNIjoiLS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS1cbk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ2FaVHNRL2FNdnc3ZjBITk9cbmpGdlUyNkR0VFhiMERiUjI2OG5BOW5LbzY4MmhSQU5DQUFUaGM4aHpjeWs3V25xaStMckR0Q3NFcGFHTSs4V1NcbjlGb0pxbTQ0SHBNb2ZxSGFPeE1iWGdDVjE1SUN4Z1paMHN0MHZqU0RuVU9aWGRQVVZoNzZnbmhlXG4tLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS1cbiJ9LCJzeXN0ZW1Vc2VycyI6bnVsbCwicGJtRW5hYmxlZCI6ZmFsc2UsImRlc2lyZWRQcm9jZXNzZXMiOlsibWNwLXJvIiwibWNwLXJ3Il0sIm1haW50ZW5hbmNlIjpmYWxzZSwiY29uZmlnVmVyc2lvbiI6MX0=",
+    "datamcp/state": "eyJpZCI6InNlcnZpY2UtMSIsInN0YWdlIjoicmVhZHkiLCJydW50aW1lSGFzaCI6Ijg5NmQ5NTc3ZDRhM2YxNDA0MWIwYjExZTNlMmU1MDU2YjM4ZGM0Y2RmOGE3MzNjYTgzMDg3ZmZiYjE2ZWYwYjYiLCJzcGVjSGFzaCI6IjI0Yzc3MDRkMzlhZDUxZTQ3YmUwYTY4ZDZiNDQ1MTlhM2UwNTQyMDdmMjk2NjY5NzMzMTRlZmJhNjhhZTc1NzkifQ==",
+    "tls/ca.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJaakNDQVF1Z0F3SUJBZ0lSQUtObzI1U3d3Ulp3Z1RMRklEMGc4UlF3Q2dZSUtvWkl6ajBFQXdJd0VqRVEKTUE0R0ExVUVBeE1IWTJ4MWMzUmxjakFlRncweU5qRXhNRFV5TURNNE1UUmFGdzB6TmpFeE1ESXlNRFF6TVRSYQpNQkl4RURBT0JnTlZCQU1UQjJOc2RYTjBaWEl3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVMyCmhjdmZtVUYvTnpyYU55bE9oTDRoeFA0U2tIY0pkVHhrM2tXTVlXdk9Ia3JscWJlS2JtYitSNVRFZ3JFL0hqU1oKbW9xeDZVblNlb2dTOEhHT3d6ZThvMEl3UURBT0JnTlZIUThCQWY4RUJBTUNBWVl3RHdZRFZSMFRBUUgvQkFVdwpBd0VCL3pBZEJnTlZIUTRFRmdRVXlNUDNjU2d0dktvdW5QMVRjRERZYVRkMm9yRXdDZ1lJS29aSXpqMEVBd0lEClNRQXdSZ0loQUxyMnJyd1BjK3NwcFg4ZUxuampuMmlFMzN0NnhsNm9INC8vZHdUdFl6VUdBaUVBMVo1REt5RlQKWW05cmU4YWlyTTZZb0d4dkk1K21SRE53UjY5andZK3RXdGM9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K",
+    "tls/ca.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnVnZ6cGNIN1c0MVozd1pOSQp1OGJmUlBTSlViR2tNUWs3dS9vVkdBMTZsZDJoUkFOQ0FBUzJoY3ZmbVVGL056cmFOeWxPaEw0aHhQNFNrSGNKCmRUeGsza1dNWVd2T0hrcmxxYmVLYm1iK1I1VEVnckUvSGpTWm1vcXg2VW5TZW9nUzhIR093emU4Ci0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo="
+  },
+  "Tokens": {
+    "demomcp": "kk_2HY5icIRCVEtBrjPXnhvelveFlyUASwi73NLfpp5Zm5NgzgL"
+  },
+  "Services": [
+    {
+      "id": "service-1",
+      "hostname": "demomcp",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 1,
+        "minRam": 0.25,
+        "maxRam": 0.5,
+        "minDisk": 0,
+        "maxDisk": 0
+      },
+      "minContainers": 1,
+      "maxContainers": 1
+    }
+  ],
+  "Ownership": {
+    "demomcp": {
+      "KARAKORAM_AGENT_TOKEN": "kk_2HY5icIRCVEtBrjPXnhvelveFlyUASwi73NLfpp5Zm5NgzgL",
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_MEMBER": "demomcp",
+      "KARAKORAM_OWNER": "v1.22e40e2a6b9cbf9359fa6cc8344de890bad423c14440b5e95a648f5bd4199762"
+    }
+  },
+  "Runtime": {
+    "base": "ubuntu-24.04",
+    "prepare": [
+      "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl xz-utils python3",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://artifacts.invalid/pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'ca79e3054455b5505d3ac4ed4bc5d4cd074a57f108b8fe9ddcd3e24d16c5452a  pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz'\"'\"' | sha256sum -c -\npython3 -c '\"'\"'# SPDX-License-Identifier: Apache-2.0\n# Copyright 2026 The Karakoram Authors\n\"\"\"Validate tar headers, not locale-dependent human-readable tar listings.\"\"\"\nfrom collections import deque\nimport posixpath\nimport sys\nimport tarfile\n\n\ndef validate(filename, extensions):\n    with tarfile.open(filename, \"r:*\") as archive:\n        members = archive.getmembers()\n    entries = {}\n    symlinks = {}\n    roots = (\"usr/lib/postgresql/17\", \"usr/share/postgresql/17\")\n    ancestors = {\".\", \"usr\", \"usr/lib\", \"usr/share\", \"usr/lib/postgresql\", \"usr/share/postgresql\"}\n    for member in members:\n        name = member.name\n        if not name or name.startswith(\"/\") or \"..\" in name.split(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in name):\n            raise ValueError(\"invalid path: \" + repr(name))\n        name = posixpath.normpath(name)\n        if name in entries and not (member.isdir() and entries[name].isdir()):\n            raise ValueError(\"duplicate path: \" + repr(name))\n        entries[name] = member\n        if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):\n            raise ValueError(\"unsupported file type: \" + repr(name))\n        if extensions:\n            if not (member.isfile() or member.isdir()):\n                raise ValueError(\"unexpected extension archive type: \" + repr(name))\n            if not (any(name == root or name.startswith(root + \"/\") for root in roots) or (name in ancestors and member.isdir())):\n                raise ValueError(\"unexpected extension archive member: \" + repr(name))\n        if member.issym() or member.islnk():\n            if not member.linkname or member.linkname.startswith(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in member.linkname):\n                raise ValueError(\"invalid link target: \" + repr(name))\n        if member.issym():\n            symlinks[name] = member.linkname\n\n    def resolve(path, follow_final=True):\n        pending = deque(path.split(\"/\"))\n        resolved = []\n        followed = 0\n        while pending:\n            part = pending.popleft()\n            if part in (\"\", \".\"):\n                continue\n            if part == \"..\":\n                if not resolved:\n                    raise ValueError(\"link escapes destination: \" + repr(path))\n                resolved.pop()\n                continue\n            candidate = \"/\".join([*resolved, part])\n            if candidate in symlinks and (pending or follow_final):\n                followed += 1\n                if followed \u003e 40:\n                    raise ValueError(\"too many symbolic links: \" + repr(path))\n                pending.extendleft(reversed(symlinks[candidate].split(\"/\")))\n            else:\n                resolved.append(part)\n        return \"/\".join(resolved) or \".\"\n\n    for name, member in entries.items():\n        parent = posixpath.dirname(name)\n        while parent not in (\"\", \".\"):\n            if parent in symlinks:\n                raise ValueError(\"member traverses a symbolic link: \" + repr(name))\n            parent = posixpath.dirname(parent)\n        resolve(name)\n        if member.islnk():\n            # Hardlink targets are archive-root-relative, unlike symlinks.\n            target = member.linkname\n            seen = {name}\n            while True:\n                target = resolve(target, follow_final=False)\n                if target in seen or target not in entries:\n                    raise ValueError(\"invalid hardlink: \" + repr(name))\n                seen.add(target)\n                linked = entries[target]\n                if linked.isfile():\n                    break\n                if not linked.islnk():\n                    raise ValueError(\"hardlink must reference a regular file: \" + repr(name))\n                target = linked.linkname\n\n\nif __name__ == \"__main__\":\n    try:\n        validate(sys.argv[1], sys.argv[2] == \"extensions\")\n    except (OSError, ValueError, tarfile.TarError) as error:\n        sys.exit(\"unsafe archive member: \" + str(error))\n'\"'\"' \"$file\" '\"'\"'application'\"'\"'\nmkdir -p -m 0755 '\"'\"'/opt/karakoram'\"'\"'\nif mkdir -m 0755 '\"'\"'/opt/karakoram/pgedge-postgres-mcp-1.1.0'\"'\"' 2\u003e/dev/null; then\nchown -h '\"'\"'karakoram:karakoram'\"'\"' '\"'\"'/opt/karakoram/pgedge-postgres-mcp-1.1.0'\"'\"'\nfi\nsudo -u '\"'\"'karakoram'\"'\"' -- sh -c '\"'\"'set -eu\numask 022\nmkdir -p '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/pgedge-postgres-mcp-1.1.0'\"'\"'\"'\"'\"'\"'\"'\"'\ntar --no-same-owner --no-same-permissions --delay-directory-restore -xzf - -C '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/pgedge-postgres-mcp-1.1.0'\"'\"'\"'\"'\"'\"'\"'\"''\"'\"' \u003c \"$file\"\n'"
+    ],
+    "env": {
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/srv/karakoram/karakoram-data",
+      "KARAKORAM_ENGINE": "datamcp",
+      "KARAKORAM_INTERNAL_CA": "control-plane-ca",
+      "KARAKORAM_MEMBER": "demomcp",
+      "KARAKORAM_URL": "https://control-plane.invalid"
+    },
+    "args": [
+      "agent"
+    ],
+    "ports": [
+      {
+        "port": 9443,
+        "protocol": "tcp"
+      }
+    ],
+    "readiness": {
+      "args": [
+        "agent",
+        "readiness",
+        "--startup",
+        "--data-dir=/srv/karakoram/karakoram-data"
+      ],
+      "failureTimeout": 300000000000,
+      "retryPeriod": 10000000000
+    },
+    "stopBeforeStart": true
+  }
+}

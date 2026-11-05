@@ -1,0 +1,606 @@
+{
+  "At": "2026-11-05T21:12:25.506336073Z",
+  "Binding": {
+    "BindingID": "binding-1",
+    "Host": "postgres.example",
+    "Port": 5432,
+    "Databases": null,
+    "Username": "temporal_owner",
+    "PasswordSecretRef": "sealed-password",
+    "TLS": {
+      "Mode": "verify-full",
+      "CAPEM": "ZGF0YWJhc2UtY2E="
+    },
+    "MaxConnections": 200,
+    "CredentialGeneration": 1,
+    "Shared": true,
+    "ConsumerCount": 2
+  },
+  "Cluster": {
+    "namespace": "default",
+    "name": "workflows",
+    "spec": {
+      "provider": "temporal",
+      "version": "1.32.1",
+      "topology": {
+        "type": "combined"
+      },
+      "components": {
+        "engine": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 1,
+            "minRam": 1,
+            "maxRam": 1,
+            "minDisk": 1,
+            "maxDisk": 1
+          }
+        },
+        "configServer": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "router": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "extra": {
+          "frontend": {
+            "replicas": 0,
+            "resources": {
+              "cpuMode": "SHARED",
+              "minCpu": 1,
+              "maxCpu": 1,
+              "minRam": 1,
+              "maxRam": 1,
+              "minDisk": 1,
+              "maxDisk": 1
+            }
+          },
+          "history": {
+            "replicas": 0,
+            "resources": {
+              "cpuMode": "SHARED",
+              "minCpu": 1,
+              "maxCpu": 1,
+              "minRam": 1,
+              "maxRam": 1,
+              "minDisk": 1,
+              "maxDisk": 1
+            }
+          },
+          "matching": {
+            "replicas": 0,
+            "resources": {
+              "cpuMode": "SHARED",
+              "minCpu": 1,
+              "maxCpu": 1,
+              "minRam": 1,
+              "maxRam": 1,
+              "minDisk": 1,
+              "maxDisk": 1
+            }
+          },
+          "server": {
+            "replicas": 1,
+            "resources": {
+              "cpuMode": "SHARED",
+              "minCpu": 1,
+              "maxCpu": 1,
+              "minRam": 1,
+              "maxRam": 1,
+              "minDisk": 1,
+              "maxDisk": 1
+            }
+          },
+          "ui": {
+            "replicas": 1,
+            "resources": {
+              "cpuMode": "SHARED",
+              "minCpu": 1,
+              "maxCpu": 1,
+              "minRam": 1,
+              "maxRam": 1,
+              "minDisk": 1,
+              "maxDisk": 1
+            }
+          },
+          "worker": {
+            "replicas": 0,
+            "resources": {
+              "cpuMode": "SHARED",
+              "minCpu": 1,
+              "maxCpu": 1,
+              "minRam": 1,
+              "maxRam": 1,
+              "minDisk": 1,
+              "maxDisk": 1
+            }
+          }
+        }
+      },
+      "engineOptions": {
+        "persistence": {
+          "postgres": {
+            "cluster": "pg1"
+          }
+        },
+        "historyShards": 512,
+        "frontend": {
+          "requireClientAuth": true
+        },
+        "ui": {
+          "publicHttps": false
+        }
+      },
+      "backup": {
+        "schedules": null,
+        "pitr": {
+          "enabled": false,
+          "oplogSpanMinutes": 0
+        }
+      },
+      "tls": {
+        "mode": "requireTLS",
+        "ca": "selfSigned"
+      },
+      "exposure": {
+        "public": false,
+        "ipType": "",
+        "allowlist": null
+      },
+      "monitoring": {
+        "enabled": false
+      }
+    },
+    "status": {
+      "phase": "",
+      "conditions": null,
+      "observedGeneration": 1,
+      "observedAt": "0001-01-01T00:00:00Z",
+      "members": null,
+      "connection": {
+        "hosts": null,
+        "uri": "",
+        "publicHosts": null
+      },
+      "backup": {},
+      "placement": {
+        "guaranteedAntiAffinity": false,
+        "groups": null
+      }
+    },
+    "generation": 1,
+    "deleting": false,
+    "deleteOptions": {
+      "keepVolumes": false,
+      "keepBackups": false
+    },
+    "createdAt": "0001-01-01T00:00:00Z",
+    "updatedAt": "0001-01-01T00:00:00Z"
+  },
+  "Configs": {
+    "workflowsts": {
+      "cluster": "workflows",
+      "member": "workflowsts",
+      "engine": "temporal",
+      "engineSpec": {
+        "component": "server",
+        "version": "1.32.1",
+        "installDir": "/opt/karakoram/temporal-server-1.32-1.32.1",
+        "restartToken": "e17cb71bebdee51d477ceab7cb984987aecd4c9244578b12593699bc909de4ed",
+        "clusterName": "workflows",
+        "historyShards": 512,
+        "persistence": {
+          "host": "postgres.example",
+          "port": 5432,
+          "database": "temporal_workflows",
+          "visibilityDatabase": "temporal_workflows_visibility",
+          "username": "temporal_owner",
+          "password": "bound-password",
+          "caPEM": "database-ca",
+          "maxConns": 100,
+          "visibilityMaxConns": 100
+        },
+        "tls": {
+          "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBgTCCASegAwIBAgIRAL/4OpxIjc93WH0xRET3rVQwCgYIKoZIzj0EAwIwIDEe\nMBwGA1UEAxMVd29ya2Zsb3dzIFRlbXBvcmFsIENBMB4XDTI2MTEwNTIxMDcxMVoX\nDTM2MTEwMjIxMTIxMVowIDEeMBwGA1UEAxMVd29ya2Zsb3dzIFRlbXBvcmFsIENB\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEsS/ypyqk0wzAGZSlKIam7UxRN6iA\n2rJEei/hR29hePZkb3zR1Aqj4usLbTdDfsh3/CDWT9QWpPy+uceTiEgo7aNCMEAw\nDgYDVR0PAQH/BAQDAgGGMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFHQg4z6d\nrGhaLiIX/EIbxSWQxr2UMAoGCCqGSM49BAMCA0gAMEUCIQD/mF6ETlK4jFVvzcNE\nMBsWzW2hGQJvg005J8lDdd7GGwIgQ2InhSjgZfSscUtX5vL+d4iakvrjPoavq+qO\nnyEXJ88=\n-----END CERTIFICATE-----\n",
+          "internodeCertPEM": "-----BEGIN CERTIFICATE-----\nMIICAzCCAamgAwIBAgIRAN8aHqncenqu5+VIekhi+b4wCgYIKoZIzj0EAwIwIDEe\nMBwGA1UEAxMVd29ya2Zsb3dzIFRlbXBvcmFsIENBMB4XDTI2MTEwNTIxMDcxMVoX\nDTI3MTIwNzIxMTIxMVowIDEeMBwGA1UEAxMVd29ya2Zsb3dzdHMtaW50ZXJub2Rl\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEKVxvtbAxhdF/A54lL7QMG47nunIo\n/ilVujSKJYcUU4DKW7jF46mkgZFjzHZdbRqYrUOfUI8Y4lleeEOgitgdr6OBwzCB\nwDAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMC\nMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUdCDjPp2saFouIhf8QhvFJZDGvZQw\nYAYDVR0RBFkwV4ILd29ya2Zsb3dzdHOCCWxvY2FsaG9zdIIlaW50ZXJub2RlLnRl\nbXBvcmFsLmthcmFrb3JhbS5pbnRlcm5hbIcEfwAAAYcQAAAAAAAAAAAAAAAAAAAA\nATAKBggqhkjOPQQDAgNIADBFAiEAyqR3XlW3lG5L+ZqEccRhidfBzdDFiVfqooDa\ncZbMppgCICrQl15Cr5deiy9x9Ty3NjABXkNJ9e4d5mtkR8m/vY1f\n-----END CERTIFICATE-----\n",
+          "internodeKeyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg+Nb/+p8ustB/spRJ\nGzNya/U2hwRBIzzYBMpuryqw5E2hRANCAAQpXG+1sDGF0X8DniUvtAwbjue6cij+\nKVW6NIolhxRTgMpbuMXjqaSBkWPMdl1tGpitQ59QjxjiWV54Q6CK2B2v\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n",
+          "internodeServerName": "internode.temporal.karakoram.internal",
+          "frontendCertPEM": "-----BEGIN CERTIFICATE-----\nMIICBTCCAaqgAwIBAgIRAOSJuC8rNEZkHbmB/Pf5oKUwCgYIKoZIzj0EAwIwIDEe\nMBwGA1UEAxMVd29ya2Zsb3dzIFRlbXBvcmFsIENBMB4XDTI2MTEwNTIxMDcxMVoX\nDTI3MTIwNzIxMTIxMVowHzEdMBsGA1UEAxMUd29ya2Zsb3dzdHMtZnJvbnRlbmQw\nWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARjj0S5bIM5MeZpFx2IX87HtAHzSMFs\nCssxt4U3UOKE8jPkfj0lqJo0dn7z8QbaJoLb+FlR40r/jBOjUaydSEbho4HFMIHC\nMA4GA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8E\nAjAAMB8GA1UdIwQYMBaAFHQg4z6drGhaLiIX/EIbxSWQxr2UMGwGA1UdEQRlMGOC\nC3dvcmtmbG93c3Rzgglsb2NhbGhvc3SCJGZyb250ZW5kLnRlbXBvcmFsLmthcmFr\nb3JhbS5pbnRlcm5hbIILd29ya2Zsb3dzdHOHBH8AAAGHEAAAAAAAAAAAAAAAAAAA\nAAEwCgYIKoZIzj0EAwIDSQAwRgIhAKhjxbud3nUTx2eUdXFwChO/oGY23ZdvNtp3\nLdVYHst1AiEA260aygwH9Ed05TrF1+8qxowkuI3a1eZZeF5G7BAcpD4=\n-----END CERTIFICATE-----\n",
+          "frontendKeyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgHi+4RHKms3LHa+3F\nZrfpp6umSRvSFm+XDV4WkzNAwZihRANCAARjj0S5bIM5MeZpFx2IX87HtAHzSMFs\nCssxt4U3UOKE8jPkfj0lqJo0dn7z8QbaJoLb+FlR40r/jBOjUaydSEbh\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n",
+          "frontendServerName": "frontend.temporal.karakoram.internal",
+          "requireClientAuth": true
+        },
+        "frontendAddress": "workflowsts:7233"
+      },
+      "role": "server",
+      "replSetName": "",
+      "port": 7233,
+      "engineVersion": "1.32.1",
+      "engineConfig": "",
+      "keyfile": "",
+      "tls": {
+        "mode": "",
+        "caPEM": "",
+        "certPEM": "",
+        "keyPEM": ""
+      },
+      "agentTLS": {
+        "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBzzCCAXSgAwIBAgIRAOuwS8nhDMFbL4T5HV2oa/IwCgYIKoZIzj0EAwIwIDEe\nMBwGA1UEAxMVd29ya2Zsb3dzIFRlbXBvcmFsIENBMB4XDTI2MTEwNTIxMDcxMVoX\nDTI3MTIwNzIxMTIxMVowHDEaMBgGA1UEAxMRd29ya2Zsb3dzdHMtYWdlbnQwWTAT\nBgcqhkjOPQIBBggqhkjOPQMBBwNCAATWu83MOMTIcW4wJz2OC3l9GDKeUIpLf5Sz\nJCLqZJLJmO9n7Bi8jejNuKQSLSrzEPrs/P9Bl9cBdMiNWYhERm06o4GSMIGPMA4G\nA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8EAjAA\nMB8GA1UdIwQYMBaAFHQg4z6drGhaLiIX/EIbxSWQxr2UMDkGA1UdEQQyMDCCC3dv\ncmtmbG93c3Rzgglsb2NhbGhvc3SHBH8AAAGHEAAAAAAAAAAAAAAAAAAAAAEwCgYI\nKoZIzj0EAwIDSQAwRgIhAPpbmtzOnh2j2bgjloKAJFUC/RktAbW17K4W+Bo2SaCo\nAiEAqhBuKtjWKw4JainVZhTQYZiCOm6JKLmQaJndoXoxDc0=\n-----END CERTIFICATE-----\n",
+        "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgEQm1vAs9Y3gRiFDi\nnvrjTFlEDIf1RMcs220UJWA1FLWhRANCAATWu83MOMTIcW4wJz2OC3l9GDKeUIpL\nf5SzJCLqZJLJmO9n7Bi8jejNuKQSLSrzEPrs/P9Bl9cBdMiNWYhERm06\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+      },
+      "systemUsers": null,
+      "pbmEnabled": false,
+      "desiredProcesses": [
+        "temporal-server"
+      ],
+      "maintenance": false,
+      "configVersion": 1
+    },
+    "workflowstu": {
+      "cluster": "workflows",
+      "member": "workflowstu",
+      "engine": "temporal",
+      "engineSpec": {
+        "component": "ui",
+        "version": "2.56.0",
+        "installDir": "/opt/karakoram/temporal-ui-server-2.56.0",
+        "restartToken": "bf9edc1293c59141644dfdb434dabfa683a8d3d9c3b49612219cb59f88c0c1d3",
+        "clusterName": "workflows",
+        "historyShards": 512,
+        "tls": {
+          "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBgTCCASegAwIBAgIRAL/4OpxIjc93WH0xRET3rVQwCgYIKoZIzj0EAwIwIDEe\nMBwGA1UEAxMVd29ya2Zsb3dzIFRlbXBvcmFsIENBMB4XDTI2MTEwNTIxMDcxMVoX\nDTM2MTEwMjIxMTIxMVowIDEeMBwGA1UEAxMVd29ya2Zsb3dzIFRlbXBvcmFsIENB\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEsS/ypyqk0wzAGZSlKIam7UxRN6iA\n2rJEei/hR29hePZkb3zR1Aqj4usLbTdDfsh3/CDWT9QWpPy+uceTiEgo7aNCMEAw\nDgYDVR0PAQH/BAQDAgGGMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFHQg4z6d\nrGhaLiIX/EIbxSWQxr2UMAoGCCqGSM49BAMCA0gAMEUCIQD/mF6ETlK4jFVvzcNE\nMBsWzW2hGQJvg005J8lDdd7GGwIgQ2InhSjgZfSscUtX5vL+d4iakvrjPoavq+qO\nnyEXJ88=\n-----END CERTIFICATE-----\n",
+          "internodeCertPEM": "-----BEGIN CERTIFICATE-----\nMIICBDCCAamgAwIBAgIRAN2Orizj+4VuiMA4UShO3fEwCgYIKoZIzj0EAwIwIDEe\nMBwGA1UEAxMVd29ya2Zsb3dzIFRlbXBvcmFsIENBMB4XDTI2MTEwNTIxMDcxMVoX\nDTI3MTIwNzIxMTIxMVowIDEeMBwGA1UEAxMVd29ya2Zsb3dzdHUtaW50ZXJub2Rl\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEqZxq5gZQ7R1L/ynhSz78Anj7QY1N\ne5GwiItTe6UBolhkCcsIYQdc+01Q8O8I47xHnsWgxZV8DsVEER6Azkw+d6OBwzCB\nwDAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMC\nMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUdCDjPp2saFouIhf8QhvFJZDGvZQw\nYAYDVR0RBFkwV4ILd29ya2Zsb3dzdHWCCWxvY2FsaG9zdIIlaW50ZXJub2RlLnRl\nbXBvcmFsLmthcmFrb3JhbS5pbnRlcm5hbIcEfwAAAYcQAAAAAAAAAAAAAAAAAAAA\nATAKBggqhkjOPQQDAgNJADBGAiEAjwEpNIgqNdR1CiEcye3zWigHmP0rKaAUj7Mm\nmn6iCpICIQD+bVpmAAqME0iiVbtXaf6l/oBXcwd7Z+7F2yksCoEMUQ==\n-----END CERTIFICATE-----\n",
+          "internodeKeyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgUSWudrWPhgwi+bK7\n2jLgeGQVPUXnF+8b3MkwG26ssKWhRANCAASpnGrmBlDtHUv/KeFLPvwCePtBjU17\nkbCIi1N7pQGiWGQJywhhB1z7TVDw7wjjvEeexaDFlXwOxUQRHoDOTD53\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n",
+          "internodeServerName": "internode.temporal.karakoram.internal",
+          "frontendServerName": "frontend.temporal.karakoram.internal",
+          "requireClientAuth": true
+        },
+        "frontendAddress": "workflowsts:7233",
+        "ui": {}
+      },
+      "role": "ui",
+      "replSetName": "",
+      "port": 8080,
+      "engineVersion": "2.56.0",
+      "engineConfig": "",
+      "keyfile": "",
+      "tls": {
+        "mode": "",
+        "caPEM": "",
+        "certPEM": "",
+        "keyPEM": ""
+      },
+      "agentTLS": {
+        "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBzzCCAXSgAwIBAgIRAMyeEGAw1Ih+6HmvnkUVnEYwCgYIKoZIzj0EAwIwIDEe\nMBwGA1UEAxMVd29ya2Zsb3dzIFRlbXBvcmFsIENBMB4XDTI2MTEwNTIxMDcxMVoX\nDTI3MTIwNzIxMTIxMVowHDEaMBgGA1UEAxMRd29ya2Zsb3dzdHUtYWdlbnQwWTAT\nBgcqhkjOPQIBBggqhkjOPQMBBwNCAARloq8X169a50dt65c2pZGoLGhqZfu/+b2S\nvLGQMXt5Pg7nOcEJBF8Sqi0rUBqj6omqbRZLnJMN9qX3G6wHIHLZo4GSMIGPMA4G\nA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8EAjAA\nMB8GA1UdIwQYMBaAFHQg4z6drGhaLiIX/EIbxSWQxr2UMDkGA1UdEQQyMDCCC3dv\ncmtmbG93c3R1gglsb2NhbGhvc3SHBH8AAAGHEAAAAAAAAAAAAAAAAAAAAAEwCgYI\nKoZIzj0EAwIDSQAwRgIhAI4+goIxtko/Z94sG6EiFXwlG7/ZGXaqs1oB2Rmy5WF4\nAiEAnBbFrIoCeViifTyUWsAi/1ph3yP26z73BFnuTVnlNGA=\n-----END CERTIFICATE-----\n",
+        "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgCmqW1RfZ3u/pHEh+\nyN4PC82LjPgj8LmBAjlML18TErmhRANCAARloq8X169a50dt65c2pZGoLGhqZfu/\n+b2SvLGQMXt5Pg7nOcEJBF8Sqi0rUBqj6omqbRZLnJMN9qX3G6wHIHLZ\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+      },
+      "systemUsers": null,
+      "pbmEnabled": false,
+      "desiredProcesses": [
+        "ui-server"
+      ],
+      "maintenance": false,
+      "configVersion": 1
+    }
+  },
+  "Internal": {
+    "temporal": {
+      "members": {
+        "server": {
+          "name": "workflowsts",
+          "component": "server",
+          "serviceId": "service-1",
+          "stage": "joined",
+          "version": "1.32.1",
+          "configHash": "e17cb71bebdee51d477ceab7cb984987aecd4c9244578b12593699bc909de4ed",
+          "configVersion": 1,
+          "replicas": 1,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 1,
+            "minRam": 1,
+            "maxRam": 1,
+            "minDisk": 1,
+            "maxDisk": 1
+          },
+          "public": false,
+          "runtimeDeployed": true,
+          "observed": {
+            "component": "server",
+            "version": "1.32.1",
+            "restartToken": "e17cb71bebdee51d477ceab7cb984987aecd4c9244578b12593699bc909de4ed",
+            "ready": true,
+            "schemaVersion": "1.0",
+            "visibilitySchemaVersion": "1.1"
+          }
+        },
+        "ui": {
+          "name": "workflowstu",
+          "component": "ui",
+          "serviceId": "service-4",
+          "stage": "joined",
+          "version": "2.56.0",
+          "configHash": "bf9edc1293c59141644dfdb434dabfa683a8d3d9c3b49612219cb59f88c0c1d3",
+          "configVersion": 1,
+          "replicas": 1,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 1,
+            "minRam": 1,
+            "maxRam": 1,
+            "minDisk": 1,
+            "maxDisk": 1
+          },
+          "public": false,
+          "runtimeDeployed": true,
+          "observed": {
+            "component": "ui",
+            "version": "2.56.0",
+            "restartToken": "bf9edc1293c59141644dfdb434dabfa683a8d3d9c3b49612219cb59f88c0c1d3",
+            "ready": true,
+            "schemaVersion": "1.0",
+            "visibilitySchemaVersion": "1.1"
+          }
+        }
+      },
+      "bindingId": "binding-1",
+      "credentialGeneration": 1,
+      "binding": {
+        "sourceNamespace": "default",
+        "sourceCluster": "pg1",
+        "shared": true,
+        "consumerCount": 2
+      },
+      "namespaces": [
+        {
+          "name": "default",
+          "retention": "72h",
+          "state": "Registered"
+        }
+      ],
+      "namespaceHash": "23fc2a04c9479c216d5c06727263585f52e51986aaa69fbef93fa9141eed7ab5",
+      "version": "1.32.1"
+    }
+  },
+  "Ownership": {
+    "workflowsts": {
+      "KARAKORAM_AGENT_TOKEN": "kk_GcSMK3bTKcLxKloAs2ORnAVhL8IEX2BmtEIyqD0YBdUwXkJ9",
+      "KARAKORAM_CLUSTER": "workflows",
+      "KARAKORAM_MEMBER": "workflowsts",
+      "KARAKORAM_OWNER": "v1.f7c731e7a1df3d1e90ad0cb9d4cff5c44db93f6bfeb5d4239e10ffc3bd8840e4"
+    },
+    "workflowstu": {
+      "KARAKORAM_AGENT_TOKEN": "kk_MMkImL8A67ByFv4hpVAvfhpfRnJdQx3XKLZqPmiDEGysIyuQ",
+      "KARAKORAM_CLUSTER": "workflows",
+      "KARAKORAM_MEMBER": "workflowstu",
+      "KARAKORAM_OWNER": "v1.56e43c1397b904de1c0b26dcfccc06e3fe37670b6ae3ca3a3bbdcef6f5a29f8a"
+    }
+  },
+  "Revision": "441b0639",
+  "Runtime": {
+    "base": "ubuntu-24.04",
+    "prepare": [
+      "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl python3",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'ui-server_2.56.0_linux_amd64.tar.gz'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://github.com/temporalio/ui-server/releases/download/v2.56.0/ui-server_2.56.0_linux_amd64.tar.gz'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'c9d767a49815d475f00e4882f4cf4b00ff89d3253c9d410f41c93b40b739e2ec  ui-server_2.56.0_linux_amd64.tar.gz'\"'\"' | sha256sum -c -\npython3 -c '\"'\"'# SPDX-License-Identifier: Apache-2.0\n# Copyright 2026 The Karakoram Authors\n\"\"\"Validate tar headers, not locale-dependent human-readable tar listings.\"\"\"\nfrom collections import deque\nimport posixpath\nimport sys\nimport tarfile\n\n\ndef validate(filename, extensions):\n    with tarfile.open(filename, \"r:*\") as archive:\n        members = archive.getmembers()\n    entries = {}\n    symlinks = {}\n    roots = (\"usr/lib/postgresql/17\", \"usr/share/postgresql/17\")\n    ancestors = {\".\", \"usr\", \"usr/lib\", \"usr/share\", \"usr/lib/postgresql\", \"usr/share/postgresql\"}\n    for member in members:\n        name = member.name\n        if not name or name.startswith(\"/\") or \"..\" in name.split(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in name):\n            raise ValueError(\"invalid path: \" + repr(name))\n        name = posixpath.normpath(name)\n        if name in entries and not (member.isdir() and entries[name].isdir()):\n            raise ValueError(\"duplicate path: \" + repr(name))\n        entries[name] = member\n        if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):\n            raise ValueError(\"unsupported file type: \" + repr(name))\n        if extensions:\n            if not (member.isfile() or member.isdir()):\n                raise ValueError(\"unexpected extension archive type: \" + repr(name))\n            if not (any(name == root or name.startswith(root + \"/\") for root in roots) or (name in ancestors and member.isdir())):\n                raise ValueError(\"unexpected extension archive member: \" + repr(name))\n        if member.issym() or member.islnk():\n            if not member.linkname or member.linkname.startswith(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in member.linkname):\n                raise ValueError(\"invalid link target: \" + repr(name))\n        if member.issym():\n            symlinks[name] = member.linkname\n\n    def resolve(path, follow_final=True):\n        pending = deque(path.split(\"/\"))\n        resolved = []\n        followed = 0\n        while pending:\n            part = pending.popleft()\n            if part in (\"\", \".\"):\n                continue\n            if part == \"..\":\n                if not resolved:\n                    raise ValueError(\"link escapes destination: \" + repr(path))\n                resolved.pop()\n                continue\n            candidate = \"/\".join([*resolved, part])\n            if candidate in symlinks and (pending or follow_final):\n                followed += 1\n                if followed \u003e 40:\n                    raise ValueError(\"too many symbolic links: \" + repr(path))\n                pending.extendleft(reversed(symlinks[candidate].split(\"/\")))\n            else:\n                resolved.append(part)\n        return \"/\".join(resolved) or \".\"\n\n    for name, member in entries.items():\n        parent = posixpath.dirname(name)\n        while parent not in (\"\", \".\"):\n            if parent in symlinks:\n                raise ValueError(\"member traverses a symbolic link: \" + repr(name))\n            parent = posixpath.dirname(parent)\n        resolve(name)\n        if member.islnk():\n            # Hardlink targets are archive-root-relative, unlike symlinks.\n            target = member.linkname\n            seen = {name}\n            while True:\n                target = resolve(target, follow_final=False)\n                if target in seen or target not in entries:\n                    raise ValueError(\"invalid hardlink: \" + repr(name))\n                seen.add(target)\n                linked = entries[target]\n                if linked.isfile():\n                    break\n                if not linked.islnk():\n                    raise ValueError(\"hardlink must reference a regular file: \" + repr(name))\n                target = linked.linkname\n\n\nif __name__ == \"__main__\":\n    try:\n        validate(sys.argv[1], sys.argv[2] == \"extensions\")\n    except (OSError, ValueError, tarfile.TarError) as error:\n        sys.exit(\"unsafe archive member: \" + str(error))\n'\"'\"' \"$file\" '\"'\"'application'\"'\"'\nmkdir -p -m 0755 '\"'\"'/opt/karakoram'\"'\"'\nif mkdir -m 0755 '\"'\"'/opt/karakoram/temporal-ui-server-2.56.0'\"'\"' 2\u003e/dev/null; then\nchown -h '\"'\"'karakoram:karakoram'\"'\"' '\"'\"'/opt/karakoram/temporal-ui-server-2.56.0'\"'\"'\nfi\nsudo -u '\"'\"'karakoram'\"'\"' -- sh -c '\"'\"'set -eu\numask 022\nmkdir -p '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/temporal-ui-server-2.56.0'\"'\"'\"'\"'\"'\"'\"'\"'\ntar --no-same-owner --no-same-permissions --delay-directory-restore -xzf - -C '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/temporal-ui-server-2.56.0'\"'\"'\"'\"'\"'\"'\"'\"''\"'\"' \u003c \"$file\"\n'"
+    ],
+    "env": {
+      "KARAKORAM_CLUSTER": "workflows",
+      "KARAKORAM_DATA_DIR": "/srv/karakoram/karakoram-data",
+      "KARAKORAM_ENGINE": "temporal",
+      "KARAKORAM_INTERNAL_CA": "control-plane-ca",
+      "KARAKORAM_MEMBER": "workflowstu",
+      "KARAKORAM_URL": "https://control.example"
+    },
+    "args": [
+      "agent"
+    ],
+    "ports": [
+      {
+        "port": 9443,
+        "protocol": "tcp"
+      },
+      {
+        "port": 8080,
+        "protocol": "tcp",
+        "http": true
+      }
+    ],
+    "readiness": {
+      "args": [
+        "agent",
+        "readiness",
+        "--startup",
+        "--data-dir=/srv/karakoram/karakoram-data"
+      ],
+      "failureTimeout": 300000000000,
+      "retryPeriod": 10000000000
+    },
+    "stopBeforeStart": true
+  },
+  "Runtimes": {
+    "workflowsts": {
+      "base": "ubuntu-24.04",
+      "prepare": [
+        "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl python3",
+        "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'temporal_1.32.1_linux_amd64.tar.gz'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://github.com/temporalio/temporal/releases/download/v1.32.1/temporal_1.32.1_linux_amd64.tar.gz'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'4260448d650c1ba7ee7683ff0c93d5c6a1709260e3a7ef543bfa34e06cff6051  temporal_1.32.1_linux_amd64.tar.gz'\"'\"' | sha256sum -c -\npython3 -c '\"'\"'# SPDX-License-Identifier: Apache-2.0\n# Copyright 2026 The Karakoram Authors\n\"\"\"Validate tar headers, not locale-dependent human-readable tar listings.\"\"\"\nfrom collections import deque\nimport posixpath\nimport sys\nimport tarfile\n\n\ndef validate(filename, extensions):\n    with tarfile.open(filename, \"r:*\") as archive:\n        members = archive.getmembers()\n    entries = {}\n    symlinks = {}\n    roots = (\"usr/lib/postgresql/17\", \"usr/share/postgresql/17\")\n    ancestors = {\".\", \"usr\", \"usr/lib\", \"usr/share\", \"usr/lib/postgresql\", \"usr/share/postgresql\"}\n    for member in members:\n        name = member.name\n        if not name or name.startswith(\"/\") or \"..\" in name.split(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in name):\n            raise ValueError(\"invalid path: \" + repr(name))\n        name = posixpath.normpath(name)\n        if name in entries and not (member.isdir() and entries[name].isdir()):\n            raise ValueError(\"duplicate path: \" + repr(name))\n        entries[name] = member\n        if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):\n            raise ValueError(\"unsupported file type: \" + repr(name))\n        if extensions:\n            if not (member.isfile() or member.isdir()):\n                raise ValueError(\"unexpected extension archive type: \" + repr(name))\n            if not (any(name == root or name.startswith(root + \"/\") for root in roots) or (name in ancestors and member.isdir())):\n                raise ValueError(\"unexpected extension archive member: \" + repr(name))\n        if member.issym() or member.islnk():\n            if not member.linkname or member.linkname.startswith(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in member.linkname):\n                raise ValueError(\"invalid link target: \" + repr(name))\n        if member.issym():\n            symlinks[name] = member.linkname\n\n    def resolve(path, follow_final=True):\n        pending = deque(path.split(\"/\"))\n        resolved = []\n        followed = 0\n        while pending:\n            part = pending.popleft()\n            if part in (\"\", \".\"):\n                continue\n            if part == \"..\":\n                if not resolved:\n                    raise ValueError(\"link escapes destination: \" + repr(path))\n                resolved.pop()\n                continue\n            candidate = \"/\".join([*resolved, part])\n            if candidate in symlinks and (pending or follow_final):\n                followed += 1\n                if followed \u003e 40:\n                    raise ValueError(\"too many symbolic links: \" + repr(path))\n                pending.extendleft(reversed(symlinks[candidate].split(\"/\")))\n            else:\n                resolved.append(part)\n        return \"/\".join(resolved) or \".\"\n\n    for name, member in entries.items():\n        parent = posixpath.dirname(name)\n        while parent not in (\"\", \".\"):\n            if parent in symlinks:\n                raise ValueError(\"member traverses a symbolic link: \" + repr(name))\n            parent = posixpath.dirname(parent)\n        resolve(name)\n        if member.islnk():\n            # Hardlink targets are archive-root-relative, unlike symlinks.\n            target = member.linkname\n            seen = {name}\n            while True:\n                target = resolve(target, follow_final=False)\n                if target in seen or target not in entries:\n                    raise ValueError(\"invalid hardlink: \" + repr(name))\n                seen.add(target)\n                linked = entries[target]\n                if linked.isfile():\n                    break\n                if not linked.islnk():\n                    raise ValueError(\"hardlink must reference a regular file: \" + repr(name))\n                target = linked.linkname\n\n\nif __name__ == \"__main__\":\n    try:\n        validate(sys.argv[1], sys.argv[2] == \"extensions\")\n    except (OSError, ValueError, tarfile.TarError) as error:\n        sys.exit(\"unsafe archive member: \" + str(error))\n'\"'\"' \"$file\" '\"'\"'application'\"'\"'\nmkdir -p -m 0755 '\"'\"'/opt/karakoram'\"'\"'\nif mkdir -m 0755 '\"'\"'/opt/karakoram/temporal-server-1.32-1.32.1'\"'\"' 2\u003e/dev/null; then\nchown -h '\"'\"'karakoram:karakoram'\"'\"' '\"'\"'/opt/karakoram/temporal-server-1.32-1.32.1'\"'\"'\nfi\nsudo -u '\"'\"'karakoram'\"'\"' -- sh -c '\"'\"'set -eu\numask 022\nmkdir -p '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/temporal-server-1.32-1.32.1'\"'\"'\"'\"'\"'\"'\"'\"'\ntar --no-same-owner --no-same-permissions --delay-directory-restore -xzf - -C '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/temporal-server-1.32-1.32.1'\"'\"'\"'\"'\"'\"'\"'\"''\"'\"' \u003c \"$file\"\n'"
+      ],
+      "env": {
+        "KARAKORAM_CLUSTER": "workflows",
+        "KARAKORAM_DATA_DIR": "/srv/karakoram/karakoram-data",
+        "KARAKORAM_ENGINE": "temporal",
+        "KARAKORAM_INTERNAL_CA": "control-plane-ca",
+        "KARAKORAM_MEMBER": "workflowsts",
+        "KARAKORAM_URL": "https://control.example"
+      },
+      "args": [
+        "agent"
+      ],
+      "ports": [
+        {
+          "port": 9443,
+          "protocol": "tcp"
+        },
+        {
+          "port": 7234,
+          "protocol": "tcp"
+        },
+        {
+          "port": 6934,
+          "protocol": "tcp"
+        },
+        {
+          "port": 7235,
+          "protocol": "tcp"
+        },
+        {
+          "port": 6935,
+          "protocol": "tcp"
+        },
+        {
+          "port": 7233,
+          "protocol": "tcp"
+        },
+        {
+          "port": 6933,
+          "protocol": "tcp"
+        },
+        {
+          "port": 7243,
+          "protocol": "tcp"
+        },
+        {
+          "port": 7239,
+          "protocol": "tcp"
+        },
+        {
+          "port": 6939,
+          "protocol": "tcp"
+        }
+      ],
+      "readiness": {
+        "args": [
+          "agent",
+          "readiness",
+          "--startup",
+          "--data-dir=/srv/karakoram/karakoram-data"
+        ],
+        "failureTimeout": 300000000000,
+        "retryPeriod": 10000000000
+      },
+      "stopBeforeStart": true
+    },
+    "workflowstu": {
+      "base": "ubuntu-24.04",
+      "prepare": [
+        "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl python3",
+        "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'ui-server_2.56.0_linux_amd64.tar.gz'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://github.com/temporalio/ui-server/releases/download/v2.56.0/ui-server_2.56.0_linux_amd64.tar.gz'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'c9d767a49815d475f00e4882f4cf4b00ff89d3253c9d410f41c93b40b739e2ec  ui-server_2.56.0_linux_amd64.tar.gz'\"'\"' | sha256sum -c -\npython3 -c '\"'\"'# SPDX-License-Identifier: Apache-2.0\n# Copyright 2026 The Karakoram Authors\n\"\"\"Validate tar headers, not locale-dependent human-readable tar listings.\"\"\"\nfrom collections import deque\nimport posixpath\nimport sys\nimport tarfile\n\n\ndef validate(filename, extensions):\n    with tarfile.open(filename, \"r:*\") as archive:\n        members = archive.getmembers()\n    entries = {}\n    symlinks = {}\n    roots = (\"usr/lib/postgresql/17\", \"usr/share/postgresql/17\")\n    ancestors = {\".\", \"usr\", \"usr/lib\", \"usr/share\", \"usr/lib/postgresql\", \"usr/share/postgresql\"}\n    for member in members:\n        name = member.name\n        if not name or name.startswith(\"/\") or \"..\" in name.split(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in name):\n            raise ValueError(\"invalid path: \" + repr(name))\n        name = posixpath.normpath(name)\n        if name in entries and not (member.isdir() and entries[name].isdir()):\n            raise ValueError(\"duplicate path: \" + repr(name))\n        entries[name] = member\n        if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):\n            raise ValueError(\"unsupported file type: \" + repr(name))\n        if extensions:\n            if not (member.isfile() or member.isdir()):\n                raise ValueError(\"unexpected extension archive type: \" + repr(name))\n            if not (any(name == root or name.startswith(root + \"/\") for root in roots) or (name in ancestors and member.isdir())):\n                raise ValueError(\"unexpected extension archive member: \" + repr(name))\n        if member.issym() or member.islnk():\n            if not member.linkname or member.linkname.startswith(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in member.linkname):\n                raise ValueError(\"invalid link target: \" + repr(name))\n        if member.issym():\n            symlinks[name] = member.linkname\n\n    def resolve(path, follow_final=True):\n        pending = deque(path.split(\"/\"))\n        resolved = []\n        followed = 0\n        while pending:\n            part = pending.popleft()\n            if part in (\"\", \".\"):\n                continue\n            if part == \"..\":\n                if not resolved:\n                    raise ValueError(\"link escapes destination: \" + repr(path))\n                resolved.pop()\n                continue\n            candidate = \"/\".join([*resolved, part])\n            if candidate in symlinks and (pending or follow_final):\n                followed += 1\n                if followed \u003e 40:\n                    raise ValueError(\"too many symbolic links: \" + repr(path))\n                pending.extendleft(reversed(symlinks[candidate].split(\"/\")))\n            else:\n                resolved.append(part)\n        return \"/\".join(resolved) or \".\"\n\n    for name, member in entries.items():\n        parent = posixpath.dirname(name)\n        while parent not in (\"\", \".\"):\n            if parent in symlinks:\n                raise ValueError(\"member traverses a symbolic link: \" + repr(name))\n            parent = posixpath.dirname(parent)\n        resolve(name)\n        if member.islnk():\n            # Hardlink targets are archive-root-relative, unlike symlinks.\n            target = member.linkname\n            seen = {name}\n            while True:\n                target = resolve(target, follow_final=False)\n                if target in seen or target not in entries:\n                    raise ValueError(\"invalid hardlink: \" + repr(name))\n                seen.add(target)\n                linked = entries[target]\n                if linked.isfile():\n                    break\n                if not linked.islnk():\n                    raise ValueError(\"hardlink must reference a regular file: \" + repr(name))\n                target = linked.linkname\n\n\nif __name__ == \"__main__\":\n    try:\n        validate(sys.argv[1], sys.argv[2] == \"extensions\")\n    except (OSError, ValueError, tarfile.TarError) as error:\n        sys.exit(\"unsafe archive member: \" + str(error))\n'\"'\"' \"$file\" '\"'\"'application'\"'\"'\nmkdir -p -m 0755 '\"'\"'/opt/karakoram'\"'\"'\nif mkdir -m 0755 '\"'\"'/opt/karakoram/temporal-ui-server-2.56.0'\"'\"' 2\u003e/dev/null; then\nchown -h '\"'\"'karakoram:karakoram'\"'\"' '\"'\"'/opt/karakoram/temporal-ui-server-2.56.0'\"'\"'\nfi\nsudo -u '\"'\"'karakoram'\"'\"' -- sh -c '\"'\"'set -eu\numask 022\nmkdir -p '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/temporal-ui-server-2.56.0'\"'\"'\"'\"'\"'\"'\"'\"'\ntar --no-same-owner --no-same-permissions --delay-directory-restore -xzf - -C '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/temporal-ui-server-2.56.0'\"'\"'\"'\"'\"'\"'\"'\"''\"'\"' \u003c \"$file\"\n'"
+      ],
+      "env": {
+        "KARAKORAM_CLUSTER": "workflows",
+        "KARAKORAM_DATA_DIR": "/srv/karakoram/karakoram-data",
+        "KARAKORAM_ENGINE": "temporal",
+        "KARAKORAM_INTERNAL_CA": "control-plane-ca",
+        "KARAKORAM_MEMBER": "workflowstu",
+        "KARAKORAM_URL": "https://control.example"
+      },
+      "args": [
+        "agent"
+      ],
+      "ports": [
+        {
+          "port": 9443,
+          "protocol": "tcp"
+        },
+        {
+          "port": 8080,
+          "protocol": "tcp",
+          "http": true
+        }
+      ],
+      "readiness": {
+        "args": [
+          "agent",
+          "readiness",
+          "--startup",
+          "--data-dir=/srv/karakoram/karakoram-data"
+        ],
+        "failureTimeout": 300000000000,
+        "retryPeriod": 10000000000
+      },
+      "stopBeforeStart": true
+    }
+  },
+  "Secrets": {
+    "temporal/agent-cert/workflowsts": "eyJjZXJ0UEVNIjoiLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tXG5NSUlCenpDQ0FYU2dBd0lCQWdJUkFPdXdTOG5oRE1GYkw0VDVIVjJvYS9Jd0NnWUlLb1pJemowRUF3SXdJREVlXG5NQndHQTFVRUF4TVZkMjl5YTJac2IzZHpJRlJsYlhCdmNtRnNJRU5CTUI0WERUSTJNVEV3TlRJeE1EY3hNVm9YXG5EVEkzTVRJd056SXhNVEl4TVZvd0hERWFNQmdHQTFVRUF4TVJkMjl5YTJac2IzZHpkSE10WVdkbGJuUXdXVEFUXG5CZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFUV3U4M01PTVRJY1c0d0p6Mk9DM2w5R0RLZVVJcExmNVN6XG5KQ0xxWkpMSm1POW43Qmk4amVqTnVLUVNMU3J6RVBycy9QOUJsOWNCZE1pTldZaEVSbTA2bzRHU01JR1BNQTRHXG5BMVVkRHdFQi93UUVBd0lGb0RBVEJnTlZIU1VFRERBS0JnZ3JCZ0VGQlFjREFUQU1CZ05WSFJNQkFmOEVBakFBXG5NQjhHQTFVZEl3UVlNQmFBRkhRZzR6NmRyR2hhTGlJWC9FSWJ4U1dReHIyVU1Ea0dBMVVkRVFReU1EQ0NDM2R2XG5jbXRtYkc5M2MzUnpnZ2xzYjJOaGJHaHZjM1NIQkg4QUFBR0hFQUFBQUFBQUFBQUFBQUFBQUFBQUFBRXdDZ1lJXG5Lb1pJemowRUF3SURTUUF3UmdJaEFQcGJtdHpPbmgyajJiZ2psb0tBSkZVQy9Sa3RBYlcxN0s0VytCbzJTYUNvXG5BaUVBcWhCdUt0aldLdzRKYWluVlpoVFFZWmlDT202SktMbVFhSm5kb1hveERjMD1cbi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS1cbiIsImtleVBFTSI6Ii0tLS0tQkVHSU4gS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tXG5NSUdIQWdFQU1CTUdCeXFHU000OUFnRUdDQ3FHU000OUF3RUhCRzB3YXdJQkFRUWdFUW0xdkFzOVkzZ1JpRkRpXG5udnJqVEZsRURJZjFSTWNzMjIwVUpXQTFGTFdoUkFOQ0FBVFd1ODNNT01USWNXNHdKejJPQzNsOUdES2VVSXBMXG5mNVN6SkNMcVpKTEptTzluN0JpOGplak51S1FTTFNyekVQcnMvUDlCbDljQmRNaU5XWWhFUm0wNlxuLS0tLS1FTkQgS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tXG4ifQ==",
+    "temporal/agent-cert/workflowstu": "eyJjZXJ0UEVNIjoiLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tXG5NSUlCenpDQ0FYU2dBd0lCQWdJUkFNeWVFR0F3MUloKzZIbXZua1VWbkVZd0NnWUlLb1pJemowRUF3SXdJREVlXG5NQndHQTFVRUF4TVZkMjl5YTJac2IzZHpJRlJsYlhCdmNtRnNJRU5CTUI0WERUSTJNVEV3TlRJeE1EY3hNVm9YXG5EVEkzTVRJd056SXhNVEl4TVZvd0hERWFNQmdHQTFVRUF4TVJkMjl5YTJac2IzZHpkSFV0WVdkbGJuUXdXVEFUXG5CZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFSbG9xOFgxNjlhNTBkdDY1YzJwWkdvTEdocVpmdS8rYjJTXG52TEdRTVh0NVBnN25PY0VKQkY4U3FpMHJVQnFqNm9tcWJSWkxuSk1OOXFYM0c2d0hJSExabzRHU01JR1BNQTRHXG5BMVVkRHdFQi93UUVBd0lGb0RBVEJnTlZIU1VFRERBS0JnZ3JCZ0VGQlFjREFUQU1CZ05WSFJNQkFmOEVBakFBXG5NQjhHQTFVZEl3UVlNQmFBRkhRZzR6NmRyR2hhTGlJWC9FSWJ4U1dReHIyVU1Ea0dBMVVkRVFReU1EQ0NDM2R2XG5jbXRtYkc5M2MzUjFnZ2xzYjJOaGJHaHZjM1NIQkg4QUFBR0hFQUFBQUFBQUFBQUFBQUFBQUFBQUFBRXdDZ1lJXG5Lb1pJemowRUF3SURTUUF3UmdJaEFJNCtnb0l4dGtvL1o5NHNHNkVpRlh3bEc3L1pHWGFxczFvQjJSbXk1V0Y0XG5BaUVBbkJiRnJJb0NlVmlpZlR5VVdzQWkvMXBoM3lQMjZ6NzNCRm51VFZubE5HQT1cbi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS1cbiIsImtleVBFTSI6Ii0tLS0tQkVHSU4gS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tXG5NSUdIQWdFQU1CTUdCeXFHU000OUFnRUdDQ3FHU000OUF3RUhCRzB3YXdJQkFRUWdDbXFXMVJmWjN1L3BIRWgrXG55TjRQQzgyTGpQZ2o4TG1CQWpsTUwxOFRFcm1oUkFOQ0FBUmxvcThYMTY5YTUwZHQ2NWMycFpHb0xHaHFaZnUvXG4rYjJTdkxHUU1YdDVQZzduT2NFSkJGOFNxaTByVUJxajZvbXFiUlpMbkpNTjlxWDNHNndISUhMWlxuLS0tLS1FTkQgS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tXG4ifQ==",
+    "temporal/config/workflowsts": "eyJjbHVzdGVyIjoid29ya2Zsb3dzIiwibWVtYmVyIjoid29ya2Zsb3dzdHMiLCJlbmdpbmUiOiJ0ZW1wb3JhbCIsImVuZ2luZVNwZWMiOnsiY29tcG9uZW50Ijoic2VydmVyIiwidmVyc2lvbiI6IjEuMzIuMSIsImluc3RhbGxEaXIiOiIvb3B0L2thcmFrb3JhbS90ZW1wb3JhbC1zZXJ2ZXItMS4zMi0xLjMyLjEiLCJyZXN0YXJ0VG9rZW4iOiJlMTdjYjcxYmViZGVlNTFkNDc3Y2VhYjdjYjk4NDk4N2FlY2Q0YzkyNDQ1NzhiMTI1OTM2OTliYzkwOWRlNGVkIiwiY2x1c3Rlck5hbWUiOiJ3b3JrZmxvd3MiLCJoaXN0b3J5U2hhcmRzIjo1MTIsInBlcnNpc3RlbmNlIjp7Imhvc3QiOiJwb3N0Z3Jlcy5leGFtcGxlIiwicG9ydCI6NTQzMiwiZGF0YWJhc2UiOiJ0ZW1wb3JhbF93b3JrZmxvd3MiLCJ2aXNpYmlsaXR5RGF0YWJhc2UiOiJ0ZW1wb3JhbF93b3JrZmxvd3NfdmlzaWJpbGl0eSIsInVzZXJuYW1lIjoidGVtcG9yYWxfb3duZXIiLCJwYXNzd29yZCI6ImJvdW5kLXBhc3N3b3JkIiwiY2FQRU0iOiJkYXRhYmFzZS1jYSIsIm1heENvbm5zIjoxMDAsInZpc2liaWxpdHlNYXhDb25ucyI6MTAwfSwidGxzIjp7ImNhUEVNIjoiLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tXG5NSUlCZ1RDQ0FTZWdBd0lCQWdJUkFMLzRPcHhJamM5M1dIMHhSRVQzclZRd0NnWUlLb1pJemowRUF3SXdJREVlXG5NQndHQTFVRUF4TVZkMjl5YTJac2IzZHpJRlJsYlhCdmNtRnNJRU5CTUI0WERUSTJNVEV3TlRJeE1EY3hNVm9YXG5EVE0yTVRFd01qSXhNVEl4TVZvd0lERWVNQndHQTFVRUF4TVZkMjl5YTJac2IzZHpJRlJsYlhCdmNtRnNJRU5CXG5NRmt3RXdZSEtvWkl6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVzUy95cHlxazB3ekFHWlNsS0lhbTdVeFJONmlBXG4yckpFZWkvaFIyOWhlUFprYjN6UjFBcWo0dXNMYlRkRGZzaDMvQ0RXVDlRV3BQeSt1Y2VUaUVnbzdhTkNNRUF3XG5EZ1lEVlIwUEFRSC9CQVFEQWdHR01BOEdBMVVkRXdFQi93UUZNQU1CQWY4d0hRWURWUjBPQkJZRUZIUWc0ejZkXG5yR2hhTGlJWC9FSWJ4U1dReHIyVU1Bb0dDQ3FHU000OUJBTUNBMGdBTUVVQ0lRRC9tRjZFVGxLNGpGVnZ6Y05FXG5NQnNXelcyaEdRSnZnMDA1SjhsRGRkN0dHd0lnUTJJbmhTamdaZlNzY1V0WDV2TCtkNGlha3ZyalBvYXZxK3FPXG5ueUVYSjg4PVxuLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLVxuIiwiaW50ZXJub2RlQ2VydFBFTSI6Ii0tLS0tQkVHSU4gQ0VSVElGSUNBVEUtLS0tLVxuTUlJQ0F6Q0NBYW1nQXdJQkFnSVJBTjhhSHFuY2VucXU1K1ZJZWtoaStiNHdDZ1lJS29aSXpqMEVBd0l3SURFZVxuTUJ3R0ExVUVBeE1WZDI5eWEyWnNiM2R6SUZSbGJYQnZjbUZzSUVOQk1CNFhEVEkyTVRFd05USXhNRGN4TVZvWFxuRFRJM01USXdOekl4TVRJeE1Wb3dJREVlTUJ3R0ExVUVBeE1WZDI5eWEyWnNiM2R6ZEhNdGFXNTBaWEp1YjJSbFxuTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFS1Z4dnRiQXhoZEYvQTU0bEw3UU1HNDdudW5Jb1xuL2lsVnVqU0tKWWNVVTRES1c3akY0Nm1rZ1pGanpIWmRiUnFZclVPZlVJOFk0bGxlZUVPZ2l0Z2RyNk9Cd3pDQlxud0RBT0JnTlZIUThCQWY4RUJBTUNCYUF3SFFZRFZSMGxCQll3RkFZSUt3WUJCUVVIQXdFR0NDc0dBUVVGQndNQ1xuTUF3R0ExVWRFd0VCL3dRQ01BQXdId1lEVlIwakJCZ3dGb0FVZENEalBwMnNhRm91SWhmOFFodkZKWkRHdlpRd1xuWUFZRFZSMFJCRmt3VjRJTGQyOXlhMlpzYjNkemRIT0NDV3h2WTJGc2FHOXpkSUlsYVc1MFpYSnViMlJsTG5SbFxuYlhCdmNtRnNMbXRoY21GcmIzSmhiUzVwYm5SbGNtNWhiSWNFZndBQUFZY1FBQUFBQUFBQUFBQUFBQUFBQUFBQVxuQVRBS0JnZ3Foa2pPUFFRREFnTklBREJGQWlFQXlxUjNYbFczbEc1TCtacUVjY1JoaWRmQnpkREZpVmZxb29EYVxuY1piTXBwZ0NJQ3JRbDE1Q3I1ZGVpeTl4OVR5M05qQUJYa05KOWU0ZDVtdGtSOG0vdlkxZlxuLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLVxuIiwiaW50ZXJub2RlS2V5UEVNIjoiLS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS1cbk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZytOYi8rcDh1c3RCL3NwUkpcbkd6TnlhL1UyaHdSQkl6ellCTXB1cnlxdzVFMmhSQU5DQUFRcFhHKzFzREdGMFg4RG5pVXZ0QXdianVlNmNpaitcbktWVzZOSW9saHhSVGdNcGJ1TVhqcWFTQmtXUE1kbDF0R3BpdFE1OVFqeGppV1Y1NFE2Q0syQjJ2XG4tLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS1cbiIsImludGVybm9kZVNlcnZlck5hbWUiOiJpbnRlcm5vZGUudGVtcG9yYWwua2FyYWtvcmFtLmludGVybmFsIiwiZnJvbnRlbmRDZXJ0UEVNIjoiLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tXG5NSUlDQlRDQ0FhcWdBd0lCQWdJUkFPU0p1QzhyTkVaa0hibUIvUGY1b0tVd0NnWUlLb1pJemowRUF3SXdJREVlXG5NQndHQTFVRUF4TVZkMjl5YTJac2IzZHpJRlJsYlhCdmNtRnNJRU5CTUI0WERUSTJNVEV3TlRJeE1EY3hNVm9YXG5EVEkzTVRJd056SXhNVEl4TVZvd0h6RWRNQnNHQTFVRUF4TVVkMjl5YTJac2IzZHpkSE10Wm5KdmJuUmxibVF3XG5XVEFUQmdjcWhrak9QUUlCQmdncWhrak9QUU1CQndOQ0FBUmpqMFM1YklNNU1lWnBGeDJJWDg3SHRBSHpTTUZzXG5Dc3N4dDRVM1VPS0U4alBrZmowbHFKbzBkbjd6OFFiYUpvTGIrRmxSNDByL2pCT2pVYXlkU0ViaG80SEZNSUhDXG5NQTRHQTFVZER3RUIvd1FFQXdJRm9EQVRCZ05WSFNVRUREQUtCZ2dyQmdFRkJRY0RBVEFNQmdOVkhSTUJBZjhFXG5BakFBTUI4R0ExVWRJd1FZTUJhQUZIUWc0ejZkckdoYUxpSVgvRUlieFNXUXhyMlVNR3dHQTFVZEVRUmxNR09DXG5DM2R2Y210bWJHOTNjM1J6Z2dsc2IyTmhiR2h2YzNTQ0pHWnliMjUwWlc1a0xuUmxiWEJ2Y21Gc0xtdGhjbUZyXG5iM0poYlM1cGJuUmxjbTVoYklJTGQyOXlhMlpzYjNkemRIT0hCSDhBQUFHSEVBQUFBQUFBQUFBQUFBQUFBQUFBXG5BQUV3Q2dZSUtvWkl6ajBFQXdJRFNRQXdSZ0loQUtoanhidWQzblVUeDJlVWRYRndDaE8vb0dZMjNaZHZOdHAzXG5MZFZZSHN0MUFpRUEyNjBheWd3SDlFZDA1VHJGMSs4cXhvd2t1STNhMWVaWmVGNUc3QkFjcEQ0PVxuLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLVxuIiwiZnJvbnRlbmRLZXlQRU0iOiItLS0tLUJFR0lOIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLVxuTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnSGkrNFJIS21zM0xIYSszRlxuWnJmcHA2dW1TUnZTRm0rWERWNFdrek5Bd1ppaFJBTkNBQVJqajBTNWJJTTVNZVpwRngySVg4N0h0QUh6U01Gc1xuQ3NzeHQ0VTNVT0tFOGpQa2ZqMGxxSm8wZG43ejhRYmFKb0xiK0ZsUjQwci9qQk9qVWF5ZFNFYmhcbi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLVxuIiwiZnJvbnRlbmRTZXJ2ZXJOYW1lIjoiZnJvbnRlbmQudGVtcG9yYWwua2FyYWtvcmFtLmludGVybmFsIiwicmVxdWlyZUNsaWVudEF1dGgiOnRydWV9LCJmcm9udGVuZEFkZHJlc3MiOiJ3b3JrZmxvd3N0czo3MjMzIn0sInJvbGUiOiJzZXJ2ZXIiLCJyZXBsU2V0TmFtZSI6IiIsInBvcnQiOjcyMzMsImVuZ2luZVZlcnNpb24iOiIxLjMyLjEiLCJlbmdpbmVDb25maWciOiIiLCJrZXlmaWxlIjoiIiwidGxzIjp7Im1vZGUiOiIiLCJjYVBFTSI6IiIsImNlcnRQRU0iOiIiLCJrZXlQRU0iOiIifSwiYWdlbnRUTFMiOnsiY2VydFBFTSI6Ii0tLS0tQkVHSU4gQ0VSVElGSUNBVEUtLS0tLVxuTUlJQnp6Q0NBWFNnQXdJQkFnSVJBT3V3UzhuaERNRmJMNFQ1SFYyb2EvSXdDZ1lJS29aSXpqMEVBd0l3SURFZVxuTUJ3R0ExVUVBeE1WZDI5eWEyWnNiM2R6SUZSbGJYQnZjbUZzSUVOQk1CNFhEVEkyTVRFd05USXhNRGN4TVZvWFxuRFRJM01USXdOekl4TVRJeE1Wb3dIREVhTUJnR0ExVUVBeE1SZDI5eWEyWnNiM2R6ZEhNdFlXZGxiblF3V1RBVFxuQmdjcWhrak9QUUlCQmdncWhrak9QUU1CQndOQ0FBVFd1ODNNT01USWNXNHdKejJPQzNsOUdES2VVSXBMZjVTelxuSkNMcVpKTEptTzluN0JpOGplak51S1FTTFNyekVQcnMvUDlCbDljQmRNaU5XWWhFUm0wNm80R1NNSUdQTUE0R1xuQTFVZER3RUIvd1FFQXdJRm9EQVRCZ05WSFNVRUREQUtCZ2dyQmdFRkJRY0RBVEFNQmdOVkhSTUJBZjhFQWpBQVxuTUI4R0ExVWRJd1FZTUJhQUZIUWc0ejZkckdoYUxpSVgvRUlieFNXUXhyMlVNRGtHQTFVZEVRUXlNRENDQzNkdlxuY210bWJHOTNjM1J6Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUV3Q2dZSVxuS29aSXpqMEVBd0lEU1FBd1JnSWhBUHBibXR6T25oMmoyYmdqbG9LQUpGVUMvUmt0QWJXMTdLNFcrQm8yU2FDb1xuQWlFQXFoQnVLdGpXS3c0SmFpblZaaFRRWVppQ09tNkpLTG1RYUpuZG9Yb3hEYzA9XG4tLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tXG4iLCJrZXlQRU0iOiItLS0tLUJFR0lOIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLVxuTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnRVFtMXZBczlZM2dSaUZEaVxubnZyalRGbEVESWYxUk1jczIyMFVKV0ExRkxXaFJBTkNBQVRXdTgzTU9NVEljVzR3SnoyT0MzbDlHREtlVUlwTFxuZjVTekpDTHFaSkxKbU85bjdCaThqZWpOdUtRU0xTcnpFUHJzL1A5Qmw5Y0JkTWlOV1loRVJtMDZcbi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLVxuIn0sInN5c3RlbVVzZXJzIjpudWxsLCJwYm1FbmFibGVkIjpmYWxzZSwiZGVzaXJlZFByb2Nlc3NlcyI6WyJ0ZW1wb3JhbC1zZXJ2ZXIiXSwibWFpbnRlbmFuY2UiOmZhbHNlLCJjb25maWdWZXJzaW9uIjoxfQ==",
+    "temporal/config/workflowstu": "eyJjbHVzdGVyIjoid29ya2Zsb3dzIiwibWVtYmVyIjoid29ya2Zsb3dzdHUiLCJlbmdpbmUiOiJ0ZW1wb3JhbCIsImVuZ2luZVNwZWMiOnsiY29tcG9uZW50IjoidWkiLCJ2ZXJzaW9uIjoiMi41Ni4wIiwiaW5zdGFsbERpciI6Ii9vcHQva2FyYWtvcmFtL3RlbXBvcmFsLXVpLXNlcnZlci0yLjU2LjAiLCJyZXN0YXJ0VG9rZW4iOiJiZjllZGMxMjkzYzU5MTQxNjQ0ZGZkYjQzNGRhYmZhNjgzYThkM2Q5YzNiNDk2MTIyMTljYjU5Zjg4YzBjMWQzIiwiY2x1c3Rlck5hbWUiOiJ3b3JrZmxvd3MiLCJoaXN0b3J5U2hhcmRzIjo1MTIsInRscyI6eyJjYVBFTSI6Ii0tLS0tQkVHSU4gQ0VSVElGSUNBVEUtLS0tLVxuTUlJQmdUQ0NBU2VnQXdJQkFnSVJBTC80T3B4SWpjOTNXSDB4UkVUM3JWUXdDZ1lJS29aSXpqMEVBd0l3SURFZVxuTUJ3R0ExVUVBeE1WZDI5eWEyWnNiM2R6SUZSbGJYQnZjbUZzSUVOQk1CNFhEVEkyTVRFd05USXhNRGN4TVZvWFxuRFRNMk1URXdNakl4TVRJeE1Wb3dJREVlTUJ3R0ExVUVBeE1WZDI5eWEyWnNiM2R6SUZSbGJYQnZjbUZzSUVOQlxuTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFc1MveXB5cWswd3pBR1pTbEtJYW03VXhSTjZpQVxuMnJKRWVpL2hSMjloZVBaa2IzelIxQXFqNHVzTGJUZERmc2gzL0NEV1Q5UVdwUHkrdWNlVGlFZ283YU5DTUVBd1xuRGdZRFZSMFBBUUgvQkFRREFnR0dNQThHQTFVZEV3RUIvd1FGTUFNQkFmOHdIUVlEVlIwT0JCWUVGSFFnNHo2ZFxuckdoYUxpSVgvRUlieFNXUXhyMlVNQW9HQ0NxR1NNNDlCQU1DQTBnQU1FVUNJUUQvbUY2RVRsSzRqRlZ2emNORVxuTUJzV3pXMmhHUUp2ZzAwNUo4bERkZDdHR3dJZ1EySW5oU2pnWmZTc2NVdFg1dkwrZDRpYWt2cmpQb2F2cStxT1xubnlFWEo4OD1cbi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS1cbiIsImludGVybm9kZUNlcnRQRU0iOiItLS0tLUJFR0lOIENFUlRJRklDQVRFLS0tLS1cbk1JSUNCRENDQWFtZ0F3SUJBZ0lSQU4yT3JpemorNFZ1aU1BNFVTaE8zZkV3Q2dZSUtvWkl6ajBFQXdJd0lERWVcbk1Cd0dBMVVFQXhNVmQyOXlhMlpzYjNkeklGUmxiWEJ2Y21Gc0lFTkJNQjRYRFRJMk1URXdOVEl4TURjeE1Wb1hcbkRUSTNNVEl3TnpJeE1USXhNVm93SURFZU1Cd0dBMVVFQXhNVmQyOXlhMlpzYjNkemRIVXRhVzUwWlhKdWIyUmxcbk1Ga3dFd1lIS29aSXpqMENBUVlJS29aSXpqMERBUWNEUWdBRXFaeHE1Z1pRN1IxTC95bmhTejc4QW5qN1FZMU5cbmU1R3dpSXRUZTZVQm9saGtDY3NJWVFkYyswMVE4TzhJNDd4SG5zV2d4WlY4RHNWRUVSNkF6a3crZDZPQnd6Q0JcbndEQU9CZ05WSFE4QkFmOEVCQU1DQmFBd0hRWURWUjBsQkJZd0ZBWUlLd1lCQlFVSEF3RUdDQ3NHQVFVRkJ3TUNcbk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVWRDRGpQcDJzYUZvdUloZjhRaHZGSlpER3ZaUXdcbllBWURWUjBSQkZrd1Y0SUxkMjl5YTJac2IzZHpkSFdDQ1d4dlkyRnNhRzl6ZElJbGFXNTBaWEp1YjJSbExuUmxcbmJYQnZjbUZzTG10aGNtRnJiM0poYlM1cGJuUmxjbTVoYkljRWZ3QUFBWWNRQUFBQUFBQUFBQUFBQUFBQUFBQUFcbkFUQUtCZ2dxaGtqT1BRUURBZ05KQURCR0FpRUFqd0VwTklncU5kUjFDaUVjeWUzeldpZ0htUDByS2FBVWo3TW1cbm1uNmlDcElDSVFEK2JWcG1BQXFNRTBpaVZidFhhZjZsL29CWGN3ZDdaKzdGMnlrc0NvRU1VUT09XG4tLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tXG4iLCJpbnRlcm5vZGVLZXlQRU0iOiItLS0tLUJFR0lOIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLVxuTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnVVNXdWRyV1BoZ3dpK2JLN1xuMmpMZ2VHUVZQVVhuRis4YjNNa3dHMjZzc0tXaFJBTkNBQVNwbkdybUJsRHRIVXYvS2VGTFB2d0NlUHRCalUxN1xua2JDSWkxTjdwUUdpV0dRSnl3aGhCMXo3VFZEdzd3amp2RWVleGFERmxYd094VVFSSG9ET1RENTNcbi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLVxuIiwiaW50ZXJub2RlU2VydmVyTmFtZSI6ImludGVybm9kZS50ZW1wb3JhbC5rYXJha29yYW0uaW50ZXJuYWwiLCJmcm9udGVuZFNlcnZlck5hbWUiOiJmcm9udGVuZC50ZW1wb3JhbC5rYXJha29yYW0uaW50ZXJuYWwiLCJyZXF1aXJlQ2xpZW50QXV0aCI6dHJ1ZX0sImZyb250ZW5kQWRkcmVzcyI6IndvcmtmbG93c3RzOjcyMzMiLCJ1aSI6e319LCJyb2xlIjoidWkiLCJyZXBsU2V0TmFtZSI6IiIsInBvcnQiOjgwODAsImVuZ2luZVZlcnNpb24iOiIyLjU2LjAiLCJlbmdpbmVDb25maWciOiIiLCJrZXlmaWxlIjoiIiwidGxzIjp7Im1vZGUiOiIiLCJjYVBFTSI6IiIsImNlcnRQRU0iOiIiLCJrZXlQRU0iOiIifSwiYWdlbnRUTFMiOnsiY2VydFBFTSI6Ii0tLS0tQkVHSU4gQ0VSVElGSUNBVEUtLS0tLVxuTUlJQnp6Q0NBWFNnQXdJQkFnSVJBTXllRUdBdzFJaCs2SG12bmtVVm5FWXdDZ1lJS29aSXpqMEVBd0l3SURFZVxuTUJ3R0ExVUVBeE1WZDI5eWEyWnNiM2R6SUZSbGJYQnZjbUZzSUVOQk1CNFhEVEkyTVRFd05USXhNRGN4TVZvWFxuRFRJM01USXdOekl4TVRJeE1Wb3dIREVhTUJnR0ExVUVBeE1SZDI5eWEyWnNiM2R6ZEhVdFlXZGxiblF3V1RBVFxuQmdjcWhrak9QUUlCQmdncWhrak9QUU1CQndOQ0FBUmxvcThYMTY5YTUwZHQ2NWMycFpHb0xHaHFaZnUvK2IyU1xudkxHUU1YdDVQZzduT2NFSkJGOFNxaTByVUJxajZvbXFiUlpMbkpNTjlxWDNHNndISUhMWm80R1NNSUdQTUE0R1xuQTFVZER3RUIvd1FFQXdJRm9EQVRCZ05WSFNVRUREQUtCZ2dyQmdFRkJRY0RBVEFNQmdOVkhSTUJBZjhFQWpBQVxuTUI4R0ExVWRJd1FZTUJhQUZIUWc0ejZkckdoYUxpSVgvRUlieFNXUXhyMlVNRGtHQTFVZEVRUXlNRENDQzNkdlxuY210bWJHOTNjM1IxZ2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUV3Q2dZSVxuS29aSXpqMEVBd0lEU1FBd1JnSWhBSTQrZ29JeHRrby9aOTRzRzZFaUZYd2xHNy9aR1hhcXMxb0IyUm15NVdGNFxuQWlFQW5CYkZySW9DZVZpaWZUeVVXc0FpLzFwaDN5UDI2ejczQkZudVRWbmxOR0E9XG4tLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tXG4iLCJrZXlQRU0iOiItLS0tLUJFR0lOIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLVxuTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnQ21xVzFSZlozdS9wSEVoK1xueU40UEM4MkxqUGdqOExtQkFqbE1MMThURXJtaFJBTkNBQVJsb3E4WDE2OWE1MGR0NjVjMnBaR29MR2hxWmZ1L1xuK2IyU3ZMR1FNWHQ1UGc3bk9jRUpCRjhTcWkwclVCcWo2b21xYlJaTG5KTU45cVgzRzZ3SElITFpcbi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLVxuIn0sInN5c3RlbVVzZXJzIjpudWxsLCJwYm1FbmFibGVkIjpmYWxzZSwiZGVzaXJlZFByb2Nlc3NlcyI6WyJ1aS1zZXJ2ZXIiXSwibWFpbnRlbmFuY2UiOmZhbHNlLCJjb25maWdWZXJzaW9uIjoxfQ==",
+    "temporal/frontend-cert/workflowsts": "eyJjZXJ0UEVNIjoiLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tXG5NSUlDQlRDQ0FhcWdBd0lCQWdJUkFPU0p1QzhyTkVaa0hibUIvUGY1b0tVd0NnWUlLb1pJemowRUF3SXdJREVlXG5NQndHQTFVRUF4TVZkMjl5YTJac2IzZHpJRlJsYlhCdmNtRnNJRU5CTUI0WERUSTJNVEV3TlRJeE1EY3hNVm9YXG5EVEkzTVRJd056SXhNVEl4TVZvd0h6RWRNQnNHQTFVRUF4TVVkMjl5YTJac2IzZHpkSE10Wm5KdmJuUmxibVF3XG5XVEFUQmdjcWhrak9QUUlCQmdncWhrak9QUU1CQndOQ0FBUmpqMFM1YklNNU1lWnBGeDJJWDg3SHRBSHpTTUZzXG5Dc3N4dDRVM1VPS0U4alBrZmowbHFKbzBkbjd6OFFiYUpvTGIrRmxSNDByL2pCT2pVYXlkU0ViaG80SEZNSUhDXG5NQTRHQTFVZER3RUIvd1FFQXdJRm9EQVRCZ05WSFNVRUREQUtCZ2dyQmdFRkJRY0RBVEFNQmdOVkhSTUJBZjhFXG5BakFBTUI4R0ExVWRJd1FZTUJhQUZIUWc0ejZkckdoYUxpSVgvRUlieFNXUXhyMlVNR3dHQTFVZEVRUmxNR09DXG5DM2R2Y210bWJHOTNjM1J6Z2dsc2IyTmhiR2h2YzNTQ0pHWnliMjUwWlc1a0xuUmxiWEJ2Y21Gc0xtdGhjbUZyXG5iM0poYlM1cGJuUmxjbTVoYklJTGQyOXlhMlpzYjNkemRIT0hCSDhBQUFHSEVBQUFBQUFBQUFBQUFBQUFBQUFBXG5BQUV3Q2dZSUtvWkl6ajBFQXdJRFNRQXdSZ0loQUtoanhidWQzblVUeDJlVWRYRndDaE8vb0dZMjNaZHZOdHAzXG5MZFZZSHN0MUFpRUEyNjBheWd3SDlFZDA1VHJGMSs4cXhvd2t1STNhMWVaWmVGNUc3QkFjcEQ0PVxuLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLVxuIiwia2V5UEVNIjoiLS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS1cbk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ0hpKzRSSEttczNMSGErM0ZcblpyZnBwNnVtU1J2U0ZtK1hEVjRXa3pOQXdaaWhSQU5DQUFSamowUzViSU01TWVacEZ4MklYODdIdEFIelNNRnNcbkNzc3h0NFUzVU9LRThqUGtmajBscUpvMGRuN3o4UWJhSm9MYitGbFI0MHIvakJPalVheWRTRWJoXG4tLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS1cbiJ9",
+    "temporal/internode-cert/workflowsts": "eyJjZXJ0UEVNIjoiLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tXG5NSUlDQXpDQ0FhbWdBd0lCQWdJUkFOOGFIcW5jZW5xdTUrVklla2hpK2I0d0NnWUlLb1pJemowRUF3SXdJREVlXG5NQndHQTFVRUF4TVZkMjl5YTJac2IzZHpJRlJsYlhCdmNtRnNJRU5CTUI0WERUSTJNVEV3TlRJeE1EY3hNVm9YXG5EVEkzTVRJd056SXhNVEl4TVZvd0lERWVNQndHQTFVRUF4TVZkMjl5YTJac2IzZHpkSE10YVc1MFpYSnViMlJsXG5NRmt3RXdZSEtvWkl6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVLVnh2dGJBeGhkRi9BNTRsTDdRTUc0N251bklvXG4vaWxWdWpTS0pZY1VVNERLVzdqRjQ2bWtnWkZqekhaZGJScVlyVU9mVUk4WTRsbGVlRU9naXRnZHI2T0J3ekNCXG53REFPQmdOVkhROEJBZjhFQkFNQ0JhQXdIUVlEVlIwbEJCWXdGQVlJS3dZQkJRVUhBd0VHQ0NzR0FRVUZCd01DXG5NQXdHQTFVZEV3RUIvd1FDTUFBd0h3WURWUjBqQkJnd0ZvQVVkQ0RqUHAyc2FGb3VJaGY4UWh2RkpaREd2WlF3XG5ZQVlEVlIwUkJGa3dWNElMZDI5eWEyWnNiM2R6ZEhPQ0NXeHZZMkZzYUc5emRJSWxhVzUwWlhKdWIyUmxMblJsXG5iWEJ2Y21Gc0xtdGhjbUZyYjNKaGJTNXBiblJsY201aGJJY0Vmd0FBQVljUUFBQUFBQUFBQUFBQUFBQUFBQUFBXG5BVEFLQmdncWhrak9QUVFEQWdOSUFEQkZBaUVBeXFSM1hsVzNsRzVMK1pxRWNjUmhpZGZCemRERmlWZnFvb0RhXG5jWmJNcHBnQ0lDclFsMTVDcjVkZWl5OXg5VHkzTmpBQlhrTko5ZTRkNW10a1I4bS92WTFmXG4tLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tXG4iLCJrZXlQRU0iOiItLS0tLUJFR0lOIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLVxuTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnK05iLytwOHVzdEIvc3BSSlxuR3pOeWEvVTJod1JCSXp6WUJNcHVyeXF3NUUyaFJBTkNBQVFwWEcrMXNER0YwWDhEbmlVdnRBd2JqdWU2Y2lqK1xuS1ZXNk5Jb2xoeFJUZ01wYnVNWGpxYVNCa1dQTWRsMXRHcGl0UTU5UWp4amlXVjU0UTZDSzJCMnZcbi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLVxuIn0=",
+    "temporal/internode-cert/workflowstu": "eyJjZXJ0UEVNIjoiLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tXG5NSUlDQkRDQ0FhbWdBd0lCQWdJUkFOMk9yaXpqKzRWdWlNQTRVU2hPM2ZFd0NnWUlLb1pJemowRUF3SXdJREVlXG5NQndHQTFVRUF4TVZkMjl5YTJac2IzZHpJRlJsYlhCdmNtRnNJRU5CTUI0WERUSTJNVEV3TlRJeE1EY3hNVm9YXG5EVEkzTVRJd056SXhNVEl4TVZvd0lERWVNQndHQTFVRUF4TVZkMjl5YTJac2IzZHpkSFV0YVc1MFpYSnViMlJsXG5NRmt3RXdZSEtvWkl6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVxWnhxNWdaUTdSMUwveW5oU3o3OEFuajdRWTFOXG5lNUd3aUl0VGU2VUJvbGhrQ2NzSVlRZGMrMDFROE84STQ3eEhuc1dneFpWOERzVkVFUjZBemt3K2Q2T0J3ekNCXG53REFPQmdOVkhROEJBZjhFQkFNQ0JhQXdIUVlEVlIwbEJCWXdGQVlJS3dZQkJRVUhBd0VHQ0NzR0FRVUZCd01DXG5NQXdHQTFVZEV3RUIvd1FDTUFBd0h3WURWUjBqQkJnd0ZvQVVkQ0RqUHAyc2FGb3VJaGY4UWh2RkpaREd2WlF3XG5ZQVlEVlIwUkJGa3dWNElMZDI5eWEyWnNiM2R6ZEhXQ0NXeHZZMkZzYUc5emRJSWxhVzUwWlhKdWIyUmxMblJsXG5iWEJ2Y21Gc0xtdGhjbUZyYjNKaGJTNXBiblJsY201aGJJY0Vmd0FBQVljUUFBQUFBQUFBQUFBQUFBQUFBQUFBXG5BVEFLQmdncWhrak9QUVFEQWdOSkFEQkdBaUVBandFcE5JZ3FOZFIxQ2lFY3llM3pXaWdIbVAwckthQVVqN01tXG5tbjZpQ3BJQ0lRRCtiVnBtQUFxTUUwaWlWYnRYYWY2bC9vQlhjd2Q3Wis3RjJ5a3NDb0VNVVE9PVxuLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLVxuIiwia2V5UEVNIjoiLS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS1cbk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ1VTV3VkcldQaGd3aStiSzdcbjJqTGdlR1FWUFVYbkYrOGIzTWt3RzI2c3NLV2hSQU5DQUFTcG5Hcm1CbER0SFV2L0tlRkxQdndDZVB0QmpVMTdcbmtiQ0lpMU43cFFHaVdHUUp5d2hoQjF6N1RWRHc3d2pqdkVlZXhhREZsWHdPeFVRUkhvRE9URDUzXG4tLS0tLUVORCBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS1cbiJ9",
+    "tls/ca.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJnVENDQVNlZ0F3SUJBZ0lSQUwvNE9weElqYzkzV0gweFJFVDNyVlF3Q2dZSUtvWkl6ajBFQXdJd0lERWUKTUJ3R0ExVUVBeE1WZDI5eWEyWnNiM2R6SUZSbGJYQnZjbUZzSUVOQk1CNFhEVEkyTVRFd05USXhNRGN4TVZvWApEVE0yTVRFd01qSXhNVEl4TVZvd0lERWVNQndHQTFVRUF4TVZkMjl5YTJac2IzZHpJRlJsYlhCdmNtRnNJRU5CCk1Ga3dFd1lIS29aSXpqMENBUVlJS29aSXpqMERBUWNEUWdBRXNTL3lweXFrMHd6QUdaU2xLSWFtN1V4Uk42aUEKMnJKRWVpL2hSMjloZVBaa2IzelIxQXFqNHVzTGJUZERmc2gzL0NEV1Q5UVdwUHkrdWNlVGlFZ283YU5DTUVBdwpEZ1lEVlIwUEFRSC9CQVFEQWdHR01BOEdBMVVkRXdFQi93UUZNQU1CQWY4d0hRWURWUjBPQkJZRUZIUWc0ejZkCnJHaGFMaUlYL0VJYnhTV1F4cjJVTUFvR0NDcUdTTTQ5QkFNQ0EwZ0FNRVVDSVFEL21GNkVUbEs0akZWdnpjTkUKTUJzV3pXMmhHUUp2ZzAwNUo4bERkZDdHR3dJZ1EySW5oU2pnWmZTc2NVdFg1dkwrZDRpYWt2cmpQb2F2cStxTwpueUVYSjg4PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==",
+    "tls/ca.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnd1NnNVRQOWUyRUN2QzhzWQp4Y3NwMkJTRjVockxqQ1lYMDBadHNmaUxyZUtoUkFOQ0FBU3hML0tuS3FUVERNQVpsS1VvaHFidFRGRTNxSURhCnNrUjZMK0ZIYjJGNDltUnZmTkhVQ3FQaTZ3dHROME4reUhmOElOWlAxQmFrL0w2NXg1T0lTQ2p0Ci0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo="
+  },
+  "Services": [
+    {
+      "id": "service-1",
+      "hostname": "workflowsts",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 1,
+        "minRam": 1,
+        "maxRam": 1,
+        "minDisk": 1,
+        "maxDisk": 1
+      },
+      "minContainers": 1,
+      "maxContainers": 1
+    },
+    {
+      "id": "service-4",
+      "hostname": "workflowstu",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 1,
+        "minRam": 1,
+        "maxRam": 1,
+        "minDisk": 1,
+        "maxDisk": 1
+      },
+      "minContainers": 1,
+      "maxContainers": 1
+    }
+  ],
+  "Tokens": {
+    "workflowsts": "kk_GcSMK3bTKcLxKloAs2ORnAVhL8IEX2BmtEIyqD0YBdUwXkJ9",
+    "workflowstu": "kk_MMkImL8A67ByFv4hpVAvfhpfRnJdQx3XKLZqPmiDEGysIyuQ"
+  }
+}

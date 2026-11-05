@@ -113,6 +113,26 @@ func componentCertificate(ctx context.Context, rc *engine.Context, m *componentM
 	return pair, e
 }
 
+func (p *Provider) recoverUIVersion(ctx context.Context, rc *engine.Context, m *componentMember) error {
+	if m.Component != tspec.UI || m.Version != "" {
+		return nil
+	}
+	config, err := p.memberConfig(ctx, rc, m.Name)
+	if missing(err) && m.Stage != engine.ComponentJoined && m.Stage != engine.ComponentDeployed && m.ConfigVersion == 0 && m.ConfigHash == "" && !m.RuntimeDeployed && !m.Recovering {
+		return nil
+	}
+	if err != nil {
+		return engine.Invalid("Temporal UI %s installed version is unknown; artifact preparation is required", m.Name)
+	}
+	var spec tspec.Spec
+	if json.Unmarshal(config.EngineSpec, &spec) != nil || spec.Component != tspec.UI ||
+		spec.Version == "" || spec.InstallDir != "/opt/karakoram/temporal-ui-server-"+spec.Version {
+		return engine.Invalid("Temporal UI %s installed version cannot be recovered from its applied configuration", m.Name)
+	}
+	m.Version = spec.Version
+	return nil
+}
+
 func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *componentMember, conn pgbinding.Connection, ca *pki.CA) (tspec.Spec, error) {
 	var out tspec.Spec
 	o, e := optionsFor(rc.Cluster)
@@ -123,10 +143,18 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 	if e != nil {
 		return out, e
 	}
+	if e := p.recoverUIVersion(ctx, rc, m); e != nil {
+		return out, e
+	}
 	if m.Component == tspec.UI {
 		a, e = nativeartifacts.Get("temporal-ui-server")
 		if e != nil {
 			return out, e
+		}
+		// The lock is the deployment target, not evidence that an existing UI
+		// member has installed it. Legacy state already persists this version.
+		if m.Version != "" {
+			a.Version = m.Version
 		}
 	}
 	out = tspec.Spec{
@@ -237,6 +265,21 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 		RestartNonce  string
 	}{out, conn.CredentialGeneration, rc.Cluster.Spec.Version, m.RestartNonce})
 	return out, out.Validate()
+}
+
+// deploymentUISpec activates the release-locked UI only on a path that prepares
+// its artifact. Server versions remain governed by the explicit engine upgrade.
+func deploymentUISpec(sp tspec.Spec, generation int64, serverVersion, nonce string) (tspec.Spec, error) {
+	if sp.Component != tspec.UI {
+		return sp, nil
+	}
+	a, err := nativeartifacts.Get("temporal-ui-server")
+	if err != nil {
+		return sp, err
+	}
+	sp.Version = a.Version
+	sp.InstallDir = "/opt/karakoram/" + a.Name + "-" + a.Version
+	return deferredConfiguration(sp, generation, serverVersion, nonce), nil
 }
 
 // configurationNeedsWindow distinguishes desired application changes from

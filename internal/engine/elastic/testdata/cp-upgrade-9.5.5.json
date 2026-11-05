@@ -1,0 +1,706 @@
+{
+  "Cluster": {
+    "namespace": "default",
+    "name": "demo",
+    "spec": {
+      "provider": "elasticsearch",
+      "version": "9.5.5",
+      "topology": {
+        "type": "cluster"
+      },
+      "components": {
+        "engine": {
+          "replicas": 1,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 2,
+            "minRam": 2,
+            "maxRam": 2,
+            "minDisk": 5,
+            "maxDisk": 20
+          }
+        },
+        "configServer": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "router": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "extra": {
+          "apm": {
+            "replicas": 1,
+            "resources": {
+              "cpuMode": "SHARED",
+              "minCpu": 1,
+              "maxCpu": 2,
+              "minRam": 0.5,
+              "maxRam": 0.5,
+              "minDisk": 1,
+              "maxDisk": 5
+            }
+          },
+          "kibana": {
+            "replicas": 1,
+            "resources": {
+              "cpuMode": "SHARED",
+              "minCpu": 1,
+              "maxCpu": 2,
+              "minRam": 1.5,
+              "maxRam": 2,
+              "minDisk": 1,
+              "maxDisk": 5
+            }
+          },
+          "logstash": {
+            "replicas": 1,
+            "resources": {
+              "cpuMode": "SHARED",
+              "minCpu": 1,
+              "maxCpu": 2,
+              "minRam": 1.5,
+              "maxRam": 1.5,
+              "minDisk": 1,
+              "maxDisk": 5
+            }
+          }
+        }
+      },
+      "backup": {
+        "schedules": null,
+        "pitr": {
+          "enabled": false,
+          "oplogSpanMinutes": 0
+        }
+      },
+      "tls": {
+        "mode": "requireTLS",
+        "ca": "selfSigned"
+      },
+      "exposure": {
+        "public": false,
+        "ipType": "IPV6",
+        "allowlist": null
+      },
+      "monitoring": {
+        "enabled": true
+      }
+    },
+    "status": {
+      "phase": "Ready",
+      "message": "Creating: queued platform provisioning",
+      "conditions": null,
+      "observedGeneration": 1,
+      "observedAt": "0001-01-01T00:00:00Z",
+      "members": null,
+      "connection": {
+        "hosts": null,
+        "uri": "",
+        "publicHosts": null
+      },
+      "backup": {},
+      "placement": {
+        "guaranteedAntiAffinity": false,
+        "groups": null
+      }
+    },
+    "generation": 1,
+    "deleting": false,
+    "deleteOptions": {
+      "keepVolumes": false,
+      "keepBackups": false
+    },
+    "createdAt": "2026-11-05T20:43:19.034497798Z",
+    "updatedAt": "2026-11-05T20:43:19.034497798Z"
+  },
+  "Configs": {
+    "demoapm": {
+      "cluster": "demo",
+      "member": "demoapm",
+      "engine": "elasticsearch",
+      "engineSpec": {
+        "component": "apm-server",
+        "version": "9.5.5",
+        "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBXjCCAQWgAwIBAgIRALhmFoV7LR5yw3CoTELjopQwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMA8x\nDTALBgNVBAMTBHRlc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARFqY7TqNHA\nyo5l5Mcauw8986hDW/PEd7e6kDmOqQB87Fx5/lHVZnoVsCq+jPHZ0Fo02jyVhGec\nd2O652NW0zPMo0IwQDAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUtH/aFVuU7ZiYRm1ARAeivXPE6GowCgYIKoZIzj0EAwIDRwAwRAIg\nYnI948x7QxdAdAUHm0sTWTYxgycucTo42bCfw3g9QGsCIAzS7aEbKLm/9hXw21f1\nny/BL6cigu1YhTb5dSJisv5+\n-----END CERTIFICATE-----\n",
+        "restartToken": "9686fafad76b2cee91140368b979b278aaef8b2c4bb03a2e43e3bf39edea602f",
+        "apm": {
+          "esHosts": [
+            "https://demon0:9200"
+          ],
+          "writer": {
+            "username": "karakoram_apm",
+            "password": "TEkGXdjEdjxyasOU3dY9nlKsP6slIEmgHthvmL6r"
+          },
+          "secretToken": "YKCN8cZtZHHRfh67IKHnS6SEmHMhJdWnZVq57qy0",
+          "apiKeys": true
+        }
+      },
+      "role": "apm",
+      "replSetName": "",
+      "port": 8200,
+      "engineVersion": "9.5.5",
+      "engineConfig": "",
+      "keyfile": "",
+      "tls": {
+        "mode": "requireTLS",
+        "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBXjCCAQWgAwIBAgIRALhmFoV7LR5yw3CoTELjopQwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMA8x\nDTALBgNVBAMTBHRlc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARFqY7TqNHA\nyo5l5Mcauw8986hDW/PEd7e6kDmOqQB87Fx5/lHVZnoVsCq+jPHZ0Fo02jyVhGec\nd2O652NW0zPMo0IwQDAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUtH/aFVuU7ZiYRm1ARAeivXPE6GowCgYIKoZIzj0EAwIDRwAwRAIg\nYnI948x7QxdAdAUHm0sTWTYxgycucTo42bCfw3g9QGsCIAzS7aEbKLm/9hXw21f1\nny/BL6cigu1YhTb5dSJisv5+\n-----END CERTIFICATE-----\n",
+        "certPEM": "",
+        "keyPEM": ""
+      },
+      "agentTLS": {
+        "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBrzCCAVWgAwIBAgIRAKVFJWbKL6ypdiuz8lmrSBUwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMBIx\nEDAOBgNVBAMTB2RlbW9hcG0wWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASbIeQi\nugFEy55UVUzaaJzE3MaPa164t2+I/xFHqW41Mia1iyl+OjvRysGzfV1fmzrviCaX\nU80xZ8IgBzUuCkxWo4GOMIGLMA4GA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggr\nBgEFBQcDATAMBgNVHRMBAf8EAjAAMB8GA1UdIwQYMBaAFLR/2hVblO2YmEZtQEQH\nor1zxOhqMDUGA1UdEQQuMCyCB2RlbW9hcG2CCWxvY2FsaG9zdIcEfwAAAYcQAAAA\nAAAAAAAAAAAAAAAAATAKBggqhkjOPQQDAgNIADBFAiEAo2xd5O01ug5yAP4hcm7r\nl+KMb047pEhoCrY7U+bHDyYCIBb0xJrmb2g/grftCxXOokaBMA02+n69swg6j6Tp\n9HDg\n-----END CERTIFICATE-----\n",
+        "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgJtg7fcSCFeXlKxWB\nB9z7va/MV5RT8t8c3qppVH3Lc/ehRANCAASbIeQiugFEy55UVUzaaJzE3MaPa164\nt2+I/xFHqW41Mia1iyl+OjvRysGzfV1fmzrviCaXU80xZ8IgBzUuCkxW\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+      },
+      "systemUsers": null,
+      "pbmEnabled": false,
+      "desiredProcesses": [
+        "apm-server"
+      ],
+      "maintenance": false,
+      "configVersion": 17
+    },
+    "demokb": {
+      "cluster": "demo",
+      "member": "demokb",
+      "engine": "elasticsearch",
+      "engineSpec": {
+        "component": "kibana",
+        "version": "9.5.5",
+        "heapMB": 921,
+        "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBXjCCAQWgAwIBAgIRALhmFoV7LR5yw3CoTELjopQwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMA8x\nDTALBgNVBAMTBHRlc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARFqY7TqNHA\nyo5l5Mcauw8986hDW/PEd7e6kDmOqQB87Fx5/lHVZnoVsCq+jPHZ0Fo02jyVhGec\nd2O652NW0zPMo0IwQDAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUtH/aFVuU7ZiYRm1ARAeivXPE6GowCgYIKoZIzj0EAwIDRwAwRAIg\nYnI948x7QxdAdAUHm0sTWTYxgycucTo42bCfw3g9QGsCIAzS7aEbKLm/9hXw21f1\nny/BL6cigu1YhTb5dSJisv5+\n-----END CERTIFICATE-----\n",
+        "restartToken": "2f42dc7b93c79138bbc926001facbff176aef0403d9599fca5d0e7884c4fe01d",
+        "kibana": {
+          "esHosts": [
+            "https://demon0:9200"
+          ],
+          "serviceAccountToken": "test-kibana-token",
+          "securityKey": "KgfcegwtKslu50Y43A7GBnV3zqYFNwUuYBRR1zGsf0NQIuEX3LXIgk1wtW5TZQyq",
+          "savedObjectsKey": "iQZaEQmtLqsjOLiMKqT1gX8qYQTJ1kd7cOU7dY4QzmIxVHO7xTPsxMlE6rSwqz5d",
+          "reportingKey": "I9rT4cGwd6bllqYgXBvq9BGrLUzy1Jsxb6MSiusfn9wItJd4TZdTZUmvmBWzxITy"
+        }
+      },
+      "role": "kibana",
+      "replSetName": "",
+      "port": 5601,
+      "engineVersion": "9.5.5",
+      "engineConfig": "",
+      "keyfile": "",
+      "tls": {
+        "mode": "requireTLS",
+        "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBXjCCAQWgAwIBAgIRALhmFoV7LR5yw3CoTELjopQwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMA8x\nDTALBgNVBAMTBHRlc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARFqY7TqNHA\nyo5l5Mcauw8986hDW/PEd7e6kDmOqQB87Fx5/lHVZnoVsCq+jPHZ0Fo02jyVhGec\nd2O652NW0zPMo0IwQDAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUtH/aFVuU7ZiYRm1ARAeivXPE6GowCgYIKoZIzj0EAwIDRwAwRAIg\nYnI948x7QxdAdAUHm0sTWTYxgycucTo42bCfw3g9QGsCIAzS7aEbKLm/9hXw21f1\nny/BL6cigu1YhTb5dSJisv5+\n-----END CERTIFICATE-----\n",
+        "certPEM": "",
+        "keyPEM": ""
+      },
+      "agentTLS": {
+        "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBqzCCAVOgAwIBAgIRAOl5cKKdbNUIndbt/ScwbawwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMBEx\nDzANBgNVBAMTBmRlbW9rYjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABLM9xnob\nP3o39OhM3XyGD7e8XzkjTyHiV+VVp9pzRvx0ncGolPCxGQtfXplbK/2c1YA1qdKm\nXEro28MoertCDv6jgY0wgYowDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsG\nAQUFBwMBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUtH/aFVuU7ZiYRm1ARAei\nvXPE6GowNAYDVR0RBC0wK4IGZGVtb2tigglsb2NhbGhvc3SHBH8AAAGHEAAAAAAA\nAAAAAAAAAAAAAAEwCgYIKoZIzj0EAwIDRgAwQwIfcSNviaKpler4anLhF3kzUz00\nYFCSDnaknmElHI/3zgIgM3PH/NbzGye5pT1es6g4zNeerhhhsswZv0JgPyg8/J8=\n-----END CERTIFICATE-----\n",
+        "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgom6P6J3fgh8IwYck\nRgETI+locVONJEacd7PJ9+f1k2GhRANCAASzPcZ6Gz96N/ToTN18hg+3vF85I08h\n4lflVafac0b8dJ3BqJTwsRkLX16ZWyv9nNWANanSplxK6NvDKHq7Qg7+\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+      },
+      "systemUsers": null,
+      "pbmEnabled": false,
+      "desiredProcesses": [
+        "kibana"
+      ],
+      "maintenance": false,
+      "configVersion": 17
+    },
+    "demols": {
+      "cluster": "demo",
+      "member": "demols",
+      "engine": "elasticsearch",
+      "engineSpec": {
+        "component": "logstash",
+        "version": "9.5.5",
+        "heapMB": 768,
+        "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBXjCCAQWgAwIBAgIRALhmFoV7LR5yw3CoTELjopQwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMA8x\nDTALBgNVBAMTBHRlc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARFqY7TqNHA\nyo5l5Mcauw8986hDW/PEd7e6kDmOqQB87Fx5/lHVZnoVsCq+jPHZ0Fo02jyVhGec\nd2O652NW0zPMo0IwQDAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUtH/aFVuU7ZiYRm1ARAeivXPE6GowCgYIKoZIzj0EAwIDRwAwRAIg\nYnI948x7QxdAdAUHm0sTWTYxgycucTo42bCfw3g9QGsCIAzS7aEbKLm/9hXw21f1\nny/BL6cigu1YhTb5dSJisv5+\n-----END CERTIFICATE-----\n",
+        "restartToken": "747aef86f4dbd5c9aee10cf4b5fdb2817d3fdcf16393aec33f6d1e6169eb1393",
+        "logstash": {
+          "esHosts": [
+            "https://demon0:9200"
+          ],
+          "writer": {
+            "username": "karakoram_logstash",
+            "password": "BVqjWRq9MnMYRUx5GDaFrHraVOAPulV0GL8fFBhM"
+          },
+          "persistentQueue": false
+        }
+      },
+      "role": "logstash",
+      "replSetName": "",
+      "port": 9600,
+      "engineVersion": "9.5.5",
+      "engineConfig": "",
+      "keyfile": "",
+      "tls": {
+        "mode": "requireTLS",
+        "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBXjCCAQWgAwIBAgIRALhmFoV7LR5yw3CoTELjopQwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMA8x\nDTALBgNVBAMTBHRlc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARFqY7TqNHA\nyo5l5Mcauw8986hDW/PEd7e6kDmOqQB87Fx5/lHVZnoVsCq+jPHZ0Fo02jyVhGec\nd2O652NW0zPMo0IwQDAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUtH/aFVuU7ZiYRm1ARAeivXPE6GowCgYIKoZIzj0EAwIDRwAwRAIg\nYnI948x7QxdAdAUHm0sTWTYxgycucTo42bCfw3g9QGsCIAzS7aEbKLm/9hXw21f1\nny/BL6cigu1YhTb5dSJisv5+\n-----END CERTIFICATE-----\n",
+        "certPEM": "",
+        "keyPEM": ""
+      },
+      "agentTLS": {
+        "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBrDCCAVOgAwIBAgIRAOsjqTX8cS873CymrB4PQ8UwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMBEx\nDzANBgNVBAMTBmRlbW9sczBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABIoYgyWz\nQNcmoxBOxPGFTK0wvMjyQyPbSu3WxK4PHKYg48sMs4/sEvzQUAEH5ufa0yGu5tfb\neDcb90zZBe3Qo6KjgY0wgYowDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsG\nAQUFBwMBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUtH/aFVuU7ZiYRm1ARAei\nvXPE6GowNAYDVR0RBC0wK4IGZGVtb2xzgglsb2NhbGhvc3SHBH8AAAGHEAAAAAAA\nAAAAAAAAAAAAAAEwCgYIKoZIzj0EAwIDRwAwRAIgWYzpMUjbgxO4ih7314ukxl3O\n2kVBZyBeXMPkeVt4BHYCIA8JdcxN7iva7wKixBcvrZbm+5RexPdmyeVkOe/+/wm1\n-----END CERTIFICATE-----\n",
+        "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgBLxQdk8bbUi/oTBP\nomTT5gT4NHuGnawE9Vn8Y5J+ZbyhRANCAASKGIMls0DXJqMQTsTxhUytMLzI8kMj\n20rt1sSuDxymIOPLDLOP7BL80FABB+bn2tMhrubX23g3G/dM2QXt0KOi\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+      },
+      "systemUsers": null,
+      "pbmEnabled": false,
+      "desiredProcesses": [
+        "logstash"
+      ],
+      "maintenance": false,
+      "configVersion": 17
+    },
+    "demon0": {
+      "cluster": "demo",
+      "member": "demon0",
+      "volume": {
+        "clusterUid": "Npm30m8ovLTPnU2v",
+        "member": "demon0",
+        "volume": "demon0v",
+        "volumeId": "demon0v",
+        "initialized": true
+      },
+      "engine": "elasticsearch",
+      "engineSpec": {
+        "component": "elasticsearch",
+        "version": "9.5.5",
+        "heapMB": 768,
+        "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBXjCCAQWgAwIBAgIRALhmFoV7LR5yw3CoTELjopQwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMA8x\nDTALBgNVBAMTBHRlc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARFqY7TqNHA\nyo5l5Mcauw8986hDW/PEd7e6kDmOqQB87Fx5/lHVZnoVsCq+jPHZ0Fo02jyVhGec\nd2O652NW0zPMo0IwQDAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUtH/aFVuU7ZiYRm1ARAeivXPE6GowCgYIKoZIzj0EAwIDRwAwRAIg\nYnI948x7QxdAdAUHm0sTWTYxgycucTo42bCfw3g9QGsCIAzS7aEbKLm/9hXw21f1\nny/BL6cigu1YhTb5dSJisv5+\n-----END CERTIFICATE-----\n",
+        "restartToken": "63b08ed5373ce987bb871fb408370bcdd6ccd1d0554460cb7bbd31f108f4b142",
+        "elasticsearch": {
+          "clusterName": "demo",
+          "nodeName": "demon0",
+          "roles": [
+            "master",
+            "data",
+            "ingest",
+            "remote_cluster_client",
+            "transform"
+          ],
+          "seedHosts": [
+            "demon0:9300"
+          ],
+          "transportCert": {
+            "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBuDCCAV2gAwIBAgIRAJwlU/iHqwEl5BZEqgKvztowCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMBEx\nDzANBgNVBAMTBmRlbW9uMDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABAg9AtNP\nAlTuLCByGL8tKk/wueTMnzHpahu53raec/LWauaARd78jKc8S/gGdYGc5zZTKCJp\n4c9DAoK7dnH7ToyjgZcwgZQwDgYDVR0PAQH/BAQDAgWgMB0GA1UdJQQWMBQGCCsG\nAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8EAjAAMB8GA1UdIwQYMBaAFLR/2hVb\nlO2YmEZtQEQHor1zxOhqMDQGA1UdEQQtMCuCBmRlbW9uMIIJbG9jYWxob3N0hwR/\nAAABhxAAAAAAAAAAAAAAAAAAAAABMAoGCCqGSM49BAMCA0kAMEYCIQDIOPCKj6Qp\nnKFJj7oqcvdEXgFT/RzNn3AC+635sigIrAIhAOV6VhAQ/5fgcOfyGyZ/vlqTLRSV\nYsfsNDPVOdnpFXVy\n-----END CERTIFICATE-----\n",
+            "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgNmV5cxPDG0Tu4gZK\n2kJ1DFhjGhbUylBbUysAHmCGxPyhRANCAAQIPQLTTwJU7iwgchi/LSpP8LnkzJ8x\n6Wobud62nnPy1mrmgEXe/IynPEv4BnWBnOc2UygiaeHPQwKCu3Zx+06M\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+          },
+          "httpCert": {
+            "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBrTCCAVOgAwIBAgIRAKDLqRAW+IM9+a06qE7hTEowCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMBEx\nDzANBgNVBAMTBmRlbW9uMDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABDSn25/+\nLnjOJWrvFWblNdrqRjPFLoGZZAlbatbWCycWfr3Qtt+R6Lc4LT4rS0xvBzi8KxQW\npb6x4geer44kxH2jgY0wgYowDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsG\nAQUFBwMBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUtH/aFVuU7ZiYRm1ARAei\nvXPE6GowNAYDVR0RBC0wK4IGZGVtb24wgglsb2NhbGhvc3SHBH8AAAGHEAAAAAAA\nAAAAAAAAAAAAAAEwCgYIKoZIzj0EAwIDSAAwRQIhAJYCb9tg0sZGYKMhDKa4baib\nUtXwtdbB62lpAG4+fbbSAiBatXZuFKGBnMB0SjKbA3GbxBDiWEC98A/e5LauUG6a\n8w==\n-----END CERTIFICATE-----\n",
+            "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgDSxsVKjk8nZtQgI4\nL5diaR9ABdzYi0C8/0Mqn/YtVWKhRANCAAQ0p9uf/i54ziVq7xVm5TXa6kYzxS6B\nmWQJW2rW1gsnFn690Lbfkei3OC0+K0tMbwc4vCsUFqW+seIHnq+OJMR9\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+          },
+          "fileUsers": "karakoram:$2a$10$OAmjAHu8OJ5qbCRjt9Maa.bn79F/zN3F8O6A6pUVs1erI6otPcxVi\nkarakoram-monitor:$2a$10$.BGH4STX/SmQFKwkI7ldiubiMgtOHfjjpeElMZuB8MCKuk/2R8v7e\n",
+          "fileUsersRoles": "karakoram_monitor:karakoram-monitor\nsuperuser:karakoram\n",
+          "fileRoles": "karakoram_monitor:\n    cluster:\n        - monitor\n    indices:\n        - names:\n            - '*'\n          privileges:\n            - monitor\n            - view_index_metadata\n          allow_restricted_indices: true\n",
+          "monitor": {
+            "username": "karakoram-monitor",
+            "password": "JUGDOmnMjjMjxlPLjY3Q9IRqNiu9VJwtzyGEqPwp"
+          }
+        }
+      },
+      "role": "node",
+      "replSetName": "",
+      "port": 9200,
+      "engineVersion": "9.5.5",
+      "engineConfig": "",
+      "keyfile": "",
+      "tls": {
+        "mode": "requireTLS",
+        "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBXjCCAQWgAwIBAgIRALhmFoV7LR5yw3CoTELjopQwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMA8x\nDTALBgNVBAMTBHRlc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARFqY7TqNHA\nyo5l5Mcauw8986hDW/PEd7e6kDmOqQB87Fx5/lHVZnoVsCq+jPHZ0Fo02jyVhGec\nd2O652NW0zPMo0IwQDAOBgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAd\nBgNVHQ4EFgQUtH/aFVuU7ZiYRm1ARAeivXPE6GowCgYIKoZIzj0EAwIDRwAwRAIg\nYnI948x7QxdAdAUHm0sTWTYxgycucTo42bCfw3g9QGsCIAzS7aEbKLm/9hXw21f1\nny/BL6cigu1YhTb5dSJisv5+\n-----END CERTIFICATE-----\n",
+        "certPEM": "",
+        "keyPEM": ""
+      },
+      "agentTLS": {
+        "certPEM": "-----BEGIN CERTIFICATE-----\nMIIBrTCCAVOgAwIBAgIRANAd99w941XHA++4Z0qbOgcwCgYIKoZIzj0EAwIwDzEN\nMAsGA1UEAxMEdGVzdDAeFw0yNjExMDUyMDM4MTlaFw0yNzExMDUyMDQzMTlaMBEx\nDzANBgNVBAMTBmRlbW9uMDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABNVMwSHj\nxj4SFtEOqPsEK7bw8XLVgg2l4JnEj0o5IqWaW/Erid/iBLYubFpCrkZ9FceZWhIE\nqWHiOkctSl30JEijgY0wgYowDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsG\nAQUFBwMBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUtH/aFVuU7ZiYRm1ARAei\nvXPE6GowNAYDVR0RBC0wK4IGZGVtb24wgglsb2NhbGhvc3SHBH8AAAGHEAAAAAAA\nAAAAAAAAAAAAAAEwCgYIKoZIzj0EAwIDSAAwRQIgLbrfuF1tvX6kmCf/mq/WiBSN\nBbX+mQmK99yEInNlg3cCIQDv/k27zT9Yehc7lpW30cVbxQWLFjBbUyNQHndkmz5/\nSg==\n-----END CERTIFICATE-----\n",
+        "keyPEM": "-----BEGIN KARAKORAM TEST ONLY PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgyDczdK3GoOYgPXXm\nJqGzIR3doTVYELBXTBYpzi4ULImhRANCAATVTMEh48Y+EhbRDqj7BCu28PFy1YIN\npeCZxI9KOSKlmlvxK4nf4gS2LmxaQq5GfRXHmVoSBKlh4jpHLUpd9CRI\n-----END KARAKORAM TEST ONLY PRIVATE KEY-----\n"
+      },
+      "systemUsers": null,
+      "pbmEnabled": false,
+      "desiredProcesses": [
+        "elasticsearch"
+      ],
+      "maintenance": false,
+      "configVersion": 17
+    }
+  },
+  "Internal": {
+    "elasticsearch": {
+      "uid": "Npm30m8ovLTPnU2v",
+      "phase": "ready",
+      "nodeExposure": {
+        "admitted": {
+          "public": false,
+          "ipType": "IPV6",
+          "allowlist": null
+        }
+      },
+      "kibanaExposure": {
+        "admitted": {
+          "public": false,
+          "ipType": "",
+          "allowlist": null
+        }
+      },
+      "apmExposure": {
+        "admitted": {
+          "public": false,
+          "ipType": "",
+          "allowlist": null
+        }
+      },
+      "configVersion": 17,
+      "members": [
+        {
+          "name": "demon0",
+          "runtimeRecovery": {
+            "retryRecordedAt": "0001-01-01T00:00:00Z",
+            "retryAt": "0001-01-01T00:00:00Z",
+            "initialized": true,
+            "deployed": true
+          },
+          "kind": "node",
+          "index": 0,
+          "volume": "demon0v",
+          "serviceId": "demon0",
+          "volumeId": "demon0v",
+          "stage": "joined",
+          "version": "9.5.5",
+          "configVersion": 17,
+          "restartToken": "63b08ed5373ce987bb871fb408370bcdd6ccd1d0554460cb7bbd31f108f4b142",
+          "configHash": "63b08ed5373ce987bb871fb408370bcdd6ccd1d0554460cb7bbd31f108f4b142",
+          "heapMB": 768,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 2,
+            "minRam": 2,
+            "maxRam": 2,
+            "minDisk": 1,
+            "maxDisk": 3
+          },
+          "disk": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 2,
+            "minRam": 2,
+            "maxRam": 2,
+            "minDisk": 5,
+            "maxDisk": 20
+          },
+          "containers": 1
+        },
+        {
+          "name": "demokb",
+          "runtimeRecovery": {
+            "retryRecordedAt": "0001-01-01T00:00:00Z",
+            "retryAt": "0001-01-01T00:00:00Z",
+            "deployed": true
+          },
+          "kind": "kibana",
+          "index": 0,
+          "serviceId": "demokb",
+          "stage": "joined",
+          "version": "9.5.5",
+          "configVersion": 17,
+          "restartToken": "5f2c1f27106801710200c673af32119d8eaeb71c074b34341696e8ea30cfc02a",
+          "configHash": "5f2c1f27106801710200c673af32119d8eaeb71c074b34341696e8ea30cfc02a",
+          "heapMB": 921,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 2,
+            "minRam": 1.5,
+            "maxRam": 2,
+            "minDisk": 1,
+            "maxDisk": 5
+          },
+          "disk": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 2,
+            "minRam": 1.5,
+            "maxRam": 2,
+            "minDisk": 1,
+            "maxDisk": 5
+          },
+          "containers": 1
+        },
+        {
+          "name": "demols",
+          "runtimeRecovery": {
+            "retryRecordedAt": "0001-01-01T00:00:00Z",
+            "retryAt": "0001-01-01T00:00:00Z",
+            "deployed": true
+          },
+          "kind": "logstash",
+          "index": 0,
+          "serviceId": "demols",
+          "stage": "joined",
+          "version": "9.5.5",
+          "configVersion": 17,
+          "restartToken": "65c05c737a0c29a05967f33b33bd4bd65f6a870d3fab8928f7eee35578660eab",
+          "configHash": "65c05c737a0c29a05967f33b33bd4bd65f6a870d3fab8928f7eee35578660eab",
+          "heapMB": 768,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 2,
+            "minRam": 1.5,
+            "maxRam": 1.5,
+            "minDisk": 1,
+            "maxDisk": 5
+          },
+          "disk": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 2,
+            "minRam": 1.5,
+            "maxRam": 1.5,
+            "minDisk": 1,
+            "maxDisk": 5
+          },
+          "containers": 1
+        },
+        {
+          "name": "demoapm",
+          "runtimeRecovery": {
+            "retryRecordedAt": "0001-01-01T00:00:00Z",
+            "retryAt": "0001-01-01T00:00:00Z",
+            "deployed": true
+          },
+          "kind": "apm",
+          "index": 0,
+          "serviceId": "demoapm",
+          "stage": "joined",
+          "version": "9.5.5",
+          "configVersion": 17,
+          "restartToken": "f4732dd55fa482d4d153e492e41a95d4384aa201bef40891acf9265cb53b1d39",
+          "configHash": "f4732dd55fa482d4d153e492e41a95d4384aa201bef40891acf9265cb53b1d39",
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 2,
+            "minRam": 0.5,
+            "maxRam": 0.5,
+            "minDisk": 1,
+            "maxDisk": 5
+          },
+          "disk": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 2,
+            "minRam": 0.5,
+            "maxRam": 0.5,
+            "minDisk": 1,
+            "maxDisk": 5
+          },
+          "containers": 1
+        }
+      ],
+      "nextIndex": {
+        "node": 1
+      },
+      "clusterUUID": "test-uuid",
+      "securityHash": "1efbacca4e58a4c11fb4a08582e736fd6c4da6e8fb5c2906b9cfe899286a3f69",
+      "secureSettingsHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  },
+  "Ownership": {
+    "demoapm": {
+      "KARAKORAM_OWNER": "v1.556de08e68dca213cde3e885305b163ee97a34629798e336a8a8461a04b783c8"
+    },
+    "demokb": {
+      "KARAKORAM_OWNER": "v1.b90ba270512fec377f1a325397b452b98c4f14cef1a738303f60cfcf70cb1967"
+    },
+    "demols": {
+      "KARAKORAM_OWNER": "v1.0ba90083c4cd5f973ff04ffe4b48b9db80c17e9bdeed02ea663e817f53deb442"
+    },
+    "demon0": {
+      "KARAKORAM_OWNER": "v1.e702810329fd1ac78a2b0f6094ba1bfbb06d9c8402960396c714b82d730c2a58"
+    }
+  },
+  "Revision": "1cb6bd98",
+  "Runtime": {
+    "base": "ubuntu-24.04",
+    "prepare": [
+      "sudo mkdir -p /opt/elastic \u0026\u0026 cd /tmp \u0026\u0026 curl -fsSLO https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-9.5.5-linux-x86_64.tar.gz \u0026\u0026 curl -fsSLO https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-9.5.5-linux-x86_64.tar.gz.sha512 \u0026\u0026 sha512sum -c elasticsearch-9.5.5-linux-x86_64.tar.gz.sha512 \u0026\u0026 sudo tar -xzf elasticsearch-9.5.5-linux-x86_64.tar.gz -C /opt/elastic \u0026\u0026 sudo chown -R zerops:zerops /opt/elastic \u0026\u0026 rm -f elasticsearch-9.5.5-linux-x86_64.tar.gz elasticsearch-9.5.5-linux-x86_64.tar.gz.sha512"
+    ],
+    "env": {
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/mnt/demon0v",
+      "KARAKORAM_ENGINE": "elasticsearch",
+      "KARAKORAM_INTERNAL_CA": "",
+      "KARAKORAM_MEMBER": "demon0",
+      "KARAKORAM_URL": ""
+    },
+    "args": [
+      "agent"
+    ],
+    "ports": [
+      {
+        "port": 9200,
+        "protocol": "tcp"
+      },
+      {
+        "port": 9300,
+        "protocol": "tcp"
+      },
+      {
+        "port": 9443,
+        "protocol": "tcp"
+      }
+    ],
+    "volume": "demon0v",
+    "readiness": {
+      "args": [
+        "agent",
+        "readiness",
+        "--startup",
+        "--data-dir=/mnt/demon0v"
+      ],
+      "failureTimeout": 600000000000,
+      "retryPeriod": 10000000000
+    },
+    "stopBeforeStart": true
+  },
+  "Secrets": {
+    "apm/secret-token": "WUtDTjhjWnRaSEhSZmg2N0lLSG5TNlNFbUhNaEpkV25aVnE1N3F5MA==",
+    "filerealm/users": "a2FyYWtvcmFtOiQyYSQxMCRPQW1qQUh1OE9KNXFiQ1JqdDlNYWEuYm43OUYvek4zRjhPNkE2cFVWczFlckk2b3RQY3hWaQprYXJha29yYW0tbW9uaXRvcjokMmEkMTAkLkJHSDRTVFgvU21RRkt3a0k3bGRpdWJpTWd0T0hmampwZUVsTVp1QjhNQ0t1ay8yUjh2N2UK",
+    "kibana/keys/reporting": "STlyVDRjR3dkNmJsbHFZZ1hCdnE5QkdyTFV6eTFKc3hiNk1TaXVzZm45d0l0SmQ0VFpkVFpVbXZtQld6eElUeQ==",
+    "kibana/keys/savedObjects": "aVFaYUVRbXRMcXNqT0xpTUtxVDFnWDhxWVFUSjFrZDdjT1U3ZFk0UXptSXhWSE83eFRQc3hNbEU2clN3cXo1ZA==",
+    "kibana/keys/security": "S2dmY2Vnd3RLc2x1NTBZNDNBN0dCblYzenFZRk53VXVZQlJSMXpHc2YwTlFJdUVYM0xYSWdrMXd0VzVUWlF5cQ==",
+    "kibana/token": "dGVzdC1raWJhbmEtdG9rZW4=",
+    "kibana/token-name": "a2sta3dYNjdWM2IzOTEyNDdLUg==",
+    "members/demoapm/restart-spec": "eyJjb21wb25lbnQiOiJhcG0tc2VydmVyIiwidmVyc2lvbiI6IjkuNS41IiwiY2FQRU0iOiIiLCJyZXN0YXJ0VG9rZW4iOiJmNDczMmRkNTVmYTQ4MmQ0ZDE1M2U0OTJlNDFhOTVkNDM4NGFhMjAxYmVmNDA4OTFhY2Y5MjY1Y2I1M2IxZDM5IiwiYXBtIjp7ImVzSG9zdHMiOlsiaHR0cHM6Ly9kZW1vbjA6OTIwMCJdLCJ3cml0ZXIiOnsidXNlcm5hbWUiOiJrYXJha29yYW1fYXBtIiwicGFzc3dvcmQiOiJURWtHWGRqRWRqeHlhc09VM2RZOW5sS3NQNnNsSUVtZ0h0aHZtTDZyIn0sInNlY3JldFRva2VuIjoiWUtDTjhjWnRaSEhSZmg2N0lLSG5TNlNFbUhNaEpkV25aVnE1N3F5MCIsImFwaUtleXMiOnRydWV9fQ==",
+    "members/demokb/restart-spec": "eyJjb21wb25lbnQiOiJraWJhbmEiLCJ2ZXJzaW9uIjoiOS41LjUiLCJoZWFwTUIiOjkyMSwiY2FQRU0iOiIiLCJyZXN0YXJ0VG9rZW4iOiI1ZjJjMWYyNzEwNjgwMTcxMDIwMGM2NzNhZjMyMTE5ZDhlYWViNzFjMDc0YjM0MzQxNjk2ZThlYTMwY2ZjMDJhIiwia2liYW5hIjp7ImVzSG9zdHMiOlsiaHR0cHM6Ly9kZW1vbjA6OTIwMCJdLCJzZXJ2aWNlQWNjb3VudFRva2VuIjoidGVzdC1raWJhbmEtdG9rZW4iLCJzZWN1cml0eUtleSI6IktnZmNlZ3d0S3NsdTUwWTQzQTdHQm5WM3pxWUZOd1V1WUJSUjF6R3NmME5RSXVFWDNMWElnazF3dFc1VFpReXEiLCJzYXZlZE9iamVjdHNLZXkiOiJpUVphRVFtdExxc2pPTGlNS3FUMWdYOHFZUVRKMWtkN2NPVTdkWTRRem1JeFZITzd4VFBzeE1sRTZyU3dxejVkIiwicmVwb3J0aW5nS2V5IjoiSTlyVDRjR3dkNmJsbHFZZ1hCdnE5QkdyTFV6eTFKc3hiNk1TaXVzZm45d0l0SmQ0VFpkVFpVbXZtQld6eElUeSJ9fQ==",
+    "members/demols/restart-spec": "eyJjb21wb25lbnQiOiJsb2dzdGFzaCIsInZlcnNpb24iOiI5LjUuNSIsImhlYXBNQiI6NzY4LCJjYVBFTSI6IiIsInJlc3RhcnRUb2tlbiI6IjY1YzA1YzczN2EwYzI5YTA1OTY3ZjMzYjMzYmQ0YmQ2NWY2YTg3MGQzZmFiODkyOGY3ZWVlMzU1Nzg2NjBlYWIiLCJsb2dzdGFzaCI6eyJlc0hvc3RzIjpbImh0dHBzOi8vZGVtb24wOjkyMDAiXSwid3JpdGVyIjp7InVzZXJuYW1lIjoia2FyYWtvcmFtX2xvZ3N0YXNoIiwicGFzc3dvcmQiOiJCVnFqV1JxOU1uTVlSVXg1R0RhRnJIcmFWT0FQdWxWMEdMOGZGQmhNIn0sInBlcnNpc3RlbnRRdWV1ZSI6ZmFsc2V9fQ==",
+    "members/demon0/restart-spec": "eyJjb21wb25lbnQiOiJlbGFzdGljc2VhcmNoIiwidmVyc2lvbiI6IjkuNS41IiwiaGVhcE1CIjo3NjgsImNhUEVNIjoiIiwicmVzdGFydFRva2VuIjoiNjNiMDhlZDUzNzNjZTk4N2JiODcxZmI0MDgzNzBiY2RkNmNjZDFkMDU1NDQ2MGNiN2JiZDMxZjEwOGY0YjE0MiIsImVsYXN0aWNzZWFyY2giOnsiY2x1c3Rlck5hbWUiOiJkZW1vIiwibm9kZU5hbWUiOiJkZW1vbjAiLCJyb2xlcyI6WyJtYXN0ZXIiLCJkYXRhIiwiaW5nZXN0IiwicmVtb3RlX2NsdXN0ZXJfY2xpZW50IiwidHJhbnNmb3JtIl0sInNlZWRIb3N0cyI6bnVsbCwidHJhbnNwb3J0Q2VydCI6eyJjZXJ0UEVNIjoiIiwia2V5UEVNIjoiIn0sImh0dHBDZXJ0Ijp7ImNlcnRQRU0iOiIiLCJrZXlQRU0iOiIifSwiZmlsZVVzZXJzIjoiIiwiZmlsZVVzZXJzUm9sZXMiOiIiLCJmaWxlUm9sZXMiOiIiLCJtb25pdG9yIjp7InVzZXJuYW1lIjoiIiwicGFzc3dvcmQiOiIifX19",
+    "tls/agents/demoapm.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJyekNDQVZXZ0F3SUJBZ0lSQUtWRkpXYktMNnlwZGl1ejhsbXJTQlV3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FZEdWemREQWVGdzB5TmpFeE1EVXlNRE00TVRsYUZ3MHlOekV4TURVeU1EUXpNVGxhTUJJeApFREFPQmdOVkJBTVRCMlJsYlc5aGNHMHdXVEFUQmdjcWhrak9QUUlCQmdncWhrak9QUU1CQndOQ0FBU2JJZVFpCnVnRkV5NTVVVlV6YWFKekUzTWFQYTE2NHQyK0kveEZIcVc0MU1pYTFpeWwrT2p2UnlzR3pmVjFmbXpydmlDYVgKVTgweFo4SWdCelV1Q2t4V280R09NSUdMTUE0R0ExVWREd0VCL3dRRUF3SUZvREFUQmdOVkhTVUVEREFLQmdncgpCZ0VGQlFjREFUQU1CZ05WSFJNQkFmOEVBakFBTUI4R0ExVWRJd1FZTUJhQUZMUi8yaFZibE8yWW1FWnRRRVFICm9yMXp4T2hxTURVR0ExVWRFUVF1TUN5Q0IyUmxiVzloY0cyQ0NXeHZZMkZzYUc5emRJY0Vmd0FBQVljUUFBQUEKQUFBQUFBQUFBQUFBQUFBQUFUQUtCZ2dxaGtqT1BRUURBZ05JQURCRkFpRUFvMnhkNU8wMXVnNXlBUDRoY203cgpsK0tNYjA0N3BFaG9Dclk3VStiSER5WUNJQmIweEpybWIyZy9ncmZ0Q3hYT29rYUJNQTAyK242OXN3ZzZqNlRwCjlIRGcKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=",
+    "tls/agents/demoapm.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnSnRnN2ZjU0NGZVhsS3hXQgpCOXo3dmEvTVY1UlQ4dDhjM3FwcFZIM0xjL2VoUkFOQ0FBU2JJZVFpdWdGRXk1NVVWVXphYUp6RTNNYVBhMTY0CnQyK0kveEZIcVc0MU1pYTFpeWwrT2p2UnlzR3pmVjFmbXpydmlDYVhVODB4WjhJZ0J6VXVDa3hXCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/agents/demokb.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJxekNDQVZPZ0F3SUJBZ0lSQU9sNWNLS2RiTlVJbmRidC9TY3diYXd3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FZEdWemREQWVGdzB5TmpFeE1EVXlNRE00TVRsYUZ3MHlOekV4TURVeU1EUXpNVGxhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5cllqQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJMTTl4bm9iClAzbzM5T2hNM1h5R0Q3ZThYemtqVHlIaVYrVlZwOXB6UnZ4MG5jR29sUEN4R1F0ZlhwbGJLLzJjMVlBMXFkS20KWEVybzI4TW9lcnRDRHY2amdZMHdnWW93RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVXRIL2FGVnVVN1ppWVJtMUFSQWVpCnZYUEU2R293TkFZRFZSMFJCQzB3SzRJR1pHVnRiMnRpZ2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFFd0NnWUlLb1pJemowRUF3SURSZ0F3UXdJZmNTTnZpYUtwbGVyNGFuTGhGM2t6VXowMApZRkNTRG5ha25tRWxISS8zemdJZ00zUEgvTmJ6R3llNXBUMWVzNmc0ek5lZXJoaGhzc3dadjBKZ1B5ZzgvSjg9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K",
+    "tls/agents/demokb.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnb202UDZKM2ZnaDhJd1ljawpSZ0VUSStsb2NWT05KRWFjZDdQSjkrZjFrMkdoUkFOQ0FBU3pQY1o2R3o5Nk4vVG9UTjE4aGcrM3ZGODVJMDhoCjRsZmxWYWZhYzBiOGRKM0JxSlR3c1JrTFgxNlpXeXY5bk5XQU5hblNwbHhLNk52REtIcTdRZzcrCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/agents/demols.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJyRENDQVZPZ0F3SUJBZ0lSQU9zanFUWDhjUzg3M0N5bXJCNFBROFV3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FZEdWemREQWVGdzB5TmpFeE1EVXlNRE00TVRsYUZ3MHlOekV4TURVeU1EUXpNVGxhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5c2N6QlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJJb1lneVd6ClFOY21veEJPeFBHRlRLMHd2TWp5UXlQYlN1M1d4SzRQSEtZZzQ4c01zNC9zRXZ6UVVBRUg1dWZhMHlHdTV0ZmIKZURjYjkwelpCZTNRbzZLamdZMHdnWW93RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVXRIL2FGVnVVN1ppWVJtMUFSQWVpCnZYUEU2R293TkFZRFZSMFJCQzB3SzRJR1pHVnRiMnh6Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFFd0NnWUlLb1pJemowRUF3SURSd0F3UkFJZ1dZenBNVWpiZ3hPNGloNzMxNHVreGwzTwoya1ZCWnlCZVhNUGtlVnQ0QkhZQ0lBOEpkY3hON2l2YTd3S2l4QmN2clpibSs1UmV4UGRteWVWa09lLysvd20xCi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K",
+    "tls/agents/demols.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnQkx4UWRrOGJiVWkvb1RCUApvbVRUNWdUNE5IdUduYXdFOVZuOFk1SitaYnloUkFOQ0FBU0tHSU1sczBEWEpxTVFUc1R4aFV5dE1Mekk4a01qCjIwcnQxc1N1RHh5bUlPUExETE9QN0JMODBGQUJCK2JuMnRNaHJ1YlgyM2czRy9kTTJRWHQwS09pCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/agents/demon0.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJyVENDQVZPZ0F3SUJBZ0lSQU5BZDk5dzk0MVhIQSsrNFowcWJPZ2N3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FZEdWemREQWVGdzB5TmpFeE1EVXlNRE00TVRsYUZ3MHlOekV4TURVeU1EUXpNVGxhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dU1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJOVk13U0hqCnhqNFNGdEVPcVBzRUs3Ync4WExWZ2cybDRKbkVqMG81SXFXYVcvRXJpZC9pQkxZdWJGcENya1o5RmNlWldoSUUKcVdIaU9rY3RTbDMwSkVpamdZMHdnWW93RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVXRIL2FGVnVVN1ppWVJtMUFSQWVpCnZYUEU2R293TkFZRFZSMFJCQzB3SzRJR1pHVnRiMjR3Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFFd0NnWUlLb1pJemowRUF3SURTQUF3UlFJZ0xicmZ1RjF0dlg2a21DZi9tcS9XaUJTTgpCYlgrbVFtSzk5eUVJbk5sZzNjQ0lRRHYvazI3elQ5WWVoYzdscFczMGNWYnhRV0xGakJiVXlOUUhuZGttejUvClNnPT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=",
+    "tls/agents/demon0.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFneURjemRLM0dvT1lnUFhYbQpKcUd6SVIzZG9UVllFTEJYVEJZcHppNFVMSW1oUkFOQ0FBVFZUTUVoNDhZK0VoYlJEcWo3QkN1MjhQRnkxWUlOCnBlQ1p4STlLT1NLbG1sdnhLNG5mNGdTMkxteGFRcTVHZlJYSG1Wb1NCS2xoNGpwSExVcGQ5Q1JJCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/ca.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJYakNDQVFXZ0F3SUJBZ0lSQUxobUZvVjdMUjV5dzNDb1RFTGpvcFF3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FZEdWemREQWVGdzB5TmpFeE1EVXlNRE00TVRsYUZ3MHlOekV4TURVeU1EUXpNVGxhTUE4eApEVEFMQmdOVkJBTVRCSFJsYzNRd1dUQVRCZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFSRnFZN1RxTkhBCnlvNWw1TWNhdXc4OTg2aERXL1BFZDdlNmtEbU9xUUI4N0Z4NS9sSFZabm9Wc0NxK2pQSFowRm8wMmp5VmhHZWMKZDJPNjUyTlcwelBNbzBJd1FEQU9CZ05WSFE4QkFmOEVCQU1DQVlZd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVV0SC9hRlZ1VTdaaVlSbTFBUkFlaXZYUEU2R293Q2dZSUtvWkl6ajBFQXdJRFJ3QXdSQUlnClluSTk0OHg3UXhkQWRBVUhtMHNUV1RZeGd5Y3VjVG80MmJDZnczZzlRR3NDSUF6UzdhRWJLTG0vOWhYdzIxZjEKbnkvQkw2Y2lndTFZaFRiNWRTSmlzdjUrCi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K",
+    "tls/ca.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnamJEVTFTcHF2ZmNBL1Y3WQpTSzRTQ2NJNC9xampCWDAxZFE0K2VZZXJRV1doUkFOQ0FBUkZxWTdUcU5IQXlvNWw1TWNhdXc4OTg2aERXL1BFCmQ3ZTZrRG1PcVFCODdGeDUvbEhWWm5vVnNDcStqUEhaMEZvMDJqeVZoR2VjZDJPNjUyTlcwelBNCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/nodes/demon0/http.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJyVENDQVZPZ0F3SUJBZ0lSQUtETHFSQVcrSU05K2EwNnFFN2hURW93Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FZEdWemREQWVGdzB5TmpFeE1EVXlNRE00TVRsYUZ3MHlOekV4TURVeU1EUXpNVGxhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dU1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJEU24yNS8rCkxuak9KV3J2RldibE5kcnFSalBGTG9HWlpBbGJhdGJXQ3ljV2ZyM1F0dCtSNkxjNExUNHJTMHh2QnppOEt4UVcKcGI2eDRnZWVyNDRreEgyamdZMHdnWW93RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVXRIL2FGVnVVN1ppWVJtMUFSQWVpCnZYUEU2R293TkFZRFZSMFJCQzB3SzRJR1pHVnRiMjR3Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFFd0NnWUlLb1pJemowRUF3SURTQUF3UlFJaEFKWUNiOXRnMHNaR1lLTWhES2E0YmFpYgpVdFh3dGRiQjYybHBBRzQrZmJiU0FpQmF0WFp1RktHQm5NQjBTaktiQTNHYnhCRGlXRUM5OEEvZTVMYXVVRzZhCjh3PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=",
+    "tls/nodes/demon0/http.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnRFN4c1ZLams4blp0UWdJNApMNWRpYVI5QUJkellpMEM4LzBNcW4vWXRWV0toUkFOQ0FBUTBwOXVmL2k1NHppVnE3eFZtNVRYYTZrWXp4UzZCCm1XUUpXMnJXMWdzbkZuNjkwTGJma2VpM09DMCtLMHRNYndjNHZDc1VGcVcrc2VJSG5xK09KTVI5Ci0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/nodes/demon0/transport.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ1RENDQVYyZ0F3SUJBZ0lSQUp3bFUvaUhxd0VsNUJaRXFnS3Z6dG93Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FZEdWemREQWVGdzB5TmpFeE1EVXlNRE00TVRsYUZ3MHlOekV4TURVeU1EUXpNVGxhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dU1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJBZzlBdE5QCkFsVHVMQ0J5R0w4dEtrL3d1ZVRNbnpIcGFodTUzcmFlYy9MV2F1YUFSZDc4aktjOFMvZ0dkWUdjNXpaVEtDSnAKNGM5REFvSzdkbkg3VG95amdaY3dnWlF3RGdZRFZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUI4R0ExVWRJd1FZTUJhQUZMUi8yaFZiCmxPMlltRVp0UUVRSG9yMXp4T2hxTURRR0ExVWRFUVF0TUN1Q0JtUmxiVzl1TUlJSmJHOWpZV3hvYjNOMGh3Ui8KQUFBQmh4QUFBQUFBQUFBQUFBQUFBQUFBQUFBQk1Bb0dDQ3FHU000OUJBTUNBMGtBTUVZQ0lRRElPUENLajZRcApuS0ZKajdvcWN2ZEVYZ0ZUL1J6Tm4zQUMrNjM1c2lnSXJBSWhBT1Y2VmhBUS81ZmdjT2Z5R3laL3ZscVRMUlNWCllzZnNORFBWT2RucEZYVnkKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=",
+    "tls/nodes/demon0/transport.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnTm1WNWN4UERHMFR1NGdaSwoya0oxREZoakdoYlV5bEJiVXlzQUhtQ0d4UHloUkFOQ0FBUUlQUUxUVHdKVTdpd2djaGkvTFNwUDhMbmt6Sjh4CjZXb2J1ZDYybm5QeTFtcm1nRVhlL0l5blBFdjRCbldCbk9jMlV5Z2lhZUhQUXdLQ3UzWngrMDZNCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "users/elastic": "WllNcTZ0RzJtd2RLSlFGTm1SZk1aSEFEVEZFb1JUNnV1eHVLdG1hVw==",
+    "users/karakoram": "UGczNkRUM29NWVlybHJMU1g3eTM3ODRXWUNBVVNGRjdQdk1HaUdnbw==",
+    "users/karakoram-monitor": "SlVHRE9tbk1qak1qeGxQTGpZM1E5SVJxTml1OVZKd3R6eUdFcVB3cA==",
+    "users/karakoram_apm": "VEVrR1hkakVkanh5YXNPVTNkWTlubEtzUDZzbElFbWdIdGh2bUw2cg==",
+    "users/karakoram_logstash": "QlZxaldScTlNbk1ZUlV4NUdEYUZySHJhVk9BUHVsVjBHTDhmRkJoTQ=="
+  },
+  "Services": [
+    {
+      "id": "demoapm",
+      "hostname": "demoapm",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 2,
+        "minRam": 0.5,
+        "maxRam": 0.5,
+        "minDisk": 1,
+        "maxDisk": 5
+      },
+      "minContainers": 1,
+      "maxContainers": 1
+    },
+    {
+      "id": "demokb",
+      "hostname": "demokb",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 2,
+        "minRam": 1.5,
+        "maxRam": 2,
+        "minDisk": 1,
+        "maxDisk": 5
+      },
+      "minContainers": 1,
+      "maxContainers": 1
+    },
+    {
+      "id": "demols",
+      "hostname": "demols",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 2,
+        "minRam": 1.5,
+        "maxRam": 1.5,
+        "minDisk": 1,
+        "maxDisk": 5
+      },
+      "minContainers": 1,
+      "maxContainers": 1
+    },
+    {
+      "id": "demon0",
+      "hostname": "demon0",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 2,
+        "minRam": 2,
+        "maxRam": 2,
+        "minDisk": 1,
+        "maxDisk": 3
+      },
+      "minContainers": 1,
+      "maxContainers": 1
+    },
+    {
+      "id": "demon0v",
+      "hostname": "demon0v",
+      "kind": "volume",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "",
+        "minCpu": 0,
+        "maxCpu": 0,
+        "minRam": 0,
+        "maxRam": 0,
+        "minDisk": 5,
+        "maxDisk": 20
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    }
+  ],
+  "Tokens": {
+    "demoapm": "kk_79qgAPQrfY1aWMjWgn3Zt03cWg3J1oE4dDcyfVdskC4YN8Co",
+    "demokb": "kk_dsq659AQhRAM10PXkiBbVsAyrFxag1RuDkoCSyIRRdDbmXDr",
+    "demols": "kk_DtYlWgY4W6KIMYR8LQUdMD7pXe2hOxjzO13hyQH3FMgZqwys",
+    "demon0": "kk_tGr6ziqJ2VYbSRoaiFprbrRyrGq2345f2EUF8IP9ei6d8VNz"
+  }
+}

@@ -140,18 +140,15 @@ func TestDatabaseReadinessCredentialUpgradeRepublishesConfig(t *testing.T) {
 	}
 }
 
-func TestDeployedReadinessArtifactUpgradeRequiresDeployment(t *testing.T) {
-	p, rc, _ := setupProvider(t)
+func TestDeployedReadinessRetainsInstalledArtifact(t *testing.T) {
+	p, rc, backend := setupProvider(t)
 	convergeProvider(t, p, rc)
 	state, err := loadState(rc.Cluster)
 	if err != nil {
 		t.Fatal(err)
 	}
 	member := state.Members["rest"]
-	before, err := p.MemberConfig(t.Context(), rc, member.Name)
-	if err != nil {
-		t.Fatal(err)
-	}
+	before := append([]string(nil), backend.prepares[member.Name]...)
 	member.Stage = engine.ComponentDeployed
 	member.Version = "previous-artifact"
 	member.ConfigHash = "previous-artifact-config"
@@ -159,22 +156,30 @@ func TestDeployedReadinessArtifactUpgradeRequiresDeployment(t *testing.T) {
 		t.Fatal(err)
 	}
 	if handled, err := p.syncComponents(t.Context(), rc); err != nil || !handled {
-		t.Fatal("artifact correction was not handled", err)
+		t.Fatal("configuration correction was not handled", err)
 	}
 	state, err = loadState(rc.Cluster)
 	if err != nil {
 		t.Fatal(err)
 	}
 	member = state.Members["rest"]
-	if member.Stage != engine.ComponentImported || member.Version != "previous-artifact" {
-		t.Fatal("artifact change bypassed installation through normal deployment")
+	if member.Stage != engine.ComponentDeployed || member.Version != "previous-artifact" {
+		t.Fatal("readiness correction activated the release lock")
 	}
 	after, err := p.MemberConfig(t.Context(), rc, member.Name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(before, after) {
-		t.Fatal("published a new-artifact configuration before installation")
+	var sp sbspec.Spec
+	if err := json.Unmarshal(after.EngineSpec, &sp); err != nil {
+		t.Fatal(err)
+	}
+	if after.EngineVersion != member.Version || sp.Version != member.Version ||
+		sp.InstallDir != "/opt/karakoram/supabase-rest-previous-artifact" {
+		t.Fatal("configuration correction selected an unprepared artifact")
+	}
+	if !reflect.DeepEqual(before, backend.prepares[member.Name]) {
+		t.Fatal("readiness correction submitted an artifact deployment")
 	}
 }
 

@@ -31,9 +31,15 @@ var (
 )
 
 func publish(ctx context.Context, rc *engine.Context, p engine.DataMcpProvider, b engine.DataMcpBackend, s *state) (bool, error) {
-	a, err := nativeartifacts.Get(b.Upstream)
-	if err != nil {
-		return false, err
+	var a nativeartifacts.Artifact
+	if s.Artifact != nil {
+		a = *s.Artifact
+	} else {
+		var err error
+		a, err = nativeartifacts.Get(b.Upstream)
+		if err != nil {
+			return false, err
+		}
 	}
 	old, err := MemberConfig(ctx, rc, Member(rc.Cluster.Name))
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
@@ -201,6 +207,11 @@ func (c *Controller) Observe(ctx context.Context, rc *engine.Context, status *do
 		return err
 	}
 	v.UpstreamVersion = a.Version
+	if failure, ok := rc.Cluster.Status.DeploymentFailures[Member(rc.Cluster.Name)]; ok && rc.Cluster.Spec.RetryEpoch <= failure.RetryEpoch {
+		v.Phase = domain.DataMcpPhaseDegraded
+		v.Message = failure.Message
+		return nil
+	}
 	s, err := load(ctx, rc)
 	if err != nil {
 		return err

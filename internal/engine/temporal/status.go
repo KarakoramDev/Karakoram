@@ -131,8 +131,9 @@ func (p *Provider) syncNamespaces(ctx context.Context, rc *engine.Context, s *co
 }
 
 // Status observes component health and publishes password-free binding metadata.
-func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.ClusterStatus, error) {
-	out := rc.Cluster.Status
+func (p *Provider) Status(ctx context.Context, rc *engine.Context) (out domain.ClusterStatus, err error) {
+	out = rc.Cluster.Status
+	defer func() { engine.ApplyDeploymentStatus(rc, &out) }()
 	out.Phase = domain.PhaseUpdating
 	out.Members = nil
 	out.Conditions = nil
@@ -197,6 +198,10 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ready = false
 			continue
 		}
+		if failure := m.DeploymentFailure; failure != nil && failure.Status == "DeploymentRetriesExhausted" && rc.Cluster.Spec.RetryEpoch <= failure.RetryEpoch {
+			ready = false
+			out.Phase = domain.PhaseDegraded
+		}
 		var agent domain.AgentStatus
 		observed, e := componentStatus(ctx, rc, m, &agent)
 		if e != nil {
@@ -256,7 +261,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 	if s.Pending != nil && s.Pending.Action == "deploy" {
 		s.Pending = nil
 	}
-	if busy, e := observePending(ctx, rc, s); busy || e != nil {
+	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 		return false, e
 	}
 	for i := len(tspec.RollOrder) - 1; i >= 0; i-- {

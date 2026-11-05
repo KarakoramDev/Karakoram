@@ -1,0 +1,288 @@
+{
+  "Revision": "ed9541a6",
+  "Cluster": {
+    "namespace": "default",
+    "name": "demo",
+    "spec": {
+      "provider": "psmdb",
+      "version": "8.0.32-14",
+      "topology": {
+        "type": "replicaSet"
+      },
+      "components": {
+        "engine": {
+          "replicas": 1,
+          "resources": {
+            "cpuMode": "SHARED",
+            "minCpu": 1,
+            "maxCpu": 1,
+            "minRam": 1,
+            "maxRam": 1,
+            "minDisk": 5,
+            "maxDisk": 5
+          }
+        },
+        "configServer": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        },
+        "router": {
+          "replicas": 0,
+          "resources": {
+            "cpuMode": "",
+            "minCpu": 0,
+            "maxCpu": 0,
+            "minRam": 0,
+            "maxRam": 0,
+            "minDisk": 0,
+            "maxDisk": 0
+          }
+        }
+      },
+      "backup": {
+        "schedules": null,
+        "pitr": {
+          "enabled": false,
+          "oplogSpanMinutes": 10
+        }
+      },
+      "tls": {
+        "mode": "requireTLS",
+        "ca": "selfSigned"
+      },
+      "exposure": {
+        "public": false,
+        "ipType": "IPV6",
+        "allowlist": null
+      },
+      "monitoring": {
+        "enabled": false
+      }
+    },
+    "status": {
+      "phase": "Creating",
+      "message": "Creating: queued platform provisioning",
+      "conditions": null,
+      "observedGeneration": 0,
+      "observedAt": "0001-01-01T00:00:00Z",
+      "members": null,
+      "connection": {
+        "hosts": null,
+        "uri": "",
+        "publicHosts": null
+      },
+      "backup": {},
+      "placement": {
+        "guaranteedAntiAffinity": false,
+        "groups": null
+      }
+    },
+    "generation": 1,
+    "deleting": false,
+    "deleteOptions": {
+      "keepVolumes": false,
+      "keepBackups": false
+    },
+    "createdAt": "2026-11-05T20:47:10.498942021Z",
+    "updatedAt": "2026-11-05T20:47:10.498942021Z"
+  },
+  "Internal": {
+    "balancerStopped": false,
+    "balancerWasEnabled": false,
+    "cleanupBackups": false,
+    "cleanupSecrets": false,
+    "cloneQueued": false,
+    "configHash": "760fa7da09e1efb13d06f0c62d62facb69f93f3ee8e5bea0a93185c59c21369c",
+    "configVersion": 2,
+    "exposureAdmission": {
+      "admitted": {
+        "public": false,
+        "ipType": "IPV6",
+        "allowlist": null
+      }
+    },
+    "managedUsersRetryable": false,
+    "members": [
+      {
+        "name": "demom0",
+        "runtimeRecovery": {
+          "retryRecordedAt": "0001-01-01T00:00:00Z",
+          "retryAt": "0001-01-01T00:00:00Z",
+          "deployed": true
+        },
+        "volume": "demom0v",
+        "serviceId": "demom0",
+        "volumeId": "demom0v",
+        "set": "rs0",
+        "role": "mongod-rs",
+        "index": 0,
+        "shard": -1,
+        "stage": "active",
+        "version": "8.0.32-14",
+        "desiredVersion": "8.0.32-14",
+        "configVersion": 2,
+        "tlsMode": "requireTLS",
+        "engineConfig": "",
+        "cacheGB": 0.25,
+        "replacingReady": false,
+        "resources": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 1,
+          "maxDisk": 3
+        },
+        "cpuModeChangedAt": "0001-01-01T00:00:00Z",
+        "disk": {
+          "cpuMode": "SHARED",
+          "minCpu": 1,
+          "maxCpu": 1,
+          "minRam": 1,
+          "maxRam": 1,
+          "minDisk": 5,
+          "maxDisk": 5
+        },
+        "containers": 1,
+        "removing": false,
+        "publicHash": "3702cf33cba503f033fd69330b7ca3cd9ba849acbedd32f3640cc47cc0006d77"
+      }
+    ],
+    "nextIndex": {
+      "rs0": 1
+    },
+    "pbmHash": "",
+    "pbmPrefix": "karakoram/demo-ghvaxHxMcatJ",
+    "pbmStorage": "",
+    "phase": "reload",
+    "replaceActive": false,
+    "sets": {
+      "rs0": {
+        "stage": "ready",
+        "added": false
+      }
+    },
+    "suspended": false,
+    "tlsMode": "requireTLS",
+    "uid": "ghvaxHxMcatJ"
+  },
+  "Secrets": {
+    "keyfile": "Qkp2ZitvZDdLemFCelV3TzkwaENCdVlOUE5hNzk4VzJmNUZYajFxZ0pSMEJPZkNqa0pjM3JEdUhtWUg2NEtaZ3J4dUFlN21GcVFQZUg2cFB3RlNtV2F1ZDJWYVF0UTRwRjQxcjJ6Yk1qdCs4RWlWTW1VMHJ6Y2wrbXcyZm9YbFhrRk1aeVJLalQzVmgyQUh6eUl0VG9YTWp5S05kZ2U0R0NpbDF0dUkvdTN5QUhsZXBRRXczeUJ1S28yWGNZMW56TlRROThOa3VDL0VOSWJVazFwQk53TmprYVkrcUpabERvZ3RKWHQ1d3NsWmVUQzUyY0RHT0tZVlZDR2hGTXdhVkNRTldhYjRnTGExRTEyM2lQTnNneU5nOGdWVHVVbFpVNmsvNjZZQlhqNkpnWHBzb0lIOTRNL1pvWS9MU1dmdnAzTW9CQS8xYVRLb2ZqQnZkeG00RGhyd2ROU3d0bEdKTkZCQlpSQ3lrQTBEcFJLY3ArR1N4SWR4clc2T3REUnZ1K0tCQittejVJenR6cktKL0MycHBpVCtOTmlJOUxpY0QySTNoRmtxSDlvdnJTRUljc3FIVEdTT3VodkUrWWZiTmdlUjRQZ3g2TWNtSWdtaHpYOEdpaFhYT210YWVoZWlKbkdNemtVVjZZUitvUnJrM05UdXhQcmRIc3FxcmY5cng4UTRmSGV5Y2FzNnNwY3NwTVlsZmxIcU44RXJ6NmVOZGxuanRlREhSVDhVVE0ybjNtR1hvWWhCa1lWS2ZNRCtsSE9WMkw5OGFoVkt2aEkrUVoxdytHL1ord2JxTmRkbEVINWlKaWJHc0pUN0R5OGs5Wk9aSEFjYTFBV243ZCsxVlY0K092U0c2T0xkVlluS0F2eUttRy9ad2hObUduUm1vOEU1UGt2eEVmRW1TUG5jbVkzcnBwRG5qUGNENHZhTjAzRGRza2FOajlWdWhMWlRxMXZVRjVwb05kS09yNzM3TnZ4WTVEOE5GV1pzQkU2QW9CUzN3",
+    "members/demom0/users/backup": "Y0VuWjhBYXJ0ZEhzQlRKRkY0WFdMSzFqZnM0Tk1yY0ZCTkZuNXJ5MA==",
+    "members/demom0/users/clusterMonitor": "VVNqaHV2dFRYdkMyUDR4V0xsQlRkVTBFWTdPbjFZRU9abG5qOVVmTQ==",
+    "tls/agents/demom0.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ3RENDQVdXZ0F3SUJBZ0lSQU9ValJRcjVQSEpsR2xUc3RaMXd6OVl3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRFF5TVRCYUZ3MHlOekV4TURVeU1EUTNNVEJhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dE1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJJTlpnMlRXCktMOEZZeWVwWm5UdmN6elVzL21mS2hHQnE5dUJQbmZBazdFOUloY2RjMWtlWUhqKzNKQndRTmZQSWhmZElLbk0KVkROUTNrNjJ3ei83WmU2amdaOHdnWnd3RGdZRFZSMFBBUUgvQkFRREFnV2dNQk1HQTFVZEpRUU1NQW9HQ0NzRwpBUVVGQndNQk1Bd0dBMVVkRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVWU4UzV2SjJ5aVVlV0RVeEN0SCtZCnJNNHFWMWN3UmdZRFZSMFJCRDh3UFlJR1pHVnRiMjB3Z2dsc2IyTmhiR2h2YzNTSEJIOEFBQUdIRUFBQUFBQUEKQUFBQUFBQUFBQUFBQUFHSEVDQUJEYmdBQUFBQUFBQUFBQUFBQUFFd0NnWUlLb1pJemowRUF3SURTUUF3UmdJaApBT1crQ3hIREQzbDlESE9JRHpwdVJYeVpQVHdRM0xVaTEzUnBQNklDMXYxbkFpRUFrR1d4a3NDNUVSUHVLcmVhCk4ycFRUZlFTdUVsOE44TDJZQmJzcTUwa3dzQT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQotLS0tLUJFR0lOIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQpNSUdIQWdFQU1CTUdCeXFHU000OUFnRUdDQ3FHU000OUF3RUhCRzB3YXdJQkFRUWdrRzFEclQ5MXlKNld5YlljCjVUWFdjTU1lamJpYytrbUxXWlMyUkVDWkh4eWhSQU5DQUFTRFdZTmsxaWkvQldNbnFXWjA3M004MUxQNW55b1IKZ2F2YmdUNTN3Sk94UFNJWEhYTlpIbUI0L3R5UWNFRFh6eUlYM1NDcHpGUXpVTjVPdHNNLysyWHUKLS0tLS1FTkQgS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCg==",
+    "tls/ca.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJYekNDQVFXZ0F3SUJBZ0lSQUtacnZvZ1ZwOTMyZ1k3VEZLT1JWeFl3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRFF5TVRCYUZ3MHpOakV4TURJeU1EUTNNVEJhTUE4eApEVEFMQmdOVkJBTVRCR1JsYlc4d1dUQVRCZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFTOWVhSG1YVTErCnMzLzdtVlVBT2JWM1Y3YmQzeU1BUFA2S1pRS25DbGZPSTZsRW5mQU9KNWZ2aHBGMkJiQ3dNdVd4cENmOHhTcHAKV1ZhaDlKR0Q2MU9pbzBJd1FEQU9CZ05WSFE4QkFmOEVCQU1DQVlZd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVlOFM1dkoyeWlVZVdEVXhDdEgrWXJNNHFWMWN3Q2dZSUtvWkl6ajBFQXdJRFNBQXdSUUlnClhPeDhneXFsckhRL09EZzlvdzM2OVloWjArRWpEdWtjbW5Tbi9IYWRBSG9DSVFEOTdIUG5HRWgyOW14WXBtY0YKNVlYME1vZzMzSDdESW1SK0VaSmFtcHR0Qnc9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==",
+    "tls/ca.key": "LS0tLS1CRUdJTiBLQVJBS09SQU0gVEVTVCBPTkxZIFBSSVZBVEUgS0VZLS0tLS0KTUlHSEFnRUFNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQkcwd2F3SUJBUVFnbjdlZVhtTkY0TEU4UFJtMgpva2RDaFNIeklSUjc3dUVkL3AvL2pzOVdrTWVoUkFOQ0FBUzllYUhtWFUxK3MzLzdtVlVBT2JWM1Y3YmQzeU1BClBQNktaUUtuQ2xmT0k2bEVuZkFPSjVmdmhwRjJCYkN3TXVXeHBDZjh4U3BwV1ZhaDlKR0Q2MU9pCi0tLS0tRU5EIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQo=",
+    "tls/members/demom0.pem": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ5RENDQVcrZ0F3SUJBZ0lSQU1iUklvYUhySHFHWFFIWWJPeUZEeWN3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVBeE1FWkdWdGJ6QWVGdzB5TmpFeE1EVXlNRFF5TVRCYUZ3MHlOekV4TURVeU1EUTNNVEJhTUJFeApEekFOQmdOVkJBTVRCbVJsYlc5dE1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJNd1BBZ2NZClZ1L3pDQkNCNS95Sk96bm5UYUpyTjdyU0dLR3Q0a3NNSnM5NnBHOFlnSCt3RGtGSHdLaE5hdlZDV1UvVnZ1b1YKSWQ0MzNUckt3a3pxRW5xamdha3dnYVl3RGdZRFZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUI4R0ExVWRJd1FZTUJhQUZIdkV1YnlkCnNvbEhsZzFNUXJSL21Lek9LbGRYTUVZR0ExVWRFUVEvTUQyQ0JtUmxiVzl0TUlJSmJHOWpZV3hvYjNOMGh3Ui8KQUFBQmh4QUFBQUFBQUFBQUFBQUFBQUFBQUFBQmh4QWdBUTI0QUFBQUFBQUFBQUFBQUFBQk1Bb0dDQ3FHU000OQpCQU1DQTBjQU1FUUNJRWw3VDcwRk1KVHNnOFhRbEJyUGlDNzJqQ3pzMDU5RVVFR1F0SVNnbk11aEFpQVFzaFM1CnRlNjFQNTB5U1JvL2gxcENOMDJwdDloTTdhLytGNDArcFAvL2FBPT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQotLS0tLUJFR0lOIEtBUkFLT1JBTSBURVNUIE9OTFkgUFJJVkFURSBLRVktLS0tLQpNSUdIQWdFQU1CTUdCeXFHU000OUFnRUdDQ3FHU000OUF3RUhCRzB3YXdJQkFRUWdYb2NkNS9HVE1IKzVYeUFpCjdyeGJGU3pOQ21TbjhHOFlHYk56VyttMzRGK2hSQU5DQUFUTUR3SUhHRmJ2OHdnUWdlZjhpVHM1NTAyaWF6ZTYKMGhpaHJlSkxEQ2JQZXFSdkdJQi9zQTVCUjhDb1RXcjFRbGxQMWI3cUZTSGVOOTA2eXNKTTZoSjYKLS0tLS1FTkQgS0FSQUtPUkFNIFRFU1QgT05MWSBQUklWQVRFIEtFWS0tLS0tCg==",
+    "users/backup": "Y0VuWjhBYXJ0ZEhzQlRKRkY0WFdMSzFqZnM0Tk1yY0ZCTkZuNXJ5MA==",
+    "users/clusterAdmin": "NW9NTlZaVXdCeXlNWU1VUEZWRTJUZnRwc21vajdwWlUzN0FLcmpldg==",
+    "users/clusterMonitor": "VVNqaHV2dFRYdkMyUDR4V0xsQlRkVTBFWTdPbjFZRU9abG5qOVVmTQ==",
+    "users/databaseAdmin": "VVhCVHQxQk50bXRiU2FqQmUxNHlnWEVGRzIxNzZSTTdZMjBUR2hWVg==",
+    "users/userAdmin": "TmVOMkhnaTMzNlZLUWJobVFuUFptNGNTaWRyeGxrcTAwWWw1QmVEcg=="
+  },
+  "Tokens": {
+    "demom0": "kk_dHyTkcvtyezT9x4TgSx2vBki0mYSr2c8uuvUYcB8cCacMbgp"
+  },
+  "Services": [
+    {
+      "id": "demom0v",
+      "hostname": "demom0v",
+      "kind": "volume",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "",
+        "minCpu": 0,
+        "maxCpu": 0,
+        "minRam": 0,
+        "maxRam": 0,
+        "minDisk": 5,
+        "maxDisk": 5
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    },
+    {
+      "id": "demom0",
+      "hostname": "demom0",
+      "kind": "runtime",
+      "status": "ACTIVE",
+      "resources": {
+        "cpuMode": "SHARED",
+        "minCpu": 1,
+        "maxCpu": 1,
+        "minRam": 1,
+        "maxRam": 1,
+        "minDisk": 1,
+        "maxDisk": 3
+      },
+      "minContainers": 0,
+      "maxContainers": 0
+    }
+  ],
+  "Ownership": {
+    "demom0": {
+      "KARAKORAM_AGENT_TOKEN": "kk_dHyTkcvtyezT9x4TgSx2vBki0mYSr2c8uuvUYcB8cCacMbgp",
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/mnt/demom0v",
+      "KARAKORAM_MEMBER": "demom0",
+      "KARAKORAM_OWNER": "v1.e527e8f5a6e6d2ea93efb988ba82353380d4d9b1c622bbb508aa843a15e7f724"
+    },
+    "demom0v": {
+      "KARAKORAM_AGENT_TOKEN": "kk_dHyTkcvtyezT9x4TgSx2vBki0mYSr2c8uuvUYcB8cCacMbgp",
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_MEMBER": "demom0",
+      "KARAKORAM_OWNER": "v1.73b523b727f21ae4603569219bb7ea042ec11163a528b4550b5ea4034e69812a"
+    }
+  },
+  "Runtime": {
+    "base": "ubuntu-24.04",
+    "prepare": [
+      "sudo apt-get update",
+      "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg lsb-release",
+      "curl -fsSL https://repo.percona.com/apt/percona-release_latest.generic_all.deb -o /tmp/percona-release.deb",
+      "sudo dpkg -i /tmp/percona-release.deb",
+      "sudo percona-release enable psmdb-80 release --scheme https",
+      "sudo percona-release enable pbm release --scheme https",
+      "sudo apt-get update",
+      "sudo PERCONA_TELEMETRY_DISABLE=1 apt-get install -y --no-install-recommends percona-server-mongodb-server=8.0.32-14.noble percona-server-mongodb-mongos=8.0.32-14.noble percona-server-mongodb-tools=8.0.32-14.noble percona-mongodb-mongosh=2.10.0.noble percona-backup-mongodb=2.16.0-1.noble"
+    ],
+    "env": {
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/mnt/demom0v",
+      "KARAKORAM_INTERNAL_CA": "control-plane-ca",
+      "KARAKORAM_MEMBER": "demom0",
+      "KARAKORAM_URL": "https://karakoram:9443",
+      "PERCONA_TELEMETRY_DISABLE": "1"
+    },
+    "args": [
+      "agent"
+    ],
+    "ports": [
+      {
+        "port": 27017,
+        "protocol": "tcp"
+      }
+    ],
+    "volume": "demom0v",
+    "readiness": {
+      "args": [
+        "agent",
+        "readiness",
+        "--startup",
+        "--data-dir=/mnt/demom0v"
+      ],
+      "failureTimeout": 300000000000,
+      "retryPeriod": 10000000000
+    },
+    "stopBeforeStart": true
+  }
+}

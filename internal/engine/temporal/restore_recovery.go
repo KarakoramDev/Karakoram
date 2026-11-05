@@ -117,7 +117,7 @@ func (p *Provider) recoverRestore(ctx context.Context, rc *engine.Context, s *co
 		r.Index++
 		return false, nil
 	}
-	if busy, err := syncUIExposure(ctx, rc, s, m); busy || err != nil {
+	if busy, err := p.syncUIExposure(ctx, rc, s, m); busy || err != nil {
 		return false, err
 	}
 	if _, err := verifyComponent(ctx, rc, m); err != nil {

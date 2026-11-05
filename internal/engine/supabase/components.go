@@ -16,6 +16,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -53,15 +54,21 @@ type componentMember struct {
 // Keep terminal deployment evidence across retries and control-plane restarts.
 // An imported stage describes lifecycle progress, not the platform's outcome.
 type componentDeploymentFailure struct {
-	Op     infra.Op `json:"op"`
-	Status string   `json:"status"`
-	Detail string   `json:"detail,omitempty"`
+	Op         infra.Op `json:"op"`
+	Status     string   `json:"status"`
+	Detail     string   `json:"detail,omitempty"`
+	Intent     string   `json:"intent,omitempty"`
+	RetryEpoch int64    `json:"retryEpoch,omitempty"`
+	Attempts   int      `json:"attempts,omitempty"`
 }
 
 func (f *componentDeploymentFailure) message() string {
 	message := fmt.Sprintf("deployment %s for service %s failed (%s); inspect the backend deployment and runtime preparation diagnostics", f.Op.ID, f.Op.ServiceID, f.Status)
 	if f.Detail != "" {
 		message += "; " + f.Detail
+	}
+	if f.Attempts > 0 {
+		message += fmt.Sprintf("; %d of %d deployment attempts consumed", f.Attempts, componentDeploymentAttempts)
 	}
 	if f.Status == "DeploymentRetriesExhausted" {
 		message += "; automatic deployment retries are exhausted; inspect the failure, then run karactl clusters retry-deployments to re-arm"
@@ -85,6 +92,8 @@ type componentPending struct {
 	Op               infra.Op             `json:"op"`
 	Component        string               `json:"component"`
 	Action           string               `json:"action"`
+	Version          string               `json:"version,omitempty"`
+	RetryIntent      string               `json:"retryIntent,omitempty"`
 	Replicas         int                  `json:"replicas,omitempty"`
 	Resources        domain.Resources     `json:"resources"`
 	Public           bool                 `json:"public,omitempty"`
@@ -379,6 +388,25 @@ func (p *Provider) observeComponent(ctx context.Context, rc *engine.Context, s *
 		rc.Cluster.Status.Message = "Scaling down: deleting disabled component " + q.Component
 		return true, nil
 	}
+	// A successful submission may precede a failed secret write. Retain the
+	// receipt and finish publication without requiring the target to be ready.
+	if q.Action == "deploy" && q.Version != "" {
+		m := s.Members[q.Component]
+		if m == nil {
+			return true, engine.ErrNotFound
+		}
+		target := *m
+		target.Version = q.Version
+		sp, err := p.desiredSpec(ctx, rc, &target)
+		if err != nil {
+			return true, err
+		}
+		if m.Version != sp.Version || m.ConfigHash != sp.RestartToken {
+			if err := p.publishConfig(ctx, rc, m, sp); err != nil {
+				return true, err
+			}
+		}
+	}
 	if !rc.Cluster.Deleting && q.Action == "scale" {
 		desired := rc.Cluster.Spec.Components.Extra[q.Component]
 		if desired.Replicas > 0 && desired.Replicas < q.Replicas {
@@ -462,7 +490,7 @@ func (p *Provider) observeComponent(ctx context.Context, rc *engine.Context, s *
 		if specErr != nil {
 			return true, specErr
 		}
-		m.DeploymentFailure = &componentDeploymentFailure{Op: q.Op, Status: "DeploymentRetriesExhausted", Detail: infra.SafeDetail(err)}
+		m.DeploymentFailure = newComponentExhaustedFailure(rc, q.Op, q.RetryIntent, err)
 		s.Pending = nil
 		return false, engine.RecordDeploymentExhausted(ctx, rc, m.Name, runtime, err)
 	}
@@ -495,8 +523,7 @@ func (p *Provider) observeComponent(ctx context.Context, rc *engine.Context, s *
 				// failure or replacing prior terminal deployment evidence.
 				return true, nil
 			}
-			m.DeploymentFailure = &componentDeploymentFailure{Op: q.Op, Status: status.Status, Detail: status.Message}
-			return true, errors.New(m.DeploymentFailure.message())
+			return true, p.recordComponentDeploymentFailure(ctx, rc, m, q.Op, status.Status, status.Message, q.RetryIntent)
 		}
 		if q.Action == "scale" || q.Action == "resize" {
 			target := q.Target
@@ -854,11 +881,7 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 				return importComponent(ctx, rc, s, m, desired)
 			},
 			Deploy: func(ctx context.Context) error {
-				sp, e := p.desiredSpec(ctx, rc, m)
-				if e != nil {
-					return e
-				}
-				return p.deployComponent(ctx, rc, s, m, sp)
+				return p.deployComponent(ctx, rc, s, m)
 			},
 			AwaitReady: func(ctx context.Context) error {
 				// A configuration correction must reach an instance even when
@@ -923,16 +946,30 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 	return exposureDeferred, nil
 }
 
-func (p *Provider) deployComponent(ctx context.Context, rc *engine.Context, s *componentState, m *componentMember, sp sbspec.Spec) error {
+func (p *Provider) deployComponent(ctx context.Context, rc *engine.Context, s *componentState, m *componentMember) error {
 	if _, err := verifyComponent(ctx, rc, m); err != nil {
 		return err
 	}
-	if err := p.publishConfig(ctx, rc, m, sp); err != nil {
+	// Only a deployment prepares the current release's artifact. Render its
+	// matching configuration here, after the caller's rollout/readiness gates,
+	// rather than letting a control-plane-only reconcile activate it.
+	a, err := nativeartifacts.Get(componentArtifact(m.Component))
+	if err != nil {
+		return err
+	}
+	intent := componentDeploymentIntent(&a)
+	target := *m
+	target.Version = a.Version
+	sp, err := p.desiredSpec(ctx, rc, &target)
+	if err != nil {
 		return err
 	}
 	runtime, err := p.runtimeSpec(rc, m)
 	if err != nil {
 		return err
+	}
+	if sameComponentDeploymentBudget(rc, m.DeploymentFailure, intent) && m.DeploymentFailure.Status == "DeploymentRetriesExhausted" {
+		return componentDeploymentBudgetError(ctx, rc, m, runtime)
 	}
 	if m.Stage == engine.ComponentImported {
 		desired := rc.Cluster.Spec.Components.Extra[m.Component]
@@ -947,12 +984,15 @@ func (p *Provider) deployComponent(ctx context.Context, rc *engine.Context, s *c
 	op, err := engine.Deploy(ctx, rc, m.Name, runtime)
 	if err != nil {
 		if errors.Is(err, infra.ErrDeploymentRetriesExhausted) {
-			m.DeploymentFailure = &componentDeploymentFailure{Status: "DeploymentRetriesExhausted", Detail: infra.SafeDetail(err)}
+			m.DeploymentFailure = newComponentExhaustedFailure(rc, infra.Op{}, intent, err)
+		}
+		if !errors.Is(err, infra.ErrDeploymentRetriesExhausted) && !componentDeploymentWaiting(err) {
+			return errors.Join(err, p.recordComponentDeploymentFailure(ctx, rc, m, infra.Op{}, "DeploymentSubmissionFailed", infra.SafeDetail(err), intent))
 		}
 		return err
 	}
-	s.Pending = &componentPending{Op: op, Component: m.Component, Action: "deploy", RuntimePort: ports[m.Component], SubmittedAt: clockNow(rc)}
-	return nil
+	s.Pending = &componentPending{Op: op, Component: m.Component, Action: "deploy", Version: sp.Version, RetryIntent: intent, RuntimePort: ports[m.Component], SubmittedAt: clockNow(rc)}
+	return p.publishConfig(ctx, rc, m, sp)
 }
 func deleteComponent(ctx context.Context, rc *engine.Context, s *componentState, m *componentMember) error {
 	service, err := verifyComponent(ctx, rc, m)

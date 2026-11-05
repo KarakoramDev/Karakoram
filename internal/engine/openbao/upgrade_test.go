@@ -106,8 +106,9 @@ func TestVersionUpgradeRollsStandbysFirst(t *testing.T) {
 	}
 }
 
-func TestPluginRevisionRolloutResumesAfterControllerRestart(t *testing.T) {
+func TestExplicitUpgradeActivatesPluginsAfterControllerRestart(t *testing.T) {
 	p, rc, f, _ := setup(t)
+	rc.Cluster.Spec.Version = "2.7.1"
 	ready(t, p, rc)
 	s := state(t, rc)
 	for _, m := range s.Members {
@@ -116,6 +117,8 @@ func TestPluginRevisionRolloutResumesAfterControllerRestart(t *testing.T) {
 	if err := s.save(rc.Cluster); err != nil {
 		t.Fatal(err)
 	}
+	rc.Cluster.Spec.Version = "2.7.2"
+	rc.Cluster.Generation++
 	initialDeployments := len(f.deployments)
 	// Persist the member change before recreating the controller.
 	if _, err := p.Sync(t.Context(), rc); err != nil {
@@ -132,10 +135,10 @@ func TestPluginRevisionRolloutResumesAfterControllerRestart(t *testing.T) {
 		}
 		if allInstalled {
 			if len(f.deployments)-initialDeployments != 3 {
-				t.Fatal("plugin-only rollout did not redeploy exactly once per member")
+				t.Fatal("explicit upgrade did not redeploy exactly once per member")
 			}
 			return
 		}
 	}
-	t.Fatal("plugin-only rollout failed to recover after controller restart")
+	t.Fatal("explicit upgrade failed to recover after controller restart")
 }

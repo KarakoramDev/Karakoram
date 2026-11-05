@@ -225,7 +225,7 @@ func (p *Provider) rollOperation(ctx context.Context, rc *engine.Context, s *com
 	if rc.WaitForWindow().RequeueAfter > 0 {
 		return false, nil
 	}
-	if busy, e := syncUIExposure(ctx, rc, s, m); busy || e != nil {
+	if busy, e := p.syncUIExposure(ctx, rc, s, m); busy || e != nil {
 		return false, e
 	}
 	conn, e := p.options.Bindings.Resolve(ctx, s.BindingID)

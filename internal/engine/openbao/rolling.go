@@ -118,7 +118,9 @@ func (p *Provider) lifecycleStep(ctx context.Context, rc *engine.Context, s *int
 				continue
 			}
 			kind := ""
-			if m.DesiredVersion != rc.Cluster.Spec.Version || m.PluginRevision != pluginRevision {
+			// Lock drift alone is not upgrade intent. Install newer plugins with
+			// the next explicit server or agent rollout, never a CP-only reconcile.
+			if m.DesiredVersion != rc.Cluster.Spec.Version {
 				kind = "deploy"
 			} else if !reflect.DeepEqual(m.Resources, runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)) || m.Disk.MinDisk != rc.Cluster.Spec.Components.Engine.Resources.MinDisk || m.Disk.MaxDisk != rc.Cluster.Spec.Components.Engine.Resources.MaxDisk {
 				kind = "resources"

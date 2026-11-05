@@ -225,6 +225,10 @@ func TestOptionalAgentRolloutWindowClosesBetweenMembers(t *testing.T) {
 		return r
 	}
 	step()
+	if len(wrapped.names) != 0 || json.Unmarshal(op.Checkpoint, &cp) != nil || !cp.Preparing {
+		t.Fatal("optional deployment did not persist preparation intent first")
+	}
+	step()
 	first := s.Members["gateway"].Name
 	if !reflect.DeepEqual(wrapped.names, []string{first}) {
 		t.Fatal("first optional member did not deploy", wrapped.names)
@@ -276,6 +280,7 @@ func TestOptionalAgentRolloutWindowClosesBetweenMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	step()
+	step() // Submit the already-persisted preparation intent.
 	if !reflect.DeepEqual(wrapped.names, []string{first, s.Members["auth"].Name}) {
 		t.Fatal("persisted override did not permit optional deployment", wrapped.names)
 	}

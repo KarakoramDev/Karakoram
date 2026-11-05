@@ -49,7 +49,7 @@ func TestMaintenanceHTTPSPatchDoesNotMutateRuntime(t *testing.T) {
 					continue
 				}
 				m.Stage = stage
-				busy, err := syncUIExposure(t.Context(), rc, s, m)
+				busy, err := p.syncUIExposure(t.Context(), rc, s, m)
 				if err != nil || !busy || s.Pending != nil || m.Public == public {
 					t.Fatal("closed window crossed ingress boundary", busy, err)
 				}
@@ -78,11 +78,11 @@ func TestMaintenanceHTTPSAdmittedTransitionCompletesAfterClosure(t *testing.T) {
 	}
 	rc.Cluster.Generation = 2
 	rc.Cluster.Status.ObservedGeneration = 1
-	if busy, err := syncUIExposure(t.Context(), rc, s, m); err != nil || !busy || s.Pending == nil || s.Pending.Action != "stop-public" {
+	if busy, err := p.syncUIExposure(t.Context(), rc, s, m); err != nil || !busy || s.Pending == nil || s.Pending.Action != "stop-public" {
 		t.Fatal("open window did not admit private UI stop", busy, err)
 	}
 	for range 4 {
-		if _, err := observePending(t.Context(), rc, s); err != nil {
+		if _, err := p.observePending(t.Context(), rc, s); err != nil {
 			t.Fatal(err)
 		}
 		if s.Pending == nil {
@@ -93,7 +93,7 @@ func TestMaintenanceHTTPSAdmittedTransitionCompletesAfterClosure(t *testing.T) {
 		t.Fatal("admitted stop did not complete")
 	}
 	rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: fmt.Sprintf("0 0 1 %d *", int(time.Now().Month())%12+1), Duration: "1h"}}}
-	if busy, err := syncUIExposure(t.Context(), rc, s, m); err != nil || !busy || s.Pending == nil || s.Pending.Action != "public" {
+	if busy, err := p.syncUIExposure(t.Context(), rc, s, m); err != nil || !busy || s.Pending == nil || s.Pending.Action != "public" {
 		t.Fatal("window closure stranded the admitted UI transition", busy, err)
 	}
 }
