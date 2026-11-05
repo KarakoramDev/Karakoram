@@ -33,6 +33,13 @@ Full backup receipts report XtraBackup's native checkpoint type
 `full`. Incremental receipts report `incremental`. Metadata validation failures
 identify the inconsistent field without including its value.
 
+Fresh clusters can have an empty executed GTID set because managed bootstrap
+accounts are created with binary logging disabled. XtraBackup then records only
+the binlog filename and position; these remain required and validated, while the
+GTID column is optional. A first full backup does not require an application
+write. This parser correction requires the updated member agent, not only a
+control-plane upgrade.
+
 Pipeline failures retain their reason-code prefix (for example,
 `pipeline_stream_failed`) and include XtraBackup/xbcloud exit statuses or signals.
 SIGKILL is reported as possible OOM, not proof of it; pipeline cleanup can also
