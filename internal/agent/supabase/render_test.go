@@ -64,6 +64,72 @@ func TestRenderComponents(t *testing.T) {
 	}
 }
 
+func TestStoragePatchEnvironmentCompatibility(t *testing.T) {
+	for _, limit := range []int64{0, 1048576} {
+		s := testSpec("storage")
+		s.Storage.Endpoint = "https://s3.example/prefix%20with%20spaces"
+		s.Storage.FileSizeLimit = limit
+		p, files, err := Render(s, "/data")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var environment map[string]string
+		if err := json.Unmarshal(files["supabase/environment.json"], &environment); err != nil {
+			t.Fatal(err)
+		}
+		for key, want := range map[string]string{
+			"GLOBAL_S3_ENDPOINT":             s.Storage.Endpoint,
+			"GLOBAL_S3_BUCKET":               s.Storage.Bucket,
+			"GLOBAL_S3_FORCE_PATH_STYLE":     "true",
+			"REQUEST_ALLOW_X_FORWARDED_PATH": "true",
+			"TENANT_ID":                      s.Storage.TenantID,
+		} {
+			if environment[key] != want || !contains(p.Env, key+"="+want) {
+				t.Fatalf("storage environment %s lost its configured value", key)
+			}
+		}
+		wantLimit := "52428800"
+		if limit != 0 {
+			wantLimit = "1048576"
+		}
+		if environment["FILE_SIZE_LIMIT"] != wantLimit {
+			t.Fatal("storage upload limit default or override changed")
+		}
+		// Storage 1.81.5 owns the new 60-second body-idle timeout. Do not
+		// disable it or confuse it with the whole upload duration.
+		if _, overridden := environment["TUS_BODY_IDLE_TIMEOUT_MS"]; overridden {
+			t.Fatal("storage body-idle timeout must retain its upstream default")
+		}
+	}
+}
+
+func TestStorageNativeSmokeEnvironment(t *testing.T) {
+	s := testSpec("storage")
+	s.Storage.TLS = false
+	s.Storage.ImageTransformation = true
+	s.Upstreams["imgproxy"] = "127.0.0.1:5001"
+	_, files, err := Render(s, "/data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rendered, golden map[string]string
+	if err := json.Unmarshal(files["supabase/environment.json"], &rendered); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile("../../../scripts/native-artifacts/storage-env.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &golden); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range golden {
+		if rendered[key] != want {
+			t.Errorf("%s: renderer=%q smoke=%q", key, rendered[key], want)
+		}
+	}
+}
+
 func TestBEAMDistributionIsPrivate(t *testing.T) {
 	cookies := map[string]bool{}
 	expectedCookies := map[string]string{
@@ -215,6 +281,14 @@ func TestFunctionsSourcesAndJWT(t *testing.T) {
 	}
 	if !contains(p.Env, "VERIFY_JWT=true") {
 		t.Fatal("JWT verification disabled")
+	}
+	if !contains(p.Env, "FUNCTIONS_ROOT=/data/karakoram/functions") ||
+		!contains(p.Env, "DENO_DIR=/data/karakoram/deno-cache") {
+		t.Fatal("function sources and import cache must remain outside worker-private /tmp")
+	}
+	wantArgs := []string{"start", "--ip", "0.0.0.0", "--user-worker-request-idle-timeout", "150000", "--main-service", s.InstallDir + "/app/main"}
+	if !reflect.DeepEqual(p.Args, wantArgs) {
+		t.Fatal("edge runtime launch contract changed")
 	}
 }
 func TestInvalidServiceCredentials(t *testing.T) {

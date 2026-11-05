@@ -223,7 +223,7 @@ func TestNativeAdditionalComponents(t *testing.T) {
 			t.Skip("registered S3 backend environment is required")
 		}
 		base.Upstreams = map[string]string{"storage": "127.0.0.1:5000"}
-		defer launch(t, "storage", "1.81.0", storageDir)()
+		defer launch(t, "storage", "1.81.5", storageDir)()
 		defer launch(t, "gateway", "1.39.1", gatewayDir)()
 		bucket := "native-" + strings.ToLower(rand.Text())
 		body, _ := json.Marshal(map[string]any{"id": bucket, "name": bucket, "public": false})

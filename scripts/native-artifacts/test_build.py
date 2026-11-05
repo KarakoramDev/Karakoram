@@ -100,6 +100,91 @@ EOF
 
 
 class NativeBuilder(unittest.TestCase):
+    def test_incus_control_calls_are_bounded_without_limiting_compilation(self):
+        with patch.object(build.subprocess, 'run') as run:
+            build.run('incus', 'init', 'images:ubuntu/24.04', 'builder')
+            self.assertEqual(run.call_args.kwargs['timeout'], 600)
+            build.run('incus', 'delete', 'runner', '--force', timeout=30)
+            self.assertEqual(run.call_args.kwargs['timeout'], 30)
+            build.execute('builder', 'cargo', 'build', '--locked')
+            self.assertNotIn('timeout', run.call_args.kwargs)
+        listing = subprocess.CompletedProcess([], 0, stdout=b'[]')
+        with patch.object(build.subprocess, 'run', return_value=listing) as run:
+            self.assertEqual(build.get_instances(), [])
+            self.assertEqual(run.call_args.kwargs['timeout'], 600)
+
+    def fake_incus(self, instances, operations=(), timeouts=()):
+        """Subprocess stand-in: listed instances/operations, and calls that time out."""
+        calls, pending, timeouts = [], list(operations), list(timeouts)
+        def handler(args, **kwargs):
+            args = tuple(args)
+            calls.append(args)
+            if args[1:3] == ('operation', 'list'):
+                return subprocess.CompletedProcess(args, 0, stdout=json.dumps([pending.pop(0)] if pending else []).encode())
+            if args[1] == 'list':
+                return subprocess.CompletedProcess(args, 0, stdout=json.dumps(instances).encode())
+            if timeouts and timeouts[0].split('-')[0] == args[1]:
+                effect = timeouts.pop(0)
+                if effect == 'init-created':
+                    config = dict(args[i+1].split('=', 1) for i in range(len(args)-1) if args[i] == '-c')
+                    instances.append({'name': args[3], 'status': 'Stopped', 'config': config})
+                raise subprocess.TimeoutExpired(list(args), 600)
+            return subprocess.CompletedProcess(args, 0)
+        return calls, handler
+
+    def test_timed_out_creation_that_completed_is_adopted_not_replayed(self):
+        running = {'status': 'Running', 'resources': {'instances': ['/1.0/instances/runner']}}
+        calls, handler = self.fake_incus([], operations=[running], timeouts=['init-created'])
+        with patch.object(build.subprocess, 'run', side_effect=handler), patch.object(build.time, 'sleep') as sleep:
+            build.run('incus', 'init', 'images:ubuntu/24.04', 'runner', '-c', 'limits.memory=2GiB')
+        inits = [c for c in calls if c[1] == 'init']
+        self.assertEqual(len(inits), 1)
+        self.assertTrue(any(a.startswith('user.karakoram.creation=') for a in inits[0]))
+        sleep.assert_called_once_with(5)
+
+    def test_timed_out_creation_without_instance_is_retried_once(self):
+        calls, handler = self.fake_incus([])
+        def lost(args, **kwargs):
+            if tuple(args)[1] == 'init' and not any(c[1] == 'init' for c in calls):
+                calls.append(tuple(args))
+                raise subprocess.TimeoutExpired(list(args), 600)
+            return handler(args, **kwargs)
+        with patch.object(build.subprocess, 'run', side_effect=lost):
+            build.run('incus', 'init', 'images:ubuntu/24.04', 'runner', '-c', 'limits.memory=2GiB')
+        self.assertEqual([c[1] for c in calls].count('init'), 2)
+
+    def test_timed_out_creation_refuses_unmarked_same_name_instance(self):
+        # Same name and limits, but not created by this call: never adopted.
+        foreign = {'name': 'runner', 'status': 'Stopped', 'config': {'limits.memory': '2GiB'}}
+        calls, handler = self.fake_incus([foreign], timeouts=['init'])
+        with patch.object(build.subprocess, 'run', side_effect=handler), patch.object(build, 'FOREIGN_INSTANCES', set()):
+            with self.assertRaisesRegex(RuntimeError, 'not created by this build'):
+                build.run('incus', 'init', 'images:ubuntu/24.04', 'runner', '-c', 'limits.memory=2GiB')
+            # Build cleanup must leave the refused instance alone.
+            build.delete_instance('runner')
+        self.assertEqual([c[1] for c in calls].count('init'), 1)
+        self.assertNotIn('delete', [c[1] for c in calls])
+        source = (build.HERE/'build.py').read_text()
+        self.assertNotIn("run('incus','delete'", source)
+
+    def test_timed_out_state_changes_reconcile_before_one_retry(self):
+        builder = {'name': 'builder', 'status': 'Running', 'config': {}}
+        calls, handler = self.fake_incus([builder], timeouts=['start', 'stop'])
+        with patch.object(build.subprocess, 'run', side_effect=handler):
+            build.run('incus', 'start', 'builder')
+            build.run('incus', 'stop', 'builder', '--timeout', '120')
+        self.assertEqual([c[1] for c in calls].count('start'), 1)
+        self.assertEqual([c[1] for c in calls].count('stop'), 2)
+        timeout = subprocess.TimeoutExpired(['incus', 'file'], 600)
+        with patch.object(build.subprocess, 'run', side_effect=[timeout, timeout]) as run:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                build.run('incus', 'file', 'push', 'a', 'builder/root/a')
+            self.assertEqual(run.call_count, 2)
+        with patch.object(build.subprocess, 'run', side_effect=timeout) as run:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                build.run('incus', 'exec', 'builder', '--', 'true', timeout=5)
+            self.assertEqual(run.call_count, 1)
+
     def test_supavisor_smoke_checks_both_ipv6_sql_listeners(self):
         tree = ast.parse((build.HERE/'smoke.py').read_text())
         function = next(node for node in tree.body
@@ -166,8 +251,8 @@ class NativeBuilder(unittest.TestCase):
 
     def test_bootstrap_tools_are_verified_without_registry_resolution(self):
         for name, node, expected in (
-            ('supabase-storage', '24.22.0', ['npm-11.12.1']),
-            ('supabase-studio', '22.23.3', ['pnpm-11.13.1', 'turbo-linux-64-2.9.14']),
+            ('supabase-storage', '24.22.2', ['npm-11.12.1']),
+            ('supabase-studio', '22.23.4', ['pnpm-11.13.1', 'turbo-linux-64-2.9.14']),
         ):
             with patch.object(build,'install_toolchain') as install, patch.object(build,'guest'), patch.object(build,'STUDIO_ASSETS',[]):
                 path = build.toolchains({'name':name,'node':node})
@@ -184,9 +269,8 @@ class NativeBuilder(unittest.TestCase):
 
     def test_mix_bootstrap_uses_pinned_verified_local_files(self):
         for otp, elixir, hex_key in (
-            ('28.5.0.4', '1.19.5', 'hex-2.5.3-elixir-1.19-otp-28'),
-            ('27.3.4.6', '1.19.5', 'hex-2.5.3-elixir-1.19-otp-27'),
-            ('27.2.1', '1.18.2', 'hex-2.5.3-elixir-1.18-otp-27'),
+            ('28.5.0.8', '1.19.7', 'hex-2.5.3-elixir-1.19-otp-28'),
+            ('27.3.4.19', '1.18.6', 'hex-2.5.3-elixir-1.18-otp-27'),
         ):
             with self.subTest(otp=otp, elixir=elixir), patch.object(build,'install_toolchain') as install, patch.object(build,'guest'), patch.object(build,'wait_for_host'):
                 build.toolchains({'otp':otp,'elixir':elixir})
@@ -240,7 +324,7 @@ class NativeBuilder(unittest.TestCase):
     def test_unknown_hex_pair_fails_before_installation(self):
         with patch.object(build,'install_toolchain') as install:
             with self.assertRaisesRegex(RuntimeError, 'no pinned Hex archive'):
-                build.toolchains({'otp':'28.5.0.4','elixir':'1.18.2','node':'24.22.0'})
+                build.toolchains({'otp':'28.5.0.8','elixir':'1.18.6','node':'24.22.2'})
             install.assert_not_called()
         self.assertNotIn('hex-2.5.3',build.TOOLCHAINS)
 
@@ -293,7 +377,7 @@ class NativeBuilder(unittest.TestCase):
                 commands.Popen.return_value = process
                 scope = {'subprocess':commands,'env':{},'log':None,'time':clock,
                          'meta_process':meta,'name':'supabase-studio','health':'http://127.0.0.1:3000/',
-                         'urllib':build.urllib,'json':json}
+                         'urllib':build.urllib,'json':json,'image_process':None}
                 with patch.object(build.urllib.request,'urlopen',side_effect=response), patch('builtins.print'):
                     if outcome == 'ready':
                         exec(fixture,scope)
@@ -478,11 +562,11 @@ class NativeBuilder(unittest.TestCase):
 
     def test_precompiled_toolchains_replace_existing_trees(self):
         with patch.object(build,'install_toolchain') as install, patch.object(build,'guest'), patch.object(build,'wait_for_host'):
-            build.toolchains({'rust':'1.81.0','bun':'1.3.14','otp':'27.3.4.6','elixir':'1.18.2'})
+            build.toolchains({'rust':'1.84.1','bun':'1.3.14','otp':'27.3.4.19','elixir':'1.18.6'})
         installers = {call.args[0]:call.kwargs.get('installer','') for call in install.call_args_list}
-        self.assertIn('rm -rf /root/rust-1.81.0-x86_64-unknown-linux-gnu /opt/rust-1.81.0;',installers['rust-1.81.0'])
+        self.assertIn('rm -rf /root/rust-1.84.1-x86_64-unknown-linux-gnu /opt/rust-1.84.1;',installers['rust-1.84.1'])
         self.assertIn('rm -rf /opt/bun-linux-x64;',installers['bun-1.3.14'])
-        self.assertIn('rm -rf /opt/elixir-1.18.2;',installers['elixir-1.18.2-otp-27'])
+        self.assertIn('rm -rf /opt/elixir-1.18.6;',installers['elixir-1.18.6-otp-27'])
 
     def test_extension_compiled_toolchain_is_not_reused_by_version(self):
         spec = importlib.util.spec_from_file_location('native_extensions',build.HERE/'extensions.py')
@@ -561,12 +645,15 @@ class NativeBuilder(unittest.TestCase):
             out = Path(directory)
             fingerprint = build.build_input_fingerprint(name)
             guests = [{'name':build.BUILDER,'status':'Running'}]
-            with patch.object(build,'OUT',out), patch.object(build,'get_instances',return_value=guests), patch.object(build,'push_build_inputs') as push, patch.object(build,'toolchains',return_value='/bin'), patch.object(build,'guest'), patch.object(build,'wait_for_host'), patch.object(build,'run'), patch.object(build.subprocess,'check_output',return_value='123'), patch.object(build,'builder_environment',return_value={'imageFingerprint':'a'*64,'aptPackages':['gcc=1']}), patch.object(build,'qualify') as qualify:
+            with patch.object(build,'OUT',out), patch.object(build,'get_instances',return_value=guests), patch.object(build,'push_build_inputs') as push, patch.object(build,'toolchains',return_value='/bin'), patch.object(build,'guest') as guest, patch.object(build,'wait_for_host'), patch.object(build,'run'), patch.object(build.subprocess,'check_output',return_value='123'), patch.object(build,'builder_environment',return_value={'imageFingerprint':'a'*64,'aptPackages':['gcc=1']}), patch.object(build,'qualify') as qualify:
                 build.build(name)
             self.assertEqual(json.loads((out/(name+'.manifest.json')).read_text())['buildInputFingerprint'],fingerprint)
             self.assertEqual(json.loads((out/(name+'.manifest.json')).read_text())['builderEnvironment'],{'imageFingerprint':'a'*64,'aptPackages':['gcc=1']})
             push.assert_called_once()
             qualify.assert_called_once()
+            checkout = guest.call_args_list[0].args[0]
+            self.assertIn('git -c url.https://github.com/.insteadOf=git@github.com: submodule update --init --recursive', checkout)
+            self.assertIn('test "$(git rev-parse HEAD)" = '+build.RECIPES[name]['commit'], checkout)
 
     def test_studio_fixture_requires_locked_metadata_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -581,6 +668,23 @@ class NativeBuilder(unittest.TestCase):
             with patch.object(build,'OUT',out), patch.object(build,'LOCK',lock), patch.object(build,'get_instances',return_value=guests), patch.object(build,'memory_guard'), patch.object(build,'run') as run:
                 with self.assertRaisesRegex(RuntimeError,'postgres-meta fixture differs from lock'):
                     build.qualify('supabase-studio',candidate,0)
+            self.assertTrue(candidate.exists())
+            self.assertEqual(lock.read_text(),original)
+            run.assert_any_call('incus','delete',build.RUNNER,'--force')
+
+    def test_storage_fixture_requires_verified_imgproxy_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            candidate = out/'storage.tar.gz.candidate'
+            candidate.write_bytes(b'storage')
+            (out/'imgproxy.tar.gz').write_bytes(b'untrusted image fixture')
+            lock = out/'lock.json'
+            original = json.dumps([{'name':'supabase-imgproxy','file':'imgproxy.tar.gz','sha256':'0'*64}])
+            lock.write_text(original)
+            guests = [{'name':build.RUNNER,'status':'Running','config':{'limits.memory':'2GiB'}}]
+            with patch.dict(os.environ,{},clear=True), patch.object(build,'OUT',out), patch.object(build,'LOCK',lock), patch.object(build,'get_instances',return_value=guests), patch.object(build,'memory_guard'), patch.object(build,'run') as run:
+                with self.assertRaisesRegex(RuntimeError,'imgproxy fixture differs from expected digest'):
+                    build.qualify('supabase-storage',candidate,0)
             self.assertTrue(candidate.exists())
             self.assertEqual(lock.read_text(),original)
             run.assert_any_call('incus','delete',build.RUNNER,'--force')

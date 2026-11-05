@@ -405,8 +405,8 @@ func openNativeStorageFixture(t *testing.T, ctx context.Context) *nativeStorageF
 	}
 	sp, err := f.p.desiredSpec(ctx, f.rc, m)
 	nativeStorageMust(t, "derive initial pinned native target", err)
-	if sp.Version != "1.81.0" || sp.Topology != "ha" || len(sp.DataPeers) != 3 {
-		t.Fatal("initial Storage target must be pinned native 1.81.0 on HA3")
+	if sp.Version != "1.81.5" || sp.Topology != "ha" || len(sp.DataPeers) != 3 {
+		t.Fatal("initial Storage target must be pinned native 1.81.5 on HA3")
 	}
 	f.serviceID, f.version = m.ServiceID, sp.Version
 	f.baseline = f.identities()
@@ -686,7 +686,7 @@ func (f *nativeStorageFixture) assertTarget() {
 	}
 	sp, err := f.p.desiredSpec(f.ctx, f.rc, m)
 	nativeStorageMust(f.t, "derive real native Storage configuration", err)
-	if sp.Component != "storage" || sp.Version != "1.81.0" || sp.Topology != "ha" || len(sp.DataPeers) != 3 {
+	if sp.Component != "storage" || sp.Version != "1.81.5" || sp.Topology != "ha" || len(sp.DataPeers) != 3 {
 		f.t.Fatal("native Storage spec detached from HA3 fixture")
 	}
 	if f.bucket != "" && !reflect.DeepEqual(sp.Storage, f.backing) {

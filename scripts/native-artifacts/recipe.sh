@@ -95,7 +95,7 @@ case "$name" in
         # Upstream GitHub release asset digest; independently downloaded on two paths.
         export RUSTY_V8_ARCHIVE=/root/librusty_v8_release_x86_64-unknown-linux-gnu.a.gz
         export RUSTY_V8_SRC_BINDING_PATH=/root/src_binding_release_x86_64-unknown-linux-gnu.rs
-        GIT_V_TAG=v1.77.4 cargo build --locked --profile release --features ""
+        GIT_V_TAG=v1.77.9 cargo build --locked --profile release --features ""
         cp target/release/edge-runtime "$stage/bin/"
         mkdir -p "$stage/app/main"
         cp /root/edge-main-worker.ts "$stage/app/main/upstream-index.ts"

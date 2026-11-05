@@ -215,6 +215,8 @@ if name == 'supabase-storage':
     secret = env['JWT_SECRET']
     env |= {'PORT':'5000','STORAGE_BACKEND':'s3','TENANT_ID':fixture['NATIVE_ARTIFACT_SMOKE_PREFIX'].strip('/'),'REGION':fixture.get('S3_REGION','us-east-1'),'GLOBAL_S3_BUCKET':fixture['S3_BUCKET'],'GLOBAL_S3_ENDPOINT':fixture['S3_ENDPOINT'],'GLOBAL_S3_FORCE_PATH_STYLE':'true','AWS_ACCESS_KEY_ID':fixture['S3_ACCESS_KEY'],'AWS_SECRET_ACCESS_KEY':fixture['S3_SECRET_KEY'],'AWS_DEFAULT_REGION':fixture.get('S3_REGION','us-east-1'),'AUTH_JWT_SECRET':secret,'ANON_KEY':jwt('anon',secret),'SERVICE_KEY':jwt('service_role',secret),'PGRST_JWT_SECRET':secret}
     env['DATABASE_URL']='postgres://supabase_storage_admin@127.0.0.1:5432/smoke'
+    env |= fixture['storageEnv']
+    env |= {'S3_PROTOCOL_ACCESS_KEY_ID':secrets.token_hex(16),'S3_PROTOCOL_ACCESS_KEY_SECRET':secrets.token_hex(32)}
 if name == 'supabase-edge-runtime':
     # Runtime /tmp is worker-private, not the runner's host filesystem.
     function = Path('/var/lib/native-functions/health')
@@ -252,10 +254,18 @@ if name == 'supabase-imgproxy':
     png = b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',2,2,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(b'\x00'+b'\xff\x00\x00'*2+b'\x00'+b'\x00\xff\x00'*2))+chunk(b'IEND',b'')
     (source_root/'probe.png').write_bytes(png)
 meta_process = None
+image_process = None
 if name == 'supabase-studio':
     env |= {'PORT':'3000','NEXT_TELEMETRY_DISABLED':'1','STUDIO_PG_META_URL':'http://127.0.0.1:8080','POSTGRES_HOST':'127.0.0.1','POSTGRES_PORT':'5432','POSTGRES_DB':'smoke','POSTGRES_PASSWORD':'','POSTGRES_USER_READ_WRITE':'postgres','SUPABASE_URL':'http://127.0.0.1:8000','SUPABASE_PUBLIC_URL':'http://127.0.0.1:8000','AUTH_JWT_SECRET':secrets.token_hex(32),'PG_META_CRYPTO_KEY':secrets.token_hex(32)}
     env['CRYPTO_KEY'] = env['PG_META_CRYPTO_KEY']
 log = open('/tmp/native-smoke.log','w')
+if name == 'supabase-storage':
+    subprocess.run(['apt-get','install','-y','libvips42t64','fonts-dejavu-core'],check=True)
+    Path('/opt/imgproxy').mkdir()
+    subprocess.run(['tar','-xf','/root/imgproxy.tar.gz','-C','/opt/imgproxy'],check=True)
+    image_env = env | {'IMGPROXY_BIND':':5001','IMGPROXY_USE_ETAG':'true','IMGPROXY_AUTO_WEBP':'true','IMGPROXY_MAX_SRC_RESOLUTION':'16.8','IMGPROXY_USE_LAST_MODIFIED':'false'}
+    image_process = subprocess.Popen(['/opt/imgproxy/bin/start'],env=image_env,stdout=log,stderr=log)
+    print('NATIVE_STORAGE_IMGPROXY_FIXTURE_SHA256 '+fixture['imgproxySHA256'],flush=True)
 if name == 'supabase-studio':
     parser = 'require("./node_modules/.pnpm/libpg-query@17.6.0/node_modules/libpg-query").parse("SELECT 1").then(tree => { if (!tree.stmts?.[0]?.stmt?.SelectStmt) throw new Error("SQL parser result differs"); console.log("NATIVE_STUDIO_SQL_PARSER_OK") })'
     subprocess.run(['/opt/artifact/node/bin/node','-e',parser],cwd='/opt/artifact/app',env=env,stdout=log,stderr=log,check=True,timeout=30)
@@ -313,6 +323,25 @@ try:
                             assert imported.status == 200
                             assert imported.read() == b'native npm import healthy'
                         print('NATIVE_EDGE_NPM_IMPORT_OK')
+                        process.terminate()
+                        process.wait(timeout=20)
+                        env |= {'VERIFY_JWT':'true','JWT_SECRET':secrets.token_hex(32)}
+                        process = subprocess.Popen(['/opt/artifact/bin/start'],env=env,stdout=log,stderr=log)
+                        for _ in range(120):
+                            try:
+                                urllib.request.urlopen(health,timeout=2)
+                            except urllib.error.HTTPError as denied:
+                                assert denied.code == 401, 'JWT dispatcher did not reject missing bearer'
+                                break
+                            except OSError:
+                                time.sleep(1)
+                        else:
+                            raise RuntimeError('JWT-enabled dispatcher did not become ready')
+                        for route, body in (('health',b'native runtime healthy'),('imports',b'native npm import healthy')):
+                            request = urllib.request.Request('http://127.0.0.1:9000/'+route,headers={'Authorization':'Bearer '+jwt('anon',env['JWT_SECRET'])})
+                            with urllib.request.urlopen(request,timeout=60) as invoked:
+                                assert invoked.status == 200 and invoked.read() == body
+                        print('NATIVE_EDGE_JWT_ON_OFF_DISPATCHER_OK',flush=True)
                     if name == 'supabase-storage':
                         headers = {'Authorization':'Bearer '+env['SERVICE_KEY'],'Content-Type':'application/json'}
                         request = urllib.request.Request('http://127.0.0.1:5000/bucket',data=b'{"id":"native-smoke","name":"native-smoke","public":false}',headers=headers,method='POST')
@@ -325,6 +354,8 @@ try:
                         request = urllib.request.Request('http://127.0.0.1:5000/object/native-smoke/probe.txt',headers=headers)
                         with urllib.request.urlopen(request,timeout=20) as downloaded:
                             assert downloaded.read() == b'native S3 storage healthy'
+                        import storage_smoke
+                        storage_smoke.qualify(env)
                     if name in ('supabase-supavisor','supabase-logflare'):
                         proof = subprocess.check_output(['runuser','-u','postgres','--',pg+'psql','-At','-d','smoke','-c',"SELECT count(*) FROM pg_stat_ssl s JOIN pg_stat_activity a USING(pid) WHERE a.datname='smoke' AND s.ssl"],text=True)
                         assert int(proof.strip()) > 0, 'No live TLS database connection'
@@ -392,3 +423,7 @@ finally:
         meta_process.terminate()
         try: meta_process.wait(timeout=20)
         except subprocess.TimeoutExpired: meta_process.kill(); meta_process.wait()
+    if image_process is not None:
+        image_process.terminate()
+        try: image_process.wait(timeout=20)
+        except subprocess.TimeoutExpired: image_process.kill(); image_process.wait()

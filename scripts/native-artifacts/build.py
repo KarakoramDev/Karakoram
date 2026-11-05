@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import secrets
 import shlex
 import subprocess
 import sys
@@ -22,6 +23,7 @@ LOCK = ROOT / 'internal/engine/nativeartifacts/lock.json'
 BUILDER = os.environ.get('NATIVE_ARTIFACT_BUILDER', 'karakoram-artifact-builder')
 RUNNER = os.environ.get('NATIVE_ARTIFACT_RUNNER', 'karakoram-artifact-runner')
 NETWORK = os.environ.get('NATIVE_ARTIFACT_NETWORK', 'incusbr0')
+STORAGE = ['-s', os.environ['NATIVE_ARTIFACT_STORAGE']] if os.environ.get('NATIVE_ARTIFACT_STORAGE') else []
 RECIPES = json.loads((HERE / 'recipes.json').read_text())
 TOOLCHAINS = json.loads((HERE / 'toolchains.json').read_text())
 STUDIO_ASSETS = json.loads((HERE / 'studio-assets.json').read_text())
@@ -60,8 +62,80 @@ def build_input_fingerprint(name):
     return hashlib.sha256(payload).hexdigest()
 
 
+# Control verbs whose replay after a timeout cannot change the outcome.
+REPLAYABLE_CONTROL = {'list', 'info', 'query', 'config', 'file', 'operation'}
+# Same-name instances that timeout reconciliation refused to adopt; never cleaned up.
+FOREIGN_INSTANCES = set()
+
+
+def delete_instance(name):
+    if name not in FOREIGN_INSTANCES and name in {x['name'] for x in get_instances()}:
+        run('incus', 'delete', name, '--force')
+
+
 def run(*args, **kwargs):
-    return subprocess.run(args, check=True, **kwargs)
+    # Lifecycle/metadata clients must not indefinitely retain the host build
+    # lock if Incus stops responding. Guest compilation has its own lifetime.
+    # A timed-out control call is retried once; a second timeout fails the build.
+    # State changes are first reconciled against the daemon, because the timed-out
+    # request may still complete or may already have taken effect.
+    if args[:1] != ('incus',) or args[1:2] == ('exec',):
+        return subprocess.run(args, check=True, **kwargs)
+    kwargs.setdefault('timeout', 600)
+    if args[1] == 'init':
+        # A per-call marker lets reconciliation adopt only the instance this call created.
+        args += ('-c', 'user.karakoram.creation=' + secrets.token_hex(16))
+    try:
+        return subprocess.run(args, check=True, **kwargs)
+    except subprocess.TimeoutExpired:
+        if args[1] not in REPLAYABLE_CONTROL and control_settled(args):
+            return subprocess.CompletedProcess(args, 0)
+        return subprocess.run(args, check=True, **kwargs)
+
+
+def incus_instance(name):
+    listing = subprocess.run(('incus', 'list', name, '--format', 'json'), check=True, capture_output=True, timeout=600)
+    return next((x for x in json.loads(listing.stdout) if x['name'] == name), None)
+
+
+def wait_instance_operations(name, deadline=600):
+    # Wait for the daemon to finish (or fail) any operation on this instance,
+    # so reconciliation observes its final state rather than a creation in flight.
+    suffix = '/instances/' + name
+    end = time.monotonic() + deadline
+    while True:
+        listing = subprocess.run(('incus', 'operation', 'list', '--format', 'json'), check=True, capture_output=True, timeout=600)
+        if not any(op.get('status') == 'Running' and any(url.split('?')[0].endswith(suffix) for urls in (op.get('resources') or {}).values() for url in urls)
+                   for op in json.loads(listing.stdout)):
+            return
+        if time.monotonic() >= end:
+            raise RuntimeError('Incus operation on '+name+' did not finish')
+        time.sleep(5)
+
+
+def control_settled(args):
+    """Report whether a timed-out init/start/stop/delete already took effect."""
+    verb = args[1]
+    if verb == 'init':
+        name = args[3]
+        wait_instance_operations(name)
+        instance = incus_instance(name)
+        if instance is None:
+            return False
+        # The requested limits plus this call's creation marker identify our instance.
+        wanted = dict(args[i+1].split('=', 1) for i in range(len(args)-1) if args[i] == '-c')
+        if any(instance['config'].get(key) != value for key, value in wanted.items()):
+            FOREIGN_INSTANCES.add(name)
+            raise RuntimeError('instance '+name+' was not created by this build; refusing to adopt it')
+        return True
+    if verb in ('start', 'stop', 'delete'):
+        name = args[2]
+        wait_instance_operations(name)
+        instance = incus_instance(name)
+        if verb == 'delete':
+            return instance is None
+        return instance is not None and instance['status'] == ('Running' if verb == 'start' else 'Stopped')
+    return False
 
 
 def execute(instance, *args, **kwargs):
@@ -247,7 +321,7 @@ def ensure_builder():
     memory_guard(BUILDER, 6)
     instances = get_instances()
     if BUILDER not in {x['name'] for x in instances}:
-        run('incus', 'init', 'images:ubuntu/24.04', BUILDER, '--network', NETWORK, '-c', 'limits.memory=6GiB', '-c', 'limits.cpu=8')
+        run('incus', 'init', 'images:ubuntu/24.04', BUILDER, *STORAGE, '--network', NETWORK, '-c', 'limits.memory=6GiB', '-c', 'limits.cpu=8')
     else:
         instance = next(x for x in instances if x['name'] == BUILDER)
         if instance['config'].get('limits.memory') != '6GiB':
@@ -270,17 +344,17 @@ def push_build_inputs():
 def get_instances():
     if ROOTLESS:
         return [{'name':BUILDER, 'status':'Running', 'config':{'limits.memory':'6GiB'}}] if getattr(ROOTLESS, 'ready', False) else []
-    return json.loads(subprocess.check_output(['incus','list','--format','json']))
+    return json.loads(run('incus','list','--format','json', capture_output=True).stdout)
 
 
 def builder_environment():
     fingerprint = subprocess.check_output(
-        ['incus','config','get',BUILDER,'volatile.base_image'], text=True).strip()
+        ['incus','config','get',BUILDER,'volatile.base_image'], text=True, timeout=600).strip()
     if len(fingerprint) != 64 or any(c not in '0123456789abcdef' for c in fingerprint):
         raise RuntimeError('builder image fingerprint is missing or invalid')
     packages = subprocess.check_output(
         ['incus','exec',BUILDER,'--','dpkg-query','-W','-f=${binary:Package}=${Version}\\n'],
-        text=True).splitlines()
+        text=True, timeout=600).splitlines()
     if not packages or any('=' not in package for package in packages):
         raise RuntimeError('builder installed APT package inventory is missing or invalid')
     return {'imageFingerprint':fingerprint, 'aptPackages':sorted(packages)}
@@ -306,11 +380,11 @@ def build(name):
     push_build_inputs()
     envpath = toolchains(r)
     source = '/build/'+name
-    guest(f'mkdir -p /build; rm -rf {Q(source)}; git init {Q(source)}; cd {Q(source)}; git remote add origin https://github.com/{r["repo"]}.git; git fetch --depth=1 origin {r["commit"]}; git checkout --detach FETCH_HEAD; test "$(git rev-parse HEAD)" = {r["commit"]}; git submodule update --init --recursive')
+    guest(f'mkdir -p /build; rm -rf {Q(source)}; git init {Q(source)}; cd {Q(source)}; git remote add origin https://github.com/{r["repo"]}.git; git fetch --depth=1 origin {r["commit"]}; git checkout --detach FETCH_HEAD; test "$(git rev-parse HEAD)" = {r["commit"]}; git -c url.https://github.com/.insteadOf=git@github.com: submodule update --init --recursive')
     if ROOTLESS:
         epoch = execute(BUILDER, 'git', '-C', source, 'show', '-s', '--format=%ct', 'HEAD', capture_output=True, text=True).stdout.strip()
     else:
-        epoch = subprocess.check_output(['incus','exec',BUILDER,'--','git','-C',source,'show','-s','--format=%ct','HEAD'], text=True).strip()
+        epoch = subprocess.check_output(['incus','exec',BUILDER,'--','git','-C',source,'show','-s','--format=%ct','HEAD'], text=True, timeout=600).strip()
     filename = name+'-'+r['version']+'-ubuntu24.04-amd64.tar.gz'
     manifest = r | {'name':name, 'build':'native-v1', 'platform':'ubuntu24.04-amd64', 'sourceDateEpoch':int(epoch), 'toolchainTransports':TRANSPORTS, 'buildInputFingerprint':fingerprint, 'builderEnvironment':builder_environment()}
     local_manifest = OUT / (name+'.manifest.json'); local_manifest.write_text(json.dumps(manifest,indent=2)+'\n')
@@ -334,7 +408,7 @@ def qualify(name, candidate, started):
             ROOTLESS.remove(RUNNER)
         else:
             memory_guard(RUNNER, 2)
-            run('incus','init','images:ubuntu/24.04',RUNNER,'--network',NETWORK,'-c','limits.memory=2GiB','-c','limits.cpu=2')
+            run('incus','init','images:ubuntu/24.04',RUNNER,*STORAGE,'--network',NETWORK,'-c','limits.memory=2GiB','-c','limits.cpu=2')
             run('incus','start',RUNNER)
         push(candidate, RUNNER, '/root/artifact.tar.gz')
         push(HERE/'smoke.py', RUNNER, '/root/smoke.py')
@@ -348,6 +422,18 @@ def qualify(name, candidate, started):
                     raise RuntimeError('Studio postgres-meta fixture differs from lock')
             run('incus','file','push',str(archive),RUNNER+'/root/meta.tar.gz')
         smoke_env = {key:os.environ[key] for key in ('S3_ENDPOINT','S3_ACCESS_KEY','S3_SECRET_KEY','S3_REGION','S3_BUCKET','NATIVE_ARTIFACT_SMOKE_PREFIX') if key in os.environ}
+        if name == 'supabase-storage':
+            imgproxy = next(a for a in json.loads(LOCK.read_text()) if a['name']=='supabase-imgproxy')
+            archive = Path(os.environ.get('NATIVE_ARTIFACT_IMGPROXY', str(OUT/imgproxy['file'])))
+            expected = os.environ.get('NATIVE_ARTIFACT_IMGPROXY_SHA256', imgproxy['sha256'])
+            with archive.open('rb') as payload:
+                digest = hashlib.file_digest(payload,'sha256').hexdigest()
+            if digest != expected:
+                raise RuntimeError('Storage imgproxy fixture differs from expected digest')
+            push(archive, RUNNER, '/root/imgproxy.tar.gz')
+            push(HERE/'storage_smoke.py', RUNNER, '/root/storage_smoke.py')
+            smoke_env['storageEnv'] = json.loads((HERE/'storage-env.json').read_text())
+            smoke_env['imgproxySHA256'] = digest
         if name == 'supabase-pg17-extensions':
             extension_pins = json.loads((HERE/'extensions.json').read_text())
             smoke_env['extensionFlags'] = {extension:pin['flags'] for extension,pin in extension_pins.items()}
@@ -358,6 +444,8 @@ def qualify(name, candidate, started):
             push(config.name, RUNNER, '/root/smoke-env.json')
         try:
             execute(RUNNER, 'bash','-euc','export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get install -y python3 curl '+ ' '.join(map(Q,r['runtimeDeps']))+'; mkdir -p /opt/artifact; tar -xf /root/artifact.tar.gz -C /opt/artifact; python3 /root/smoke.py '+Q(name)+' '+Q(r['health']))
+            if name == 'mongodb-mcp-server':
+                pull(RUNNER, '/tmp/mongodb-mcp-server.qualification.json', OUT/(name+'.qualification.json'))
         finally:
             try:
                 pull(RUNNER, '/tmp/native-smoke.log', OUT/(name+'.smoke.log'))
@@ -366,8 +454,8 @@ def qualify(name, candidate, started):
     finally:
         if ROOTLESS:
             ROOTLESS.remove(RUNNER)
-        elif RUNNER in {x['name'] for x in get_instances()}:
-            run('incus','delete',RUNNER,'--force')
+        else:
+            delete_instance(RUNNER)
     with candidate.open('rb') as payload:
         digest = hashlib.file_digest(payload,'sha256').hexdigest()
     artifact = {'name':name,'version':r['version'],'file':filename,'sha256':digest,'size':candidate.stat().st_size,'upstreamURL':'','license':r['license'],'source':{'repo':'https://github.com/'+r['repo'],'commit':r['commit']},'build':'native-v1','runtimeDeps':r['runtimeDeps']}
@@ -433,8 +521,8 @@ def main():
             (OUT/'build-report.json').write_text(json.dumps(report,indent=2)+'\n')
     finally:
         if not ROOTLESS:
-            if BUILDER in {x['name'] for x in get_instances()}: run('incus','delete',BUILDER,'--force')
-            if RUNNER in {x['name'] for x in get_instances()}: run('incus','delete',RUNNER,'--force')
+            delete_instance(BUILDER)
+            delete_instance(RUNNER)
     entries = json.loads(LOCK.read_text())
     (OUT/'SHA256SUMS').write_text(''.join(a['sha256']+'  '+a['file']+'\n' for a in entries if (OUT/a['file']).exists()))
     if any('failure' in report[name] for name in selected): raise SystemExit(1)
