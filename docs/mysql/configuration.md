@@ -8,7 +8,7 @@
 
 `engineConfig` is not supported. Use string-valued, provider-allowlisted `engineOptions.parameters`; unknown settings are rejected. The provider remains authoritative even when a UI field validates locally. TLS must be `requireTLS`. Network listeners, data identity, replication, archiving and system accounts are managed settings, not raw configuration overrides.
 
-SQL listeners follow the backend layout: IPv4-only layouts retain IPv4 sockets; IPv6-capable layouts use MySQL's `*` all-addresses listener and separate IPv4/IPv6 ProxySQL writer and optional reader sockets. Proxy administration remains loopback-only. The control plane sends this policy only to agents advertising SQL-listener support on their configuration pull; updating the control plane alone does not change older agents' listeners. Use the v0.4.5 [agent rollout](operations.md#agent-rollout) on a healthy topology to install corrected agents, rather than hand-editing managed configuration.
+SQL listeners follow the backend layout: IPv4-only layouts retain IPv4 sockets; IPv6-capable layouts use MySQL's `*` all-addresses listener and separate IPv4/IPv6 ProxySQL writer and optional reader sockets. Proxy administration remains loopback-only. The control plane sends this policy only to agents advertising SQL-listener support on their configuration pull; updating the control plane alone does not change older agents' listeners. Use the v0.4.6 [agent rollout](operations.md#agent-rollout) on a healthy topology to install corrected agents, rather than hand-editing managed configuration.
 
 Example shared by `mysql` and `pxc`:
 
@@ -69,7 +69,7 @@ restart or re-create is introduced just because the control plane is upgraded.
 Native pool shrink is asynchronous; observe the effective value before claiming
 headroom restored. GR's cache change is agent-rendered and requires a corrected
 data-member agent and a subsequent native startup; normal reload does not set
-the runtime cache. Use the v0.4.5 [agent rollout](operations.md#agent-rollout)
+the runtime cache. Use the v0.4.6 [agent rollout](operations.md#agent-rollout)
 on a healthy topology to install new agents and perform the native restart.
 
 The startup-only `innodb_buffer_pool_instances` and `table_open_cache_instances` parameters accept integers 1–64. They require rolling maintenance and remain pinned per member until that member's turn; changing them is not a live-only tuning operation.
@@ -93,7 +93,7 @@ Every Group Replication server starts with `super_read_only=ON`, including initi
 
 Group Replication data members require **at least 2 GiB minimum RAM each** on every backend, even with custom buffer parameters; a larger elastic maximum does not bypass this floor. The managed message cache is **128 MiB** for the small-member pool baseline (at most 768 MiB); larger members retain a cache of one quarter of the managed pool baseline, with a 128 MiB floor. It is derived before operator buffer-pool overrides, instead of inheriting the upstream 1 GiB cache. At 2 GiB the default pool is 768 MiB and the message cache is 128 MiB, leaving 1,152 MiB outside these explicit caches, not a total-RSS guarantee. Follow the production RAM recommendation above and tune concurrency, transaction sizes and custom buffers for the workload. A smaller message history can require distributed recovery when a disconnected member misses retained messages.
 
-The RAM rejection requires the corrected control plane; the cache bound requires corrected **data-member agents**. Updating the control plane alone does not change existing agents' rendering. No wire-schema change is needed. Use the v0.4.5 [agent rollout](operations.md#agent-rollout) only on a healthy group. An unsuccessful fresh create with no healthy donor/quorum should be deleted and re-created at the supported minimum, not repaired by editing managed files or issuing forced bootstrap commands.
+The RAM rejection requires the corrected control plane; the cache bound requires corrected **data-member agents**. Updating the control plane alone does not change existing agents' rendering. No wire-schema change is needed. Use the v0.4.6 [agent rollout](operations.md#agent-rollout) only on a healthy group. An unsuccessful fresh create with no healthy donor/quorum should be deleted and re-created at the supported minimum, not repaired by editing managed files or issuing forced bootstrap commands.
 
 ## PXC only
 

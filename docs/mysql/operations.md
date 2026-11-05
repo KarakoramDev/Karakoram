@@ -190,7 +190,7 @@ roll a cluster that has lost its majority.
 Alternatively, restore/clone a verified backup into a new v0.4.3 cluster and
 verify member builds, data and client writes before switching clients.
 `karactl clusters restart` restarts native processes, not member agents.
-On v0.4.5, use [agent rollout](#agent-rollout) only after its native safety gates
+On v0.4.6, use [agent rollout](#agent-rollout) only after its native safety gates
 are satisfied. See also
 [existing-cluster rollout](../upgrade.md#existing-clusters-and-member-artifacts).
 The post-restore history comparator remains fully active: real mixed accounting
@@ -751,7 +751,7 @@ This does not alter formed GR clusters or reopen consumed multi-member epochs.
 If the create may contain valuable data, retain its volumes and seek
 evidence-based recovery instead; there is no public Group Replication
 `reset-bootstrap-epoch` action. Updating only the control plane cannot undo an
-agent's durable claim or change its native renderer. The v0.4.5
+agent's durable claim or change its native renderer. The v0.4.6
 [agent rollout](#agent-rollout) requires completed formation and cannot repair
 an unformed or consumed bootstrap epoch.
 
