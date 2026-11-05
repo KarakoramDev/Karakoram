@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -27,7 +28,7 @@ func testSpec() tspec.Spec {
 
 // TestRenderRoles checks role selection and private TLS configuration.
 func TestRenderRoles(t *testing.T) {
-	for _, version := range []string{"1.31.4", "1.32.1"} {
+	for _, version := range []string{"1.31.4", "1.31.5", "1.32.1", "1.32.2"} {
 		for _, component := range []string{tspec.Server, tspec.History, tspec.Matching, tspec.Frontend, tspec.Worker, tspec.UI} {
 			t.Run(version+"/"+component, func(t *testing.T) {
 				s := testSpec()
@@ -37,6 +38,8 @@ func TestRenderRoles(t *testing.T) {
 				}
 				s.Component = component
 				if component == tspec.UI {
+					s.Version = "2.58.0"
+					s.InstallDir = "/opt/karakoram/temporal-ui-server-2.58.0"
 					s.Persistence = nil
 					s.FrontendAddress = "frontend:7233"
 					s.UI = &tspec.UISettings{PublicURL: "https://ui.example.test/workflows", OIDC: &tspec.OIDC{Issuer: "https://issuer.example.test", ClientID: "id", ClientSecret: "private-oidc", CallbackURL: "https://ui.example.test/workflows/auth/sso/callback"}}
@@ -58,6 +61,24 @@ func TestRenderRoles(t *testing.T) {
 				if component == tspec.UI {
 					if config["publicPath"] != "/workflows" || config["port"] != 8080 {
 						t.Fatal(config)
+					}
+					if !reflect.DeepEqual(p.Args, []string{"--root", "/data/karakoram/temporal", "--config", ".", "start"}) ||
+						!reflect.DeepEqual(p.Env, []string{"GOMAXPROCS=2"}) ||
+						p.Binary != filepath.Join(s.InstallDir, "ui-server") {
+						t.Fatalf("UI CLI contract changed: %+v", p)
+					}
+					auth := config["auth"].(map[string]any)
+					provider := auth["providers"].([]any)[0].(map[string]any)
+					tls := config["tls"].(map[string]any)
+					if config["temporalGrpcAddress"] != s.FrontendAddress || config["enableUi"] != true ||
+						config["disableNewsFetch"] != true || auth["enabled"] != true ||
+						provider["providerUrl"] != s.UI.OIDC.Issuer || provider["clientId"] != "id" ||
+						provider["clientSecret"] != "private-oidc" || provider["callbackUrl"] != s.UI.OIDC.CallbackURL ||
+						tls["serverName"] != s.TLS.FrontendServerName || tls["enableHostVerification"] != true ||
+						tls["caFile"] != "/data/karakoram/temporal/ca.pem" ||
+						tls["certFile"] != "/data/karakoram/temporal/internode.pem" ||
+						tls["keyFile"] != "/data/karakoram/temporal/internode-key.pem" {
+						t.Fatalf("UI 2.58 config lost frontend TLS or OIDC settings: %+v", config)
 					}
 					return
 				}

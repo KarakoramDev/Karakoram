@@ -73,7 +73,14 @@ func serverArtifact(version string) (nativeartifacts.Artifact, error) {
 	if len(parts) != 3 {
 		return nativeartifacts.Artifact{}, engine.Invalid("Temporal version must be a locked semantic version")
 	}
-	a, e := nativeartifacts.Get("temporal-server-" + parts[0] + "." + parts[1])
+	name := "temporal-server-" + version
+	switch version {
+	case "1.31.4":
+		name = "temporal-server-1.31"
+	case "1.32.1":
+		name = "temporal-server-1.32"
+	}
+	a, e := nativeartifacts.Get(name)
 	if e != nil || a.Version != version {
 		return a, engine.Invalid("Temporal version %q has no matching locked native artifact", version)
 	}
@@ -112,7 +119,7 @@ func (p *Provider) ApplyDefaults(s *domain.ClusterSpec) {
 		s.Provider = tspec.Engine
 	}
 	if s.Version == "" {
-		s.Version = "1.32.1"
+		s.Version = "1.32.2"
 	}
 	if s.Topology.Type == "" {
 		s.Topology.Type = "combined"
@@ -157,11 +164,15 @@ func (p *Provider) Describe() domain.ProviderInfo {
 			},
 		},
 	}
-	for _, v := range []string{"1.32.1", "1.31.4"} {
+	for _, v := range []string{"1.32.2", "1.32.1", "1.31.5", "1.31.4"} {
 		if _, e := serverArtifact(v); e == nil {
+			status := "supported"
+			if v == "1.31.4" || v == "1.32.1" {
+				status = "deprecated"
+			}
 			out.Versions = append(out.Versions, domain.VersionInfo{
 				Version: v, Major: strings.Join(strings.Split(v, ".")[:2], "."),
-				Default: v == "1.32.1", Status: "supported",
+				Default: v == "1.32.2", Status: status,
 			})
 		}
 	}

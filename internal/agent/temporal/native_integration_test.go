@@ -132,6 +132,7 @@ func TestNativeTemporal(t *testing.T) {
 		}
 	}
 	s := testSpec()
+	s.Version = "1.32.2"
 	s.TLS = tspec.TLS{CAPEM: string(ca.CertPEM), InternodeCertPEM: string(cert), InternodeKeyPEM: string(key), InternodeServerName: "internode.test", FrontendCertPEM: string(cert), FrontendKeyPEM: string(key), FrontendServerName: "frontend.test", RequireClientAuth: true}
 	s.Persistence = &tspec.Database{Host: "127.0.0.1", Port: port, Database: "temporal", VisibilityDatabase: "temporal_visibility", Username: "temporal_owner", Password: "native-password", CAPEM: string(ca.CertPEM), MaxConns: 12, VisibilityMaxConns: 5}
 	selected := install
@@ -265,7 +266,7 @@ func TestNativeTemporal(t *testing.T) {
 	initial := r.status(ctx, node)
 	t.Logf("Temporal %s ready: persistence schema %s, visibility schema %s", s.Version, initial.SchemaVersion, initial.VisibilitySchemaVersion)
 	if previous != "" {
-		s.Version = "1.32.1"
+		s.Version = "1.32.2"
 		s.RestartToken = "upgrade"
 		configMu.Lock()
 		configuration.EngineSpec, _ = json.Marshal(s)
@@ -285,7 +286,7 @@ func TestNativeTemporal(t *testing.T) {
 			t.Fatal("upgrade did not ensure the new binary's schema")
 		}
 		// Both locked releases currently embed the same latest SQL schemas.
-		t.Logf("upgrade 1.31.4 -> 1.32.1 ready: persistence schema %s -> %s, visibility %s -> %s", initial.SchemaVersion, upgraded.SchemaVersion, initial.VisibilitySchemaVersion, upgraded.VisibilitySchemaVersion)
+		t.Logf("upgrade 1.31.4 -> 1.32.2 ready: persistence schema %s -> %s, visibility %s -> %s", initial.SchemaVersion, upgraded.SchemaVersion, initial.VisibilitySchemaVersion, upgraded.VisibilitySchemaVersion)
 	}
 	status := r.status(ctx, node)
 	if status.SchemaVersion != "1.19" || status.VisibilitySchemaVersion != "1.14" {
@@ -346,7 +347,7 @@ func TestNativeTemporal(t *testing.T) {
 	t.Log("namespace ensure/list/retention+description update/delete: passed; default deletion refused (409)")
 	uiSpec := s
 	uiSpec.Component = tspec.UI
-	uiSpec.Version = "2.56.0"
+	uiSpec.Version = "2.58.0"
 	uiSpec.Persistence = nil
 	uiSpec.FrontendAddress = "127.0.0.1:7233"
 	uiSpec.UI = &tspec.UISettings{}
@@ -381,5 +382,5 @@ func TestNativeTemporal(t *testing.T) {
 	if apiResponse.StatusCode != 200 {
 		t.Fatalf("UI mTLS namespace API: HTTP %d", apiResponse.StatusCode)
 	}
-	t.Log("ui-server 2.56.0: HTTP 8080 ready over mTLS frontend connection")
+	t.Log("ui-server 2.58.0: HTTP 8080 ready over mTLS frontend connection")
 }

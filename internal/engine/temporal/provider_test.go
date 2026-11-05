@@ -255,8 +255,22 @@ func TestDefaultsValidationAndCatalog(t *testing.T) {
 		t.Fatal("incorrect option defaults")
 	}
 	info := p.Describe()
-	if info.Name != "temporal" || len(info.Versions) != 2 || !info.Versions[0].Default || len(info.UpgradePaths) != 1 || len(info.Presets) != 2 {
+	if info.Name != "temporal" || len(info.Versions) != 4 || !info.Versions[0].Default || len(info.UpgradePaths) != 6 || len(info.Presets) != 2 {
 		t.Fatal("incorrect catalog")
+	}
+	for _, v := range info.Versions {
+		wantStatus := "supported"
+		if v.Version == "1.31.4" || v.Version == "1.32.1" {
+			wantStatus = "deprecated"
+		}
+		if v.Status != wantStatus || v.Default != (v.Version == "1.32.2") {
+			t.Fatalf("incorrect patch status: %+v", v)
+		}
+	}
+	var defaults domain.ClusterSpec
+	p.ApplyDefaults(&defaults)
+	if defaults.Version != "1.32.2" {
+		t.Fatal("default server patch is stale")
 	}
 	for _, preset := range info.Presets {
 		c := *rc.Cluster
@@ -359,6 +373,10 @@ func TestUpgradePaths(t *testing.T) {
 		want     bool
 	}{
 		{"1.31.4", "1.32.1", true},
+		{"1.31.4", "1.31.5", true},
+		{"1.31.4", "1.32.2", true},
+		{"1.31.5", "1.32.2", true},
+		{"1.31.5", "1.31.4", false},
 		{"1.32.1", "1.32.2", true},
 		{"1.32.1", "1.31.4", false},
 		{"1.31.4", "1.33.0", false},
@@ -368,6 +386,35 @@ func TestUpgradePaths(t *testing.T) {
 	} {
 		if upgradeAllowed(tc.from, tc.to) != tc.want {
 			t.Errorf("%s to %s", tc.from, tc.to)
+		}
+	}
+}
+
+func TestSecurityPatchCatalogAdmission(t *testing.T) {
+	p, rc, _, _ := fixture(t, "combined")
+	info := p.Describe()
+	for _, path := range info.UpgradePaths {
+		old := *rc.Cluster
+		old.Spec.Version = path.From
+		next := old
+		next.Spec.Version = path.To
+		if err := p.Validate(t.Context(), &old, &next); err != nil {
+			t.Fatalf("advertised upgrade %s to %s rejected: %v", path.From, path.To, err)
+		}
+		a, err := serverArtifact(path.To)
+		if err != nil || a.Version != path.To {
+			t.Fatalf("upgrade target artifact mismatch: %+v, %v", a, err)
+		}
+	}
+	for version, name := range map[string]string{
+		"1.31.4": "temporal-server-1.31",
+		"1.32.1": "temporal-server-1.32",
+		"1.31.5": "temporal-server-1.31.5",
+		"1.32.2": "temporal-server-1.32.2",
+	} {
+		a, err := serverArtifact(version)
+		if err != nil || a.Name != name {
+			t.Fatalf("artifact identity changed for %s: %+v, %v", version, a, err)
 		}
 	}
 }
