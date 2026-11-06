@@ -171,6 +171,16 @@ should still use `flock --close`.
 
 ### Native Weaviate integration
 
+The ordinary `internal/engine/weaviate/wvapi` unit suite checks bounded responses,
+request deadlines, dial-timeout failover and transport response-header deadlines
+against local HTTP servers. A dial-local deadline with a live request context
+must still allow failover before connection establishment. The response-header
+regression uses a longer request budget to exercise the transport timeout
+independently: it must match `context.DeadlineExceeded` and must not replay a
+non-idempotent POST to another endpoint after connection establishment.
+Run `go test ./internal/engine/weaviate/wvapi/ -run TestBoundsAndTimeout -count=100`
+to stress these timeout paths; no native executable is required.
+
 Run the integration-tagged `internal/agent/weaviate` package as an unprivileged user in a disposable isolated Linux environment:
 
 ```sh

@@ -46,14 +46,39 @@ Rolling restart uses **history → matching → frontend → worker → server �
 ## Agent upgrades
 
 ```sh
-karactl -n NS clusters upgrade-agents workflows --wait
+karactl -n NS clusters upgrade-agents workflows --include-current --wait --timeout 30m
 ```
 
-This replaces member agents with the frozen control-plane build, not a new
-Temporal release. Applied server/UI versions, component resources, replica counts,
-sealed configuration, restart tokens and the PostgreSQL binding remain unchanged.
+This is also the explicit operator mechanism for moving an existing UI to the
+current release-locked UI version. Equivalent API request:
+
+```http
+POST /api/v1/clusters/workflows/upgrade-agents?namespace=NS
+Content-Type: application/json
+
+{"includeCurrent":true}
+```
+
+Track the returned `202` operation. No separate UI-version endpoint or
+`spec.version` change is needed; that field selects the Temporal **server**,
+not its independently locked UI.
+
+This replaces member agents with the frozen control-plane build, retaining the
+applied Temporal server version, component resources, replica counts and PostgreSQL
+binding. The separately release-locked UI is prepared and activated at the
+current supplied version during its deployment; ordinary control-plane-only
+reconciliation retains the existing UI's persisted installed version and
+executable directory. Use `--include-current` to rerun preparation on current
+agents. Server sealed configuration and restart tokens remain unchanged.
 An active version upgrade, restore recovery, import or other pending structural
 work blocks admission.
+
+An absent UI version field is recovered from its sealed applied configuration;
+an unknown incumbent installation does not fall back to the current release
+lock. Target UI configuration is published only after a successful deployment
+submission. A rejected or lost response retains the previous configuration,
+and the already-admitted UI preparation can be retried without requiring the
+unprepared replacement to become ready first.
 
 The durable order is **history → matching → frontend → worker → server → ui**,
 skipping disabled roles and already-current agents (unless `--include-current`).
@@ -64,6 +89,24 @@ one-minute settle period. Replaying a completed component never redeploys it.
 Each new deployment respects the maintenance window; an already-deployed
 component finishes its readiness checks even after the window closes.
 
+Failed deployment/preparation receipts are retired into the already-admitted
+preparation phase, not polled forever and not gated on the missing executable's
+readiness. A durable per-component budget permits **four failed attempts** for
+the same locked native payload and agent build; platform placement/backpressure
+waits do not consume it. Exhaustion publishes `DeploymentRetriesExhausted`,
+marks the cluster Degraded and stops further preparation submissions. Correct
+the cause, then explicitly re-arm:
+
+```sh
+karactl -n NS clusters retry-deployments workflows
+karactl -n NS clusters upgrade-agents workflows --include-current --wait --timeout 30m
+```
+
+An existing in-flight rollout can resume after the retry epoch advances; if its
+operation already ended, the new explicit rollout repairs the retained failed
+preparation without requiring an unavailable UI to become healthy first. Native
+readiness and exact target-build checks still fence successful advancement.
+
 The backend contract deploys a whole logical component service; it has no
 per-instance deployment primitive. Platform replacement strategy therefore
 controls multi-instance rollout within that component. **Singleton components
@@ -73,10 +116,15 @@ target build. A different control-plane executable cannot replace the frozen
 target; re-run the operation using the intended build.
 
 Cancellation stops between components or before deployment intent is recorded.
-An intent without a receipt may have reached the backend, so cancellation waits
-for native readiness on either the old or target build. A submitted component
-with a receipt must acknowledge the exact target build before cancellation
-completes; no subsequent component is deployed or completed work rolled back.
+An intent without a receipt may have reached the backend. If the applied old
+configuration is still healthy, cancellation completes without submitting a UI
+upgrade—even when the installed UI is older than the current lock, or a prior
+submission was rejected. If an ambiguous replacement is no longer serving,
+only its already-admitted bounded preparation is replayed to restore readiness.
+A submitted component with a receipt must acknowledge the exact target build
+before cancellation completes; no subsequent component is deployed and completed
+work is not rolled back. Exhausted disrupted preparations retain the actionable
+condition and require explicit retry re-arm before recovery can finish.
 Component recovery/import journals defer operation admission until normal
 recovery finishes.
 With `--include-current`, a lost deployment receipt after platform acceptance
@@ -89,17 +137,23 @@ exact frozen target build before replay adopts the completed component.
 
 ## Server upgrades and schema
 
-The current catalog path is **1.31.4 → 1.32.1**. Admission requires locked artifacts. The version policy permits forward patches within a minor or exactly one minor forward; skipping minors and downgrades are rejected. Do not bypass the advertised `UpgradePaths`.
+The current catalog offers **1.31.4 → 1.31.5**, **1.32.1 → 1.32.2**, and either 1.31 patch → either 1.32 patch. Prefer the security-patched **1.31.5** or **1.32.2** (default); 1.31.4 and 1.32.1 are deprecated but retained for existing clusters. Admission requires locked artifacts. The version policy permits forward patches within a minor or exactly one minor forward; skipping minors and downgrades are rejected. Do not bypass the advertised `UpgradePaths`.
 
 ```sh
-karactl -n NS clusters upgrade workflows --version 1.32.1 --wait
+karactl -n NS clusters upgrade workflows --version 1.32.2 --wait
 ```
 
 Before starting migration, reconciliation waits until every current component is healthy. It rolls history → matching → frontend → worker → server → ui, checking all instances at the desired version/configuration before advancing. Split history gets a one-minute settle period for shard ownership. The UI binary remains release-locked even when server version changes.
 
 Every server member ensures schema before starting. The **first upgraded member** applies migrations with its bundled `temporal-sql-tool`; a PostgreSQL advisory lock on the persistence database serializes schema setup/update for both persistence and visibility. Repeated starts converge rather than racing migrations. Temporal's startup schema compatibility checks remain in force.
 
-The locked **1.31.4 and 1.32.1 both embed persistence schema 1.19 and visibility schema 1.14**. This specific upgrade therefore does not imply a schema-version increment. Inspect `TemporalSchema` and `TemporalUpgrade` conditions, observed version, members and generation—not just HTTP acceptance.
+The locked **1.31.4, 1.31.5, 1.32.1 and 1.32.2 all embed persistence schema 1.19 and visibility schema 1.14**. Official server archives carry schemas embedded in `temporal-sql-tool`, not separate schema directories. The upstream PostgreSQL schema trees are byte-for-byte unchanged across each patch pair, so the existing `postgresql/v12/temporal` and `postgresql/v12/visibility` migration selectors and advisory-lock handling remain applicable. These upgrades do not imply a schema-version increment. Inspect `TemporalSchema` and `TemporalUpgrade` conditions, observed version, members and generation—not just HTTP acceptance.
+
+### v0.4.7 compatibility notes
+
+[Server 1.31.5](https://github.com/temporalio/temporal/releases/tag/v1.31.5) and [1.32.2](https://github.com/temporalio/temporal/releases/tag/v1.32.2) tighten **`ValidateWorkerDeploymentVersionComputeConfig` to require namespace Write permission** because it has persistent side effects. Clients previously authorized only for namespace reads can now receive permission-denied responses for that API; review their authorization policy before upgrading. This is not a blanket requirement for all namespace reads. Karakoram's frontend mTLS identity configuration does not itself install an upstream namespace authorizer.
+
+The UI is upgraded from 2.56.0 to **2.58.0** for security maintenance, including the upstream go-jose remediation. The [2.57](https://github.com/temporalio/ui/releases/tag/v2.57.0) and [2.58](https://github.com/temporalio/ui/releases/tag/v2.58.0) changes retain the rendered OIDC, frontend mTLS, `publicPath`, listener and `--root` / `--config` / `start` contract. New banner settings (`banner.text` / `banner.color`, or upstream Docker-template variables `TEMPORAL_UI_BANNER_TEXT` / `TEMPORAL_UI_BANNER_COLOR`) are optional; Karakoram does not render a banner or use the upstream Docker environment template. No UI configuration migration is required. Verify private UI access, authenticated public OIDC callback/logout and namespace/workflow views after rollout.
 
 ## Backups
 

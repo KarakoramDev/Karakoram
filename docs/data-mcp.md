@@ -181,6 +181,12 @@ Companion resources default to shared CPU and 0.25–0.5 GiB RAM. `spec.dataMcp.
 
 The companion supervises `mcp-ro` and, with cluster write opt-in, `mcp-rw`. Each upstream binds only to loopback and requires a process-local bearer. MongoDB receives connection/authentication through environment variables; pgEdge uses protected configuration and SHA-256 token files. Secrets are not command arguments. The authenticated agent routes `/v1/datamcp/ro` and `/v1/datamcp/rw` over private HTTPS port **9443**, using the existing dialer/relay; never publish that port. Credentials, desired spec and certificate changes advance config version and trigger reload. Disabling/deleting waits for ownership-checked companion cleanup, including volume-preserving cluster suspension.
 
+A control-plane upgrade automatically submits one prepared companion rollout for every enabled Data MCP companion because the companion runtime includes the release-specific artifact delivery location and agent archive, even when its locked upstream artifact bytes, version and install path are unchanged. The controller publishes the target artifact configuration only after the platform accepts the deployment with its preparation commands; pending receipts retain the artifact admitted by that deployment rather than following a later control-plane lock.
+New automatic replacements respect the cluster maintenance window; an admitted rollout can finish after the window closes. A `DataMcpCompanionRollout` event identifies the stateless companion replacement. The replacement downloads and checksum-verifies its artifact during preparation before the start-first backend retires the serving predecessor; database members and volumes are untouched.
+
+Submission failures and failed deployment receipts share a durable limit of **four attempts** (the initial submission plus three retries) for the same runtime and retry epoch. Control-plane restarts do not reset the limit; platform placement/backpressure waits do not consume it. After `DeploymentRetriesExhausted`, inspect the platform failure and use `karactl clusters retry-deployments <cluster> --namespace <namespace>` to re-arm the rollout. A changed desired runtime has a separate budget.
+An exhausted rollout is reported as `status.dataMcp.phase: Degraded` with the `DeploymentRetriesExhausted` diagnostic and retry command. Automatic retries stop, while the backend retains the old serving companion where possible; if no predecessor remains healthy, Data MCP stays unavailable until the failed rollout is repaired and explicitly retried.
+
 On Nomad, an externally purged companion job does not block disabling Data MCP: reconciliation expires the missing job's rollout receipt, deletes the retained logical service and clears its sealed companion identity and configuration. Database identity removal still follows the normal disable reconciliation.
 
 Inspect `status.dataMcp` independently of database member readiness:
@@ -195,6 +201,66 @@ Inspect `status.dataMcp` independently of database member readiness:
 | `message` | Diagnostic such as artifact or companion readiness unavailable |
 
 Companion readiness checks applied config version and the configured upstream processes. Native status reports the selected provider; it is not proof that a particular database query succeeds. Installation/token/RBAC write gates may still hide writes when status says `readWrite`.
+
+Companion observation has a **four-second** budget covering state/config lookup,
+connection setup and the readiness RPC. A timeout reports Data MCP as `Degraded`
+with `Companion readiness unavailable`, not `Ready`; database availability is
+still published from its own fresh native observation. During a companion rollout,
+inspect the companion's placement, private connectivity and agent readiness if
+this persists. `ObservationStale` on the database remains a real freshness failure:
+companion work does not extend the database observation lease or retain expired
+positive member health.
+
+### Tool-list troubleshooting (v0.4.7)
+
+When an upstream `ListTools` call still fails after any reconnect attempt, the
+client receives only `tool listing unavailable`. The control-plane error log records
+`Data MCP upstream tool listing failed` using the existing request context and
+logger, for either the `read` or `readWrite` identity:
+
+| Field | Meaning |
+| --- | --- |
+| `namespace`, `cluster`, `accessLevel` | Affected cluster and upstream identity |
+| `errorTypes` | Go error type names in bounded depth-first unwrap order, including joined errors; not error messages |
+| `errorChainTruncated` | Traversal reached its budget or omitted joined children; flags may be incomplete |
+| `upstreamCategory` | `jsonrpc`, `transport`, `schema_decoding`, `http_4xx`, `http_5xx`, or `unknown`, based only on typed errors |
+| `contextCanceled`, `deadlineExceeded`, `eof`, `netClosed` | Known context/I/O sentinel present in the visited chain |
+| `sessionMissing`, `connectionClosed` | SDK session-missing or terminal connection-closed sentinel present |
+
+The diagnostic visits at most 16 error nodes, keeps at most 16 pending nodes
+and caps each type name at 160 bytes. Cycles consume the same finite budget.
+For mixed joined causes, typed HTTP status takes category precedence over
+JSON-RPC, JSON decoding and transport errors, in that order. JSON-RPC codes and
+messages are not logged. `schema_decoding` identifies typed JSON syntax/type
+errors, not every upstream schema validation failure.
+
+HTTP categories are available only when a typed error retains a status
+(currently an OAuth retrieval error). The MCP SDK often flattens HTTP failures
+into message text, so those can remain `unknown`; no status is inferred from
+strings. Flags identify visited sentinel values, not arbitrary custom `Is`
+implementations. Error text, SQL, URLs, payloads, credentials, headers and
+certificate subjects are never included in this diagnostic, even when query
+text auditing is enabled.
+
+The gateway reconnects to a companion when an upstream operation reports
+`connectionClosed` or `sessionMissing`: it retires that exact cached connection,
+lets existing users finish before closing it, and opens a fresh connection on
+the next use. Read-only tool listing retries exactly once within the same request
+timeout. A successful retry emits no failure diagnostic; a failed retry emits the
+same safe diagnostic above. Tool execution is **never retried** because it may
+have already changed data; a failed call keeps its masked error, and the next
+request reconnects.
+Reconnect matching uses the same bounded sentinel traversal as diagnostics;
+sentinels beyond the traversal budget are not matched. The gateway owns this
+retry policy; the companion MCP adapter does not independently replay requests.
+
+If `connectionClosed: true` persists in tool-list diagnostics, listing did not
+recover after the single reconnect attempt (or opening the replacement failed).
+Check companion process readiness and the private agent/relay connection; a
+control-plane restart or credential rotation is not required just to discard the
+closed cached connection. These fields do not establish the underlying cause or
+guarantee availability. A `Ready` companion and valid gateway token do not prove
+that upstream tool listing is healthy.
 
 ## Risks and operating practice
 

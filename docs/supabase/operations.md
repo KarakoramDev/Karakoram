@@ -36,12 +36,12 @@ operation. Progress survives control-plane restarts.
 This restarts **application processes in place**, not the member agent or its
 deployment archive. An unchanged allocation, job version or agent artifact is
 therefore expected. Without opt-in automatic rollout, a control-plane upgrade alone does not roll member agents.
-Release/configuration reconciliation only redeploys components when its desired
-runtime/version requires it; a new control-plane executable is not itself such
-an intent. Restart is not an artifact-upgrade command.
+Configuration reconciliation retains each existing component's installed
+application version; changing the control plane's release lock alone is not a
+deployment intent. Restart is not an artifact-upgrade command.
 
-Use the agent rollout command below to update member artifacts without changing
-application versions or recreating component identities. Realtime's internal RPC
+Use the agent rollout command below to prepare and activate release-locked
+application artifacts without recreating component identities. Realtime's internal RPC
 listener remains bound to loopback and must never be reachable.
 
 Explicitly disabling an existing component can proceed while database readiness
@@ -61,19 +61,48 @@ database members or delete their volumes to emulate a component roll.
 
 ## Agent rollout and maintenance windows
 
-`karactl -n NS clusters upgrade-agents NAME` first performs the [PostgreSQL](https://www.postgresql.org/)
+To move **existing Supabase application components to the current release-locked
+versions**, use the existing member-agent rollout operation:
+
+```sh
+karactl -n NS clusters upgrade-agents NAME --include-current --wait --timeout 30m
+```
+
+Equivalent API request (track the returned `202` operation):
+
+```http
+POST /api/v1/clusters/NAME/upgrade-agents?namespace=NS
+Content-Type: application/json
+
+{"includeCurrent":true}
+```
+
+This first performs the [PostgreSQL](https://www.postgresql.org/)
 replica-first/primary-switchover rollout, then redeploys enabled optional
-component runtimes one at a time. Each component retains its runtime identity,
-applied application version and published configuration, and must pass native
-readiness and report the frozen target agent build before advancing. A component
-with several instances completes only when every instance agrees on the target.
-Expect a brief interruption for single-instance components.
+component runtimes one at a time. It retains the PostgreSQL server version and
+component identities, **not the old separately locked application versions**.
+Each application deployment prepares the current locked artifact and activates
+its matching configuration, then must pass native readiness and report the
+frozen target agent build before advancing. All live instances must agree.
+The default minimal application set is gateway, Auth and REST; disabled optional
+components are not created by the rollout. A separate Data MCP companion is
+managed by its own maintenance-gated prepared refresh, not this component order.
+Expect a brief interruption for single-instance components. There is no separate
+component-version endpoint and no `spec.version` patch for application versions.
 
 Already-current agents are skipped unless `--include-current` is supplied.
 Completed members are journaled across control-plane restarts; cancellation
 waits for an in-flight member before stopping. A changed control-plane build
 cannot start another deployment under the previous frozen target. Normal provider
 deploy admission caps and retry budgets apply.
+
+If the member's version field is absent, ordinary reconciliation recovers it
+from the sealed applied configuration. An unknown incumbent installation fails
+closed rather than treating the latest release lock as installed. Rollout intent
+is persisted before submission; the target configuration/version is published
+only once deployment submission succeeds. A rejected or lost response leaves
+the incumbent configuration unchanged, and an admitted preparation can be
+retried without depending on the replacement application's readiness.
 
 The PostgreSQL maintenance-window rules also apply here. Additionally, component
 version/configuration redeploys or restarts, resource changes, scale-in and
@@ -231,7 +260,7 @@ upstream processing; HTTP 5xx and resets after request headers were sent are
 **not retried**, protecting non-idempotent Storage/REST writes. Existing route
 timeouts still include retries; Storage streaming and Realtime websocket/longpoll
 retain unlimited route/idle duration. An established websocket is not replayed.
-The pinned [Envoy 1.39.1 retry semantics](https://www.envoyproxy.io/docs/envoy/v1.39.1/configuration/http/http_filters/router_filter#config-http-filters-router-x-envoy-retry-on)
+The pinned [Envoy 1.39.6 retry semantics](https://www.envoyproxy.io/docs/envoy/v1.39.6/configuration/http/http_filters/router_filter#config-http-filters-router-x-envoy-retry-on)
 include `reset-before-request`.
 
 All upstream clusters passively eject a host after one local-origin failure,
@@ -241,7 +270,7 @@ and success-rate ejection are disabled. The ejection cap is **50%**, with
 `always_eject_one_host=false`: a singleton is never ejected, and two hosts can
 eject one. This retains at least 50% healthy hosts, avoiding Envoy's default
 panic mode (which would otherwise balance across unhealthy hosts below the
-50% healthy threshold). See [outlier detection](https://www.envoyproxy.io/docs/envoy/v1.39.1/api-v3/config/cluster/v3/outlier_detection.proto).
+50% healthy threshold). See [outlier detection](https://www.envoyproxy.io/docs/envoy/v1.39.6/api-v3/config/cluster/v3/outlier_detection.proto).
 With a reachable healthy alternative, pre-connect rollout failures can therefore
 be absorbed instead of repeatedly surfacing stale-host 503s. This is not
 zero-downtime protection: retry exhaustion, connection/route timeouts, large
@@ -296,7 +325,7 @@ and retain their previous readiness semantics; roll Storage members to obtain
 dependency coverage. Present observations with invalid or expired timestamps are
 not accepted as successful dependency evidence.
 
-Components use pinned artifacts and a configuration digest. Relevant configuration or release changes trigger service configuration/redeployment one component at a time; component versions are not chosen with `spec.version`. A Karakoram release update can therefore change service versions. Review [artifact availability](components.md) first: a catalog preset or saved function source does not bypass missing-artifact admission.
+Components use pinned artifacts and a configuration digest; component versions are not chosen with `spec.version`. Configuration changes reconcile one component at a time using its persisted installed version. A control-plane release update changes the available artifact lock, not existing members' executable paths. New components and deployments that rerun preparation use the current lock; use `upgrade-agents` (with `--include-current` for current agents or same-version rebuilt artifacts) to activate it through the documented gates. Review [artifact availability](components.md) first: a catalog preset or saved function source does not bypass missing-artifact admission.
 
 Component member-agent TLS certificates use the database core's thirty-day renewal window. Renewal republishes an incremented member configuration even when application settings have not changed.
 
@@ -346,11 +375,28 @@ conditions preserve sanitized platform diagnostics. RUNNING/unknown work remains
 fenced regardless of age or elapsed deadlines. A corrected artifact/runtime
 intent can supersede a conclusively terminal receipt under the same
 terminal-process evidence gate.
+
+The control plane also keeps an independent per-component budget of **four
+failed deployment attempts** for the same native artifact/version and agent
+build. It survives control-plane reconstruction and is not refreshed by a
+recovery probe/runtime fingerprint change. Submission failures and terminal
+failed preparation receipts consume this budget; backend placement/backpressure
+waits do not. Successful deployment observation clears the failure evidence.
+After exhaustion, `retry-deployments` is required to grant a fresh budget;
+repeated reconciliation alone cannot keep submitting gateway/component jobs.
+An already-admitted agent rollout retries a failed preparation through this
+bounded path without waiting for an executable that preparation has not installed.
+
 The engine driver exposes a `Deployment/COMPONENT_HOSTNAME` condition with the precise
 `DeploymentRetriesExhausted` reason and operator command. An exhausted component
 is skipped while other components continue reconciliation; pending deploy
 receipts are retired without marking the failed artifact applied. There is no
 scheduled retry deadline after exhaustion: the retry epoch must be re-armed.
+Since v0.4.7, if an initial component deployment exhausted its budget, correct
+that component's desired resource bounds and then re-arm. Reconciliation applies
+the new size and waits for its resource operation to complete before submitting
+the fresh deployment, including on Zerops. A resource-only correction does not
+itself grant another deployment budget or bypass the exhaustion fence.
 Application/configuration and instance health must still pass before Ready.
 An enabled component's terminal deployment failure also keeps combined
 `Ready=False` when the deployment guard has already set phase `Degraded`.
@@ -465,6 +511,33 @@ The optional `pgsodium` extension is available for plain cryptographic functions
 only. Karakoram does not manage a pgsodium server root key and never adds
 `pgsodium` to `shared_preload_libraries`; root-key-dependent key management and
 transparent column encryption are not enabled.
+
+### Extension bundle upgrades
+
+Bundle `17.11.1-2` supplies updated PG17 extension binaries **and SQL upgrade
+paths**. Installing files is not enough: take a database backup, deploy the new
+bundle on every database member, and complete the PostgreSQL restart/HA rollout
+before SQL bootstrap. In particular, pg_net's background worker must start with
+the new library and selected preload configuration. Do not add pgsodium to the
+preload list or provision an ephemeral server key.
+
+Bootstrap then checks installed curated extensions in the project database and
+in an existing `_supabase` metadata database, even if its optional components
+are now disabled. Each outdated installed extension receives `ALTER EXTENSION
+<name> UPDATE` to the installed control-file default; absent extensions are not
+enabled implicitly. This includes `vector` and `set_user`, whether their binaries
+come from a native bundle or APT. Updates run as the local engine migration superuser, retain the
+extension's schema and grants, and run outside the immutable creation ledger.
+Failures report the extension and SQLSTATE without exposing SQL or credentials;
+they prevent a success receipt, and retries skip already-current extensions.
+Bundle bytes and APT package pins invalidate the bootstrap receipt, so a
+release upgrade cannot be mistaken for an already-completed CREATE-only plan.
+
+After rollout, inspect `pg_extension.extversion` against
+`pg_available_extensions.default_version` in every managed database, verify
+pg_net worker restart and webhooks, and exercise existing GraphQL/JSON Schema,
+Vault and caller-key pgsodium usage. Database SQL updates are not undone by
+rolling back the control-plane executable; use the backup/recovery procedure.
 
 Realtime's logical decoding uses the packaged `wal2json` output plugin. Supabase
 data members explicitly trust it through [Percona](https://www.percona.com/)'s `output_plugin_libraries`,

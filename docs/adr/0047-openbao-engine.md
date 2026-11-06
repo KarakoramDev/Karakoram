@@ -47,6 +47,14 @@ Ranked drivers: (1) no loss of initialization material and no plaintext unseal m
 
 Version changes, resource changes, restarts and restart-requiring configuration changes (process-generation bumps, for example new database-connection trust anchors) are rolling: standbys first, one at a time (redeploy for a new binary or resize, re-unseal, wait healthy voter and autopilot healthy), then `sys/step-down` on the active node and the same steps for it. At most one member is disrupted at a time. TLS certificate rotation also proceeds one member at a time but needs no restart: the member reloads its listener certificates on `SIGHUP`, so it stays unsealed.
 
+Member configuration selects a persisted installed server version, seeded from
+the native version observation in released member state. Desired rollout intent
+does not change executable selection. A completed per-member deployment receipt
+promotes the prepared version and advances its configuration version, requiring
+a fresh reload even if the incumbent acknowledged the pre-preparation config.
+An established member with no installation identity fails closed rather than
+assuming the cluster target was installed.
+
 ### Snapshots and restore
 
 Backup type `raft-snapshot`: the control plane streams `GET sys/storage/raft/snapshot` from a healthy member to [S3](https://aws.amazon.com/s3/) at `<prefix>/<clusterUID>/raft/<backup>.snap` (bounded, checkpointed, HEAD recovery as for other engines) and supports schedules, retention and retained-backup deletion. Restore into the same cluster posts the snapshot to the active node (`sys/storage/raft/snapshot`); unseal material is unchanged, and the management token is regenerated if the snapshot predates it. Restore or clone from another Karakoram OpenBao cluster requires that source's stored unseal material: the control plane copies it to the target before `snapshot-force` and re-unseals every member. Snapshots of deleted clusters can be restored only by supplying the unseal shares in the restore request; Karakoram never infers keys. No point-in-time recovery.

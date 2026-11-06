@@ -112,7 +112,7 @@ shortcut or a remedy for arbitrary readiness failures.
 
 ## Upgrades
 
-The supported transition is **2026.09.0 → 2026.10.0**, requested by changing `spec.version`. It requires a fresh successful backup and restarts on the new pinned artifacts; the store and system database upgrade in place. Plan an outage, verify the dump and recovery destination first, and do not combine this with an assumed rollback-by-downgrade strategy. Downgrades and other version paths are rejected. See [shared upgrade admission](../clusters.md) and [offline dumps](backups.md).
+The supported transitions are **2026.09.0 → 2026.10.0**, **2026.09.0 → 2026.10.1** and **2026.10.0 → 2026.10.1**, requested by changing `spec.version`. Each requires a fresh successful backup and restarts on the new pinned artifacts; the store and system database upgrade in place. The September-to-October path remains an explicitly admitted adjacent-calendar-month upgrade, now also targeting October's hotfix; the same backup gate applies even to the October patch. No general calendar-version comparison or skip-month upgrade is admitted. Plan an outage, verify the dump and recovery destination first, and do not combine this with an assumed rollback-by-downgrade strategy. Downgrades and other version paths are rejected. See [shared upgrade admission](../clusters.md) and [offline dumps](backups.md).
 
 ### Agent upgrades
 
@@ -121,9 +121,13 @@ karactl -n NS clusters upgrade-agents graphdb --wait
 ```
 
 Agent upgrades redeploy the single member with its **unchanged applied Neo4j
-version, runtime, persistent volume and resources**. This interrupts all database
+version, persistent volume and resources**, preparing the release's shared JRE. This interrupts all database
 access: arrange application downtime and reconnection. A maintenance window is
 required before deployment unless explicitly overridden.
+
+v0.4.7 replaces Temurin JRE 21.0.12.1+1 with **21.0.13+9** for every offered Neo4j version, including existing 2026.09.0 and 2026.10.0 members. Updating only the control plane does not install Java: use agent rollout (with `--include-current` if already on the target agent build). Configuration pulls retain the member's previously installed Java root until runtime preparation succeeds, then publish the new root and restart token. Verify `bin/java -version` under the applied Java home, authenticated Bolt/HTTPS queries and preserved graph data after the outage. Neo4j [2026.10.1](https://neo4j.com/release-notes/database/neo4j-2026101/) fixes snappy-java CVE-2026-108106, CVE-2026-108104 and CVE-2026-90559; Temurin [21.0.13+9](https://adoptium.net/news/2026/10/eclipse-temurin-17021-21013-2505-2701-available) fixes CVE-2026-114820.
+
+During this transition a replacement also prepares the separately locked old JRE, preserving the Java root referenced by cached configuration until the control plane acknowledges preparation. This prevents a lost deployment receipt from stranding the singleton before it can report readiness. The new JRE becomes active after acknowledgement; later replacements omit the old JRE once activation is recorded.
 
 The operation freezes the control-plane agent build and records its member and
 deployment progress before disruption. It skips an already-current healthy agent

@@ -35,7 +35,7 @@ Missing prerequisites return **409 conflict**, `details.resource: cluster`, clus
 3. Submit an offered path, for example from healthy 7.0 binaries/FCV:
 
    ```sh
-   karactl -n default clusters upgrade demo --version 8.0.32-14 --wait
+   karactl -n default clusters upgrade demo --version 8.0.34-15 --wait
    karactl -n default clusters members demo
    karactl -n default clusters status demo
    ```

@@ -22,7 +22,7 @@ Replication (GR), PXC including ProxySQL, OpenBao with Raft or PostgreSQL storag
 Keycloak, Temporal, Neo4j Community and Weaviate. Use the existing API, CLI,
 agent-build inventory and opt-in automatic rollout settings; no public API change
 or separate rollout mechanism is introduced. After upgrading the control plane
-to v0.4.6, existing v0.4.3 agents are eligible for upgrade. Missing legacy build
+to v0.4.7, existing v0.4.3 agents are eligible for upgrade. Missing legacy build
 identity means eligible/unknown, not current.
 
 Freeze the enqueue target and initial order in durable checkpoints. Journal
@@ -46,8 +46,15 @@ the operation diagnostic before submitting a new rollout.
   acknowledgement before deployment. PXC requires a full Primary component with
   Synced, ready, connected members, GTID continuity and no active history-divergence
   latch. Select a GTID-containing admitted peer, exclude the routed writer and
-  observe replacement writer routing before redeploying it; wait for native rejoin
-  and proxy readmission. MySQL single has no writer handoff and has downtime.
+  observe replacement writer routing before redeploying it. ProxySQL's Galera
+  monitors may elect a different peer: checkpoint the common HG10 writer only
+  after rechecking its native qualification and containment of the incumbent's
+  observed GTIDs on every serving proxy instance. Split writer observations never
+  authorize deployment. Routing handoff is bounded to three minutes after
+  exclusion (persisted across replay); failure reports ProxySQL/GTID recovery
+  guidance, and failed-operation cleanup restores routing without deployment.
+  Wait for native rejoin and proxy readmission. MySQL single has no writer
+  handoff and has downtime.
   If recovery or confirmed loss appears during rollout, settle the current member
   and routing withdrawal without another executable submission, then retire the
   serialized rollout so replacement can take ownership. Confirmed loss releases

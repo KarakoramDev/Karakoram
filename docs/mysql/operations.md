@@ -190,7 +190,7 @@ roll a cluster that has lost its majority.
 Alternatively, restore/clone a verified backup into a new v0.4.3 cluster and
 verify member builds, data and client writes before switching clients.
 `karactl clusters restart` restarts native processes, not member agents.
-On v0.4.6, use [agent rollout](#agent-rollout) only after its native safety gates
+On v0.4.7, use [agent rollout](#agent-rollout) only after its native safety gates
 are satisfied. See also
 [existing-cluster rollout](../upgrade.md#existing-clusters-and-member-artifacts).
 The post-restore history comparator remains fully active: real mixed accounting
@@ -211,10 +211,16 @@ remedies, and only if it has no unique frozen/local GTID history beyond the seed
 Unique data or unproven lifecycle permission fails closed without SST. Legacy
 agents acquire no new holds and report `GTIDMappingCertified=Unknown` /
 `CertificationUnavailable`; native history comparison remains active.
-Admission records native Synced/phase progress durably. Five minutes without
-progress fails closed with an explicit stalled-join diagnostic and retryable
-member/proxy fence cleanup; it cannot leave later joiners or client holds waiting
-silently forever. Legacy restore follower starts use the same launch barrier.
+Admission checkpoints newly observed native Synced members before evaluating its
+five-minute stall watchdog; repeated health from an already joined seed does not
+extend the deadline. A deliberately fenced proxy's pending serving deployment
+does not block data checkpoints or the next serialized join. All data members
+must join and pass the replicated mapping probe before the proxy fence releases;
+the platform deployment still requires real serving health afterward (including
+Nomad TCP checks). Five minutes without progress fails closed with an explicit
+stalled-join diagnostic and retryable member/proxy fence cleanup. Synced receipts
+survive cleanup, so releasing admission fences does not stop those members on
+configuration reload. Legacy restore follower starts use the same launch barrier.
 
 Successful certification retires the empty-member erase permission before client
 fence release. Formation certification belongs only to birth, lifecycle-proven
@@ -286,10 +292,16 @@ The safe watermark advances only when every configured member is successfully
 observed eligible in the same component. An available majority with an unseen
 member does not certify that unseen member's intervening history.
 An active-SID prefix difference at identical `wsrep_last_committed` positions
-on all Synced members is held as a possible in-flight observation race. If it
-persists in at least two independent complete samples across five seconds, it
-latches as divergence, even after a full acknowledged earlier frozen differences.
-The safe watermark does not advance while that suspicion is unresolved. A cache
+on all Synced members is held as a possible in-flight observation race. It
+latches as divergence only when the **same stationary discrepancy** persists in
+at least two independent complete samples across five seconds, even after a full
+acknowledged earlier frozen differences. Any member's wsrep position or executed
+GTID change restarts that observation window: repeated torn samples under a
+moving writer are not one persistent gap. The safe watermark does not advance
+while that suspicion is unresolved; incremental admission and new PITR coverage
+fail closed as comparison Unknown. A completed, journal-backed compatible-prefix
+comparison does not itself block an agent rollout; an earlier persisted
+suspicion cannot exempt a current observation or persistence failure. A cache
 hit is not another independent sample.
 
 The guard does **not** stop database service or prohibit full backups. It blocks
@@ -349,6 +361,58 @@ before `GTIDHistoryBaselineEstablished` is emitted; recorder failures retry.
 Recorder outages never prevent committing a newly observed divergence or retiring
 healed allowances. Pending baseline events remain retryable even after a newer
 incident is recorded; equal histories cannot erase that newer latch.
+
+#### Recovery while a desired-state update is waiting for health
+
+A history latch can keep an otherwise applied resource or proxy-count update
+Running: `observedGeneration` remains behind the desired generation until the
+cluster is healthy. Cancelling a Running update does not roll back accepted
+desired state and is not the recovery procedure.
+
+On versions with incident-full admission, take the same explicit post-detection
+full even while that update is waiting:
+
+```sh
+karactl -n NS backups create CLUSTER recovery-baseline --type full --storage ARCHIVE
+```
+
+The exception applies only to a Degraded PXC cluster with a recorded active
+history incident and a formed, settled native lifecycle. Active rollout,
+replacement, restore, re-formation, proxy drain and other native operation
+ownership must settle first. Reconciliation records that the current desired
+generation has natively converged independently of the history-health latch;
+the exception requires that receipt, not merely the absence of a rollout
+checkpoint. After a control-plane upgrade, allow reconciliation to establish
+the receipt before retrying the full. An accepted but unapplied resource/count
+change must finish first. A full already queued before a newer spec edit gets
+the next exclusive operation turn before that edit starts native work.
+The exception does not admit an incremental, cancel the update, mark its generation
+observed or clear the latch at admission. The ordinary exclusive backup claim
+and complete fresh post-success acknowledgement checks still apply. Repair
+genuine incompatible history from a trusted source as described above before
+acknowledging; an admitted or successful snapshot is not proof of repair.
+After acknowledgement, normal reconciliation can complete the waiting update.
+Automatic writer re-anchoring still defers during active updates and is not an
+incident recovery mechanism.
+
+On v0.4.3, manual full admission rejects pending generations even in this
+state. Upgrade the control plane to a version with incident-full admission,
+then use the command above without editing status or the incident journal.
+If an upgrade is not immediately possible, an enabled **full** backup schedule
+can supply the post-detection full: the scheduler does not require an observed
+generation. Deliberately enable or add a full schedule using the existing
+backup storage, preserving other schedules, wait for a new occurrence after
+detection, and inspect both the backup result and `GTIDHistorySafe`. The same
+fresh, complete-member acknowledgement checks apply; repair must precede this
+step for genuinely incompatible history. Use this step only after the desired
+native rollout has settled. On v0.4.3, avoid new resource/count changes until the
+full has finished: a pending backup can block rollout initialization, whose
+failed Sync then prevents backup claiming. If already caught in that additional
+queue cycle, upgrade the control plane. Restore the intended schedule policy
+after recovery. A failed update, restart, equal later GTIDs or an old full is
+not a substitute, and merely waiting for the update timeout does not advance
+the observed generation.
+
 
 Both transitions are audited as cluster events: `GTIDHistoryDiverged`
 (Warning; boundary, detection time and affected members) when the latch is
@@ -751,7 +815,7 @@ This does not alter formed GR clusters or reopen consumed multi-member epochs.
 If the create may contain valuable data, retain its volumes and seek
 evidence-based recovery instead; there is no public Group Replication
 `reset-bootstrap-epoch` action. Updating only the control plane cannot undo an
-agent's durable claim or change its native renderer. The v0.4.6
+agent's durable claim or change its native renderer. The v0.4.7
 [agent rollout](#agent-rollout) requires completed formation and cannot repair
 an unformed or consumed bootstrap epoch.
 

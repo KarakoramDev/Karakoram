@@ -11,8 +11,9 @@ Opt-in [cluster data MCP](../data-mcp.md) uses a private `mongodb-mcp-server` co
 | Setting | Supported value / default |
 | --- | --- |
 | Engine driver | `psmdb` |
-| PSMDB catalog | `6.0.29-23` (deprecated); `7.0.40-22`, `7.0.43-23`, `8.0.29-13`; **`8.0.32-14` (default)** |
+| PSMDB catalog | `6.0.29-23` (deprecated); `7.0.40-22`, `7.0.43-23`, **`7.0.45-24` (recommended 7.0)**, `8.0.29-13`, `8.0.32-14`; **`8.0.34-15` (default)** |
 | PBM | `2.16.0-1`; Debian package pins append `.noble` |
+| Shell | Official MongoDB `mongosh` 2.14.1 on 7.0/8.0; legacy Percona 2.8.3 on 6.0 |
 | Topologies | `replicaSet`: 1/3/5/7 data-bearing members; `sharded`: config set, shard sets and mongos |
 | Resource floors | Whole CPU cores ≥1; RAM ≥0.5 GiB; disk ≥5 GiB; maxima ≥minima; start CPU within bounds |
 | Engine driver resource defaults | SHARED CPU, min/max 1 core, 1 GiB RAM, 5 GiB disk; omitted maxima follow effective minima |
@@ -20,7 +21,9 @@ Opt-in [cluster data MCP](../data-mcp.md) uses a private `mongodb-mcp-server` co
 | Recovery | PBM `logical` / `physical` snapshots and PITR |
 | Public TCP | Opt-in, CIDR allowlist; project IPv6 or dedicated IPv4 |
 
-Query your installation with `karactl providers get psmdb -o yaml`. Catalog defaults are resolved at creation, not automatic upgrades. Package availability is not an upstream lifecycle guarantee; PSMDB 8.3 Technical Preview is excluded. [Operations](operations.md) describes supported upgrade paths.
+Query your installation with `karactl providers get psmdb -o yaml`. Catalog defaults are resolved at creation, not automatic upgrades. Existing patches remain offered for existing clusters and forward upgrades; use the latest patch in each line for new clusters. Package availability is not an upstream lifecycle guarantee; PSMDB 8.3 GA is excluded pending upgrade/FCV qualification. [Operations](operations.md) describes supported upgrade paths.
+
+PSMDB 6.0 [reached end of life on 2025-07-31](https://www.percona.com/release-lifecycle-percona-software-for-mongodb/). Fresh 6.0 creates are rejected with `spec.version` / `unsupported` and disabled in the create wizard. Existing 6.0 clusters keep running and remain editable; upgrade through 7.0 to 8.0, raising FCV at each adjacent major. Recovery of existing 6.0 data remains possible through the API/CLI with a validated `spec.dataSource` (succeeded same-major/topology backup or observed PITR window), including retained backups whose source cluster is gone. This is a recovery-only exception, not renewed vendor support. The current PBM compatibility matrix excludes 6.0; retain and qualify existing recovery tooling/backups before migration.
 
 ## How it runs
 

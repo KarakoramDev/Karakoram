@@ -10,7 +10,7 @@ Opt-in [cluster data MCP](../data-mcp.md) provides native scoped Elasticsearch t
 
 | Area | Supported configuration |
 |---|---|
-| Versions | `9.5.5` (default), `9.5.4`, `9.4.8`, `8.19.23`; use your installation's catalog |
+| Versions | `9.5.6` (default), `9.5.5`, `9.5.4`, `9.4.9`, `9.4.8`, `8.19.24`, `8.19.23`; use your installation's catalog |
 | Topologies | Combined master/data nodes or dedicated masters plus data nodes; counts below |
 | Minimum RAM per instance | Data/combined: 1.5 GiB; dedicated master and Logstash: 1 GiB; enabled Kibana: 1.5 GiB on 9.x, 1 GiB on 8.x; APM: 0.25 GiB |
 | Minimum disk | Elasticsearch nodes: 5 GiB persistent; optional components: 1 GiB runtime disk |
@@ -19,6 +19,8 @@ Opt-in [cluster data MCP](../data-mcp.md) provides native scoped Elasticsearch t
 | Components | Optional Kibana, Logstash and standalone APM Server at the exact Elasticsearch version |
 
 [Access and security](access-and-security.md), [Stack components](stack.md), [Operations](operations.md), [platform limitations](../limitations.md) and [verification scope](../verification.md).
+
+Prefer **9.5.6**, **9.4.9** or **8.19.24** within the selected line: these aligned [security maintenance releases](https://discuss.elastic.co/c/announcements/security-announcements/31) update all four stack products. Older catalog patches remain supported upgrade sources, not equivalent security recommendations. Upgrade every node and enabled companion component, then check indexing/search, Kibana health, Logstash pipelines and APM intake. The existing 8.19→9.x bridge requires a fresh snapshot; patch upgrades remain rolling and forward-only.
 
 ## Topologies and presets
 
@@ -88,7 +90,7 @@ This canonical file creates an observability stack with private endpoints and ni
 name: search
 spec:
   provider: elasticsearch
-  version: 9.5.5
+  version: 9.5.6
   topology: {type: cluster}
   components:
     engine:

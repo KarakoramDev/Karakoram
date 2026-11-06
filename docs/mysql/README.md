@@ -17,6 +17,21 @@ Karakoram offers two native [MySQL](https://www.mysql.com/)-compatible engine dr
 
 Use `karactl providers get mysql -o json` or `karactl providers get pxc -o json` for exact available versions, presets, resources and upgrade paths. Version strings are engine driver-specific; do not substitute a [Percona Server](https://docs.percona.com/percona-server/) version for a [PXC](https://docs.percona.com/percona-xtradb-cluster/) version. Catalog defaults currently select Percona Server **8.4.11-11** and PXC **8.4.11-11.1**. A compatible, checksum-locked [XtraBackup](https://docs.percona.com/percona-xtrabackup/) release is selected with the server; its own compatibility check is not bypassed. Native artifacts target [Linux](https://www.kernel.org/) amd64 with the declared [Ubuntu](https://ubuntu.com/) 24.04 runtime dependencies; see [native artifacts](../native-artifacts.md).
 
+Percona Server, PXC and XtraBackup **8.0 reached community end of life on
+2026-04-01** ([Percona lifecycle](https://www.percona.com/release-lifecycle-overview/)).
+Their catalog entries are deprecated. Fresh empty 8.0 creates and imports into
+fresh empty 8.0 clusters are rejected with `spec.version` / `unsupported`; use
+8.4 for new workloads. Existing 8.0 clusters continue running, accepting updates,
+backups and restores, and retain their offered 8.0 → 8.4 upgrade paths.
+
+Recovery-only creation using `spec.dataSource` remains available for existing
+8.0 backups and PITR: physical recovery requires the same engine driver and
+major, a validated source, and independent target-local backup storage. Restore
+to 8.0 first, verify the recovered data, then upgrade to 8.4; do not restore an
+8.0 physical backup directly into 8.4. This exception does not admit empty 8.0
+clusters. The existing 8.0 server and XtraBackup 8.0.35-36 artifact locks remain
+available for recovery and migration, not renewed community security support.
+
 ## Create
 
 The UI's **New cluster** wizard lists both engine drivers. Choose a catalog preset, inspect topology and resources, then review TLS, exposure, backups and engine options. **MySQL access** is available on both engine drivers when authorized. A successful create response accepts asynchronous work; wait for the observed generation, member health and application connectivity.

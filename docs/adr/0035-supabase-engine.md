@@ -44,7 +44,7 @@ When enabled, native supervised service logs are pushed to the authenticated Vec
 
 ## Consequences
 
-The database has one implementation of HA and recovery, while API services have independent capacity and explicit dependency/resource costs. A Karakoram upgrade can change pinned application versions and trigger component configuration/redeployment; PostgreSQL upgrades remain separately cataloged. The current artifact lock intentionally limits usable presets and extensions. Public exposure, service-role keys, SMTP and object recovery need independent operational policies; database readiness alone does not establish a working API or full upstream-product parity.
+The database has one implementation of HA and recovery, while API services have independent capacity and explicit dependency/resource costs. A Karakoram upgrade can change pinned application versions, but ordinary reconciliation retains each existing component's persisted installed version. New components and explicit member deployments prepare the current release lock and activate matching configuration; `upgrade-agents` provides the maintenance/readiness-gated rollout boundary. PostgreSQL upgrades remain separately cataloged. The current artifact lock intentionally limits usable presets and extensions. Public exposure, service-role keys, SMTP and object recovery need independent operational policies; database readiness alone does not establish a working API or full upstream-product parity.
 
 ## Alternatives considered
 

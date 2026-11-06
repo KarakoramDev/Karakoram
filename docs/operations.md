@@ -340,6 +340,19 @@ Do not clear receipts or delete managed versions to bypass this boundary.
 See [retrying exhausted deployments](clusters.md#retry-exhausted-platform-deployments)
 for namespace selection, authorization and idempotency behavior.
 
+Since v0.4.7, re-arming an exhausted initial member or component deployment
+synchronizes its current desired capacity before the fresh deployment, including
+on backends such as Zerops where resource changes do not deploy a runtime. Correct
+the desired resource bounds first, then re-arm; the resource operation
+must complete before deployment proceeds. Resource-only changes do not grant
+a retry budget or bypass the deployment fence.
+For data-bearing members, keep their existing volumes and use this correction
+and re-arm path; disabling/removing members or deleting the cluster is not a
+data-preserving capacity workaround.
+This initial-deployment correction does not apply to recovery of an established
+runtime: recovery restores its accepted capacity, and newer desired resource
+changes still require the ordinary maintenance-gated lifecycle.
+
 The create/scale/update convergence-tracking operation fails immediately on
 `DeploymentRetriesExhausted`, without spending its generic failure-retry budget.
 Desired state and normal observation remain active; reconciliation does not

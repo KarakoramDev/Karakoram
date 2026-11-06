@@ -46,6 +46,13 @@ supervisor restarts OpenBao sealed, and reconciliation unseals it again. A
 reachable control plane with its original secret store/master key is required;
 OpenBao does not autonomously retrieve Karakoram-held shares.
 
+During a version rollout, configuration pulls, reloads and re-unseal recovery
+continue to select each member's installed binary, not the cluster's target
+version. Only that member's completed deployment receipt activates the prepared
+target binary. Pending or failed preparation and control-plane/agent restarts do
+not activate it early; other members retain their installed versions until their
+own turn.
+
 Reveal and store recovery material offline using the [explicit reveal procedure](access-and-tls.md#reveal-and-store-recovery-material-offline). Do not put shares in runtime environment variables, manifests, support bundles or logs.
 
 ## Transit and AWS KMS auto-unseal
@@ -182,7 +189,7 @@ corrective PATCH, suspension or recreation is required when the desired persiste
 disk bounds already match the existing volumes. The old failed operation remains
 historical; watch cluster health and `observedGeneration` for convergence.
 
-Upgrades are forward-only to catalog-listed versions; inspect `providers get openbao -o json`. Only 2.7.1 is currently listed, so a newer-version upgrade cannot yet be exercised. Never install an uncataloged binary or downgrade data in place. Retain a successful [snapshot](backups.md) before maintenance and follow operation status separately from cluster health.
+Upgrades are forward-only to catalog-listed versions; inspect `providers get openbao -o json`. The catalog retains 2.7.1 for existing clusters and supports a separate `spec.version` PATCH to 2.7.2. Never install an uncataloged binary or downgrade data in place. Retain a successful [snapshot](backups.md) before maintenance and follow operation status separately from cluster health.
 
 ## PostgreSQL storage opt-in
 

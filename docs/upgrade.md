@@ -4,21 +4,70 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
-## Upgrading to v0.4.6
+## Upgrading to v0.4.7
 
-v0.4.6 (unreleased) includes the [v0.4.5 MySQL hotfix](#upgrading-to-v045)
-and the [v0.4.4 PITR hotfix](#upgrading-to-v044). When upgrading directly
-from v0.4.3, v0.4.4 or v0.4.5, use the v0.4.6 agent rollout below instead
+v0.4.7 (unreleased) includes the [v0.4.6 security hotfix](#upgrading-to-v046)
+(`github.com/klauspost/compress` v1.20.2), the
+[v0.4.5 MySQL hotfix](#upgrading-to-v045) and the
+[v0.4.4 PITR hotfix](#upgrading-to-v044). When upgrading directly
+from v0.4.3, v0.4.4, v0.4.5 or v0.4.6, use the v0.4.7 agent rollout below instead
 of an intermediate resource-change rollout; then re-enable PITR if needed,
 take a successful full and verify the advancing window as described in the
-hotfix recovery steps. The two v0.4.5 MySQL fixes are inherited, not new in v0.4.6.
+hotfix recovery steps. The two v0.4.5 MySQL fixes are inherited, not new in v0.4.7.
+
+PSMDB adds security patches `7.0.45-24` and `8.0.34-15` (the new default).
+Existing clusters are not automatically patched. Upgrade every older offered
+7.0/8.0 patch to the latest in its line using the [MongoDB rolling upgrade
+procedure](mongodb/operations.md); adjacent 7.0→8.0 upgrades still require
+observed FCV 7.0. Server/router and database-tools package versions now differ.
+PSMDB 7.0/8.0 member deployments also replace Percona mongosh 2.10.0 with
+official MongoDB mongosh 2.14.1, fixing compromised bundled Node TLS roots
+(CVE-2026-115930). A control-plane-only upgrade does not rerun member
+preparation; `upgrade-agents` does, as do engine deployments. Verify
+`mongosh --version` after rollout. The control plane uses the MongoDB Go driver, not shell-output
+parsing; 2.11–2.14 cursor formatting/telemetry changes do not affect its calls.
+Legacy 6.0 members retain mongosh 2.8.3 and its unresolved TLS-root exposure.
+Native-artifact mirrors must add `mongosh-2.14.1-linux-x64.tgz` with the
+exact checksum in the [native artifact inventory](native-artifacts.md).
+Shell preparation honors `KARAKORAM_ARTIFACT_MIRROR`; without a mirror it
+downloads the locked official standalone archive. Percona's shell package remains
+installed to satisfy the server dependency; a local dpkg diversion makes
+`/usr/bin/mongosh` resolve to the verified 2.14.1 archive across package upgrades.
+PSMDB 6.0 is now recovery/migration-only after its 2025-07-31 EOL: fresh
+creates return `spec.version` / `unsupported`; existing updates and adjacent
+6.0→7.0→8.0 upgrade paths remain available. Restore-to-new through API/CLI
+remains admitted only with a validated same-major/topology backup or PITR
+`spec.dataSource`; the wizard disables the deprecated line. This preserves
+recovery admission, not a promise of PBM support for EOL data. Validate old
+backups before upgrading and take new backups after each binary/FCV transition.
+
+### PXC formation behind pending proxy serving health
+
+The control plane no longer makes native formation checkpoints wait for a proxy
+deployment whose serving process is deliberately fenced by birth certification.
+This dependency cycle affects v0.4.3–v0.4.6 and can block fresh PXC formation on
+Nomad, where deployment completion requires the proxy TCP listener. A Synced
+joiner could remain uncheckpointed until the admission watchdog expired, then
+stop when failure cleanup removed its donor/fence authority.
+
+This correction is control-plane-only: native Synced progress is checkpointed
+before the watchdog and terminal cleanup, without weakening all-member GTID
+certification or platform serving-health checks. No additional agent rollout is
+required for this correction. An already terminally blocked formation is not
+automatically retried or certified; preserve evidence and valuable data, then
+follow its recovery guidance. Delete/re-create only disposable failed births.
+Fresh three-member PXC creation with ProxySQL was live-verified on Nomad.
+Automated regressions also cover Zerops-like and Dokploy-like cold deployment
+completion; those paths are verified by tests only.
+
+### Upgrade procedure
 
 1. Back up control-plane state using the
    [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
    the original `KARAKORAM_MASTER_KEY` separately, and retain the previous
    executable with its pre-upgrade state. Review backup capacity and maintenance
    windows before proceeding.
-2. Upgrade the control plane to v0.4.6. Engine versions and deployed member
+2. Upgrade the control plane to v0.4.7. Engine versions and deployed member
    agents are separate from this upgrade; rollback does not undo engine or
    infrastructure changes.
 3. Run `karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m` for each
@@ -32,14 +81,167 @@ hotfix recovery steps. The two v0.4.5 MySQL fixes are inherited, not new in v0.4
    Resolve any legacy Neo4j expired-credential marker using the explicit
    [maintenance procedure](#neo4j-legacy-credential-recovery), not repeated restarts.
 
+### OpenBao security maintenance
+
+OpenBao 2.7.2 is the new default; 2.7.1 remains available but deprecated for existing clusters and forward rolling upgrades. Update the cluster's `spec.version` to `2.7.2` separately from the control-plane upgrade. Follow [OpenBao security maintenance](openbao/README.md#security-maintenance), especially the changed SSH wildcard-principal default. Member replacement installs AWS KMS plugin 0.1.1 for `awskms` seals; retain the external key/IAM access and verify unseal, healthy Raft voters and lease lifecycle after the rollout.
+
+During an explicit 2.7.1→2.7.2 engine upgrade, each member retains its installed
+server version and executable until its prepared deployment completes. A desired
+version change, seal recovery, configuration reload or ordinary configuration
+pull cannot activate the new binary early. Pending or failed preparation keeps
+the installed version; activation requires a fresh configuration acknowledgement.
+
+### Weaviate timeout classification
+
+Response-header timeouts after connection establishment now retain
+`context.DeadlineExceeded`, even when the request context's separate deadline
+has not expired. The client does not replay an established mutation on another
+endpoint. Dial-local timeouts before connection establishment remain eligible
+for endpoint failover while the request context is live. These paths are verified
+by automated tests.
+
+### PostgreSQL backup encryption maintenance
+
+The current pgBackRest 2.59.1 package remains affected by the upstream
+[weak-encryption RNG issue](https://pgbackrest.org/news.html#weak-encryption).
+The requested 2.59.3 security patch is not present in the Percona Noble package
+indexes as of 2026-11-05; a control-plane or agent upgrade does not claim to fix it.
+Even after a fixed binary is deployed, **existing weak stanza subkeys persist**.
+Inspect encrypted repositories privately using upstream's subkey check, create a
+stanza in a new repository if weak, and take a fresh full backup with a fixed
+binary. Test restore/WAL recovery and retain the old repository only while needed.
+Do not rewrite historical backup metadata or assume a fresh incremental repairs
+old keys. Follow the [operator procedure](postgres/backups.md#encryption-rng-security-notice).
+
+### PostgreSQL dependency preparation and etcd quorum
+
+The requested etcd 3.5.35 server/client packages are unavailable in Percona's
+Noble PG16/17/18 indexes as of 2026-11-05; current pins remain 3.5.33. Once
+qualified dependency pins are released, install them through the existing
+one-member-at-a-time `upgrade-agents` deployment, not a native process restart.
+Use `--include-current` when preparation must be rerun for the current build.
+Take an etcd snapshot first, preserve quorum throughout, and verify endpoint
+health/version plus Patroni leadership and replay after each member. See the
+[PostgreSQL rollout procedure](postgres/README.md#dependency-package-rollouts).
+
+### PostgreSQL vector extension maintenance
+
+v0.4.7 replaces Percona's pgvector 0.8.6 APT payload with locked upstream 0.8.7
+source bundles for PostgreSQL 16/17/18 and Supabase PG17, fixing CVE-2026-103484.
+The upstream tag is pinned to an immutable commit and each ABI is built and
+qualified independently; Percona's Noble package indexes still lack this patch.
+Existing members retain the old package identity and dependents; preparation
+diverts package payloads to `.distrib` without renaming live libraries, then
+atomically publishes the verified bundle. Database objects and data are retained.
+New members omit the old APT package and establish the same diversions.
+Complete the rolling `upgrade-agents` deployment (use `--include-current` when
+needed); native process restart alone does not replace the files. After all
+members acknowledge the fixed binaries, the existing `ALTER EXTENSION UPDATE`
+path runs in every connectable non-template database where installed. SQL failure
+keeps extension completion pending and retries without repeating completed member
+deployments. Verify each database's extension version and follow the
+[upstream-based index checks](postgres/profiles.md#pgvector-security-maintenance).
+
+### Supabase set_user compatibility
+
+The requested security-fix transition from set_user 4.2.0 to 4.3.0 is blocked on
+Percona Noble packaging as of 2026-11-05; the old pin is retained, not declared
+fixed. Managed bootstrap renders no set_user GUCs or token calls. Application
+allowlists and role-transition users must nevertheless review the new
+case-sensitive/group matching and reset-token behavior before rollout.
+See [set_user maintenance](postgres/profiles.md#set_user-security-maintenance)
+for the role/GUC audit, per-database SQL update and live-smoke requirements.
+
+### Supabase component activation boundary
+
+Upgrading only the control plane does **not** activate new release-locked
+Supabase application versions. Existing gateway (Envoy), Auth, REST, Realtime,
+Storage, imgproxy, postgres-meta, Studio, Edge Runtime, Supavisor, Logflare and
+Vector members keep their persisted installed version and executable directory
+during ordinary configuration reconciliation. This also applies to legacy
+members created before v0.4.7; a new control-plane lock is not an installation
+receipt. Newly created components use the current release lock.
+If an incumbent's persisted version field is absent, its sealed applied
+configuration supplies the pin. Missing or unusable applied installation
+identity blocks ordinary reconciliation instead of selecting the current lock.
+
+Activate the qualified artifacts with
+`karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m`.
+Use `--include-current` to rerun preparation when agents already report the
+current build, including same-version rebuilt bundles. The rollout retains the
+PostgreSQL engine version, prepares the release-locked component artifacts in
+each deployment, and activates their matching application configuration through
+the existing component readiness and maintenance-window gates. A component
+re-creation or other deployment that reruns preparation likewise uses the
+current lock; a native process restart or config reload does not install it.
+Optional singleton services can be unavailable during their deployment.
+Target configuration is published only after successful deployment submission.
+A rejected or lost submission response retains the incumbent configuration;
+the durable rollout intent can retry preparation without first requiring an
+unprepared replacement to become ready.
+Supabase also persists a four-failure component deployment budget for each
+native artifact/agent build. Failed preparation cannot turn into an unlimited
+control-plane redeployment loop: exhaustion publishes `DeploymentRetriesExhausted`
+with `clusters retry-deployments` guidance and stops submissions until re-armed.
+Verify each enabled component's reported version and health after rollout,
+including gateway routes, Storage access and the analytics/logging pipeline.
+
+### Supabase image transformations
+
+Imgproxy 3.31.4 → 4.0.21 fixes SVG/source-address and ICO vulnerabilities.
+v4 changes ETag generation to origin-based validators and SVG rasterization
+from 72 to 96 DPI; expect transient cache churn and different transformed SVG
+bytes, not persistent object changes. The renderer explicitly disables the new
+Last-Modified default to preserve v3 behavior, retaining SVG sanitization,
+loopback/link-local guards and private S3 source access.
+See [configuration parity](supabase/components.md#imgproxy-v4-configuration-parity).
+Roll the qualified artifact through the
+[member software procedure](supabase/operations.md#cluster-restart-and-member-software);
+a process restart alone does not replace an installed bundle.
+
+
 ### Behaviour changes
 
+- Temporal adds security patches **1.31.5** and **1.32.2** (default), retaining
+  deprecated 1.31.4 and 1.32.1 for existing clusters and forward upgrades.
+  **`ValidateWorkerDeploymentVersionComputeConfig` now requires namespace Write
+  permission**, not just Read; clients relying on the old authorization can
+  receive permission-denied errors. Review their policy before upgrading.
+  Release-locked UI **2.58.0** replaces 2.56.0 without a rendered-config migration.
+  Existing UI members retain their installed 2.56.0 version and executable path
+  on a control-plane-only upgrade. Activate the current UI artifact through
+  `upgrade-agents` (use `--include-current` if needed), which prepares it before
+  the replacement member starts; the Temporal server version remains unchanged.
+  Failed preparations have a durable four-attempt component budget, with a
+  `DeploymentRetriesExhausted` condition and `clusters retry-deployments`
+  re-arm instead of an indefinitely retained failed receipt. Cancelling before
+  submission (or after rejection) leaves a healthy old UI untouched.
+  Mirror `temporal_1.31.5_linux_amd64.tar.gz`,
+  `temporal_1.32.2_linux_amd64.tar.gz` and `ui-server_2.58.0_linux_amd64.tar.gz`
+  with their [locked checksums](../internal/engine/nativeartifacts/lock.json).
+  See [Temporal upgrade notes](temporal/operations.md#v047-compatibility-notes).
 - `upgrade-agents` now covers every member-agent engine; availability still
   depends on engine topology and backend rollout semantics.
+- Weaviate offers `1.39.15` and `1.40.3` (default); `1.39.12` and `1.40.1`
+  are deprecated but retained for existing clusters. Upgrade engine versions
+  explicitly after agent rollout, then qualify full S3 backup/restore and
+  queries; see [patch maintenance considerations](weaviate/operations.md#patch-maintenance-considerations)
+  for startup rebuild I/O and internal backup authentication changes.
+- Neo4j defaults to 2026.10.1; 2026.09.0 and 2026.10.0 remain offered with
+  explicit backup-required forward paths. All three use Temurin JRE 21.0.13+9.
+  Existing members need [agent rollout](neo4j/operations.md#agent-upgrades)
+  to install the JRE; control-plane-only updates retain the installed Java home.
 - PostgreSQL, Citus and Supabase support restart-free `postgres` rotation after
   agent upgrades. Peer-auth activation may need one configuration restart first.
 - MySQL GR and PXC automatically replace confirmed lost volumes only after
   native survivor/donor proof; MySQL single still requires storage recovery or restore.
+- Percona Server/PXC 8.0 entries are deprecated after community EOL on
+  2026-04-01. Fresh empty creates/import targets must use 8.4; rejection identifies
+  `spec.version` with reason `unsupported`. Existing 8.0 updates, backups/restores
+  and offered upgrades to 8.4 remain available. Recovery-only `spec.dataSource`
+  creates retain same-driver, same-major validation: recover 8.0 backup/PITR data
+  into 8.0, verify it, then upgrade to 8.4. XtraBackup 8.0.35-36 and all historical
+  artifact/backup metadata pins remain unchanged. See [MySQL lifecycle policy](mysql/README.md).
 - MySQL/PXC automatic PITR re-anchoring is **ON by default**. Opt out with
   `spec.backup.pitr.autoReanchor: false`; additional fulls consume storage and IO.
 - PITR responses add `intervals`; legacy summaries remain unchanged.
@@ -51,10 +253,19 @@ hotfix recovery steps. The two v0.4.5 MySQL fixes are inherited, not new in v0.4
 - Temporal supports Zerops private IPv6 with upgraded agents. MySQL/PXC mutation
   isolation is per cluster, and Neo4j verifies credential recovery before marking
   bootstrap complete; existing false-completion markers need explicit repair.
+- Exhausted initial member and component deployments now apply corrected desired
+  resource bounds before a re-armed deployment, including on Zerops. Update the
+  resources, then use `clusters retry-deployments`; a resource-only change does
+  not re-arm deployment by itself. Existing service and volume identities are
+  retained; data-bearing members must not be disabled or deleted as a workaround.
+- Data MCP reconnects after a companion connection closes or its session is
+  missing. Tool listing retries once; tool execution is never replayed. See
+  [tool-list troubleshooting](data-mcp.md#tool-list-troubleshooting-v047).
+- **Data MCP companion refresh:** Data MCP companions (MongoDB and PostgreSQL) are redeployed once after the upgrade, honoring each cluster's maintenance window; Data MCP is briefly unavailable for that cluster. A failed companion preparation stops after four attempts, keeps the previous companion serving where possible, and reports `DeploymentRetriesExhausted` with the retry command. Automatic replacements emit `DataMcpCompanionRollout`. Only the private stateless companion is replaced, not database members or volumes. Replacement preparation downloads and checksum-verifies the locked bytes before the start-first backend promotes the replacement and retires the old companion. See [companion operations](data-mcp.md#companion-operations-and-status).
 
 ### Agent rollout now covers every member-agent engine
 
-After upgrading the control plane to v0.4.6, run the existing rollout command for
+After upgrading the control plane to v0.4.7, run the existing rollout command for
 MySQL (single or Group Replication), PXC, OpenBao (Raft or PostgreSQL storage),
 Keycloak, Temporal, Neo4j Community and Weaviate:
 
@@ -64,9 +275,12 @@ karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m
 
 PostgreSQL (including Citus), Supabase, MongoDB, RabbitMQ and Elasticsearch retain
 their existing support. Existing v0.4.3 agents become upgradable once the control
-plane is v0.4.6; unknown legacy identities are also eligible. This installs the
+plane is v0.4.7; unknown legacy identities are also eligible. This installs the
 frozen control-plane agent build without changing applied engine versions,
-configuration, resources, bindings or persistent runtime/volume identities.
+resources, bindings or persistent runtime/volume identities. Supabase's separately
+release-locked application components and Temporal's separately locked UI
+activate through deployment preparation, as described in their activation and
+upgrade notes; these are distinct from the database/Temporal server version.
 It replaces earlier resource-change/re-creation workarounds for installing agent
 fixes; a native process restart still does not replace its agent.
 
@@ -428,8 +642,33 @@ v0.4.6 changes nothing else. The
 [known issues in v0.4.5](#known-issues-in-v045) remain present, including Data
 MCP failures after a companion connection closes, Zerops failed-deployment
 resource recovery and false PXC GTID-history incidents. Their workarounds still
-apply. Fixes for those three issues are planned for v0.4.7; the other
-continuing limitations keep their individually documented status.
+apply. Those three issues are **fixed in v0.4.7**, including failed-deployment
+resource recovery on Zerops, Dokploy and Nomad; the other continuing limitations
+keep their individually documented status.
+
+- **Creating a Percona XtraDB Cluster on Nomad fails** (also present in
+  v0.4.3–v0.4.5; Zerops and Dokploy are not affected). A new three-member PXC
+  cluster on the Nomad provider fails after about 5–9 minutes with
+  `GTIDMappingCertificationBlocked`: the last member is never started and the
+  failed create shuts down another member. No existing data is affected; this
+  happens only when creating a cluster. On v0.4.3–v0.4.6, use MySQL Group
+  Replication on Nomad, or create PXC clusters on Zerops or Dokploy.
+  **Fixed in v0.4.7:** formation no longer blocks on a fenced ProxySQL
+  deployment. Fresh three-member PXC creation with ProxySQL was live-verified
+  on Nomad; see [formation upgrade guidance](#pxc-formation-behind-pending-proxy-serving-health).
+- **A cluster can report Degraded while its Data MCP companion is unresponsive**
+  (also present in v0.4.1–v0.4.5). If a cluster's Data MCP companion accepts
+  connections but stops answering — for example while it restarts or when it
+  hangs — the control plane waits too long for it, the cluster's health
+  observations go stale, and the cluster reports `Degraded` (`ObservationStale`)
+  for as long as the companion stays unresponsive, even though the database
+  itself is healthy. It recovers by itself once the companion answers again.
+  If it persists, disable Data MCP for that cluster
+  (`spec.dataMcp.enabled: false`, applied with
+  `karactl clusters patch CLUSTER -f change.yaml`) and re-enable it later.
+  **Fixed in v0.4.7:** companion readiness observation is bounded by the
+  observation timeout, so native availability stays fresh and Data MCP is
+  reported unavailable while the companion is unresponsive.
 
 ## Upgrading to v0.4.5
 
@@ -524,7 +763,11 @@ window display, PostgreSQL administrator-password rotation, Temporal on Zerops
 and incomplete Nomad live coverage. The Zerops failed-deployment resource
 recovery and false PXC GTID-history incident issues documented
 [below](#known-issues-in-v044) also remain unfixed in v0.4.5; their workarounds
-still apply in v0.4.5. **Fixed in v0.4.6**, not included in this hotfix.
+still apply in v0.4.5. The PXC issue is **fixed in v0.4.7**, not included in
+the v0.4.5 or v0.4.6 hotfixes. Failed-first-deployment resource recovery on
+Zerops, Dokploy and Nomad is **fixed in v0.4.7**; it is not included in the
+v0.4.5 or v0.4.6 hotfixes. The documented workarounds remain necessary on
+those releases.
 
 - **Data MCP can keep failing with `tool listing unavailable` after its
   connection to a cluster's companion drops** (also present in v0.3.0–v0.4.4).
@@ -536,7 +779,8 @@ still apply in v0.4.5. **Fixed in v0.4.6**, not included in this hotfix.
   the control plane restarts. Your databases are not affected. Workaround: stop
   sending Data MCP requests to that cluster for about 10 minutes, or restart
   the Karakoram control plane (clusters keep running while it restarts).
-  A fix is planned for v0.4.7, not the v0.4.6 security hotfix.
+  **Fixed in v0.4.7:** the gateway reconnects after the companion connection
+  closes, so no control-plane restart is needed.
 
 ## Upgrading to v0.4.4
 
@@ -665,8 +909,10 @@ with the latest end. See [all current limitations](limitations.md).
   for RabbitMQ, Elasticsearch, Weaviate and OpenBao, leave the cluster as it
   is and upgrade once the fix is released. After cancelling or a timeout,
   check that the new member is actually gone before making further changes.
-  Neo4j and the Data MCP companion are not
-  affected. **Fixed in v0.4.6**; not fixed by the v0.4.5 hotfix.
+  Neo4j and the Data MCP companion are not affected.
+  Failed-first-deployment resource recovery on Zerops, Dokploy and Nomad is
+  **fixed in v0.4.7**; it is not included in the v0.4.5 or v0.4.6 hotfixes.
+  The documented workarounds remain necessary on those releases.
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or
@@ -690,7 +936,7 @@ with the latest end. See [all current limitations](limitations.md).
   scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
   serving reads and writes, so leave it as it is and upgrade once the fix is
   released. This needs configured backup storage and healthy members.
-  **Fixed in v0.4.6**; not fixed by the v0.4.5 hotfix.
+  **Fixed in v0.4.7**; not fixed by the v0.4.5 or v0.4.6 hotfixes.
 
 ## Upgrading to v0.4.3
 
@@ -985,7 +1231,7 @@ hostgroup defaults are defensive policy, not evidence of the same defect.
 A native process restart, an unchanged spec, or a control-plane-only upgrade
 does not replace its agent. v0.4.3 MySQL/PXC do not support `upgrade-agents`.
 
-**v0.4.6 supersedes this workaround:** after upgrading the control plane, use
+**v0.4.7 supersedes this workaround:** after upgrading the control plane, use
 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine) to replace
 data and proxy agents without a resource change. The procedure below describes
 v0.4.3 only.
@@ -1032,7 +1278,7 @@ does not replace running data-member or proxy-agent executables. On v0.4.3,
 MySQL/PXC do not support `upgrade-agents`, and `karactl clusters restart`
 restarts native database/proxy processes, **not their agents**.
 
-For v0.4.6, use [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+For v0.4.7, use [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
 instead of the resource-change/new-target procedures below; their v0.4.3
 compatibility and live-verification statements remain historical.
 
@@ -1105,8 +1351,8 @@ certification unavailability rather than gaining the agent-side certificate.
 **Weaviate clusters that never formed on Zerops must be re-created.** Preserve
 the create request, confirm there is no valuable imported or external state,
 then deploy with current agents. v0.4.3 Weaviate does not support `upgrade-agents`;
-v0.4.6 rollout requires a formed cluster. Preserve data-bearing clusters and use
-the v0.4.6 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+v0.4.7 rollout requires a formed cluster. Preserve data-bearing clusters and use
+the v0.4.7 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
 only when its native safety gates can be satisfied.
 
 **Supabase poolers on IPv6-only backends require the rebuilt Supavisor native
@@ -1116,14 +1362,14 @@ lock. Use the supported [member-agent rollout](#rolling-out-member-agents)
 and verify native SQL pooler connectivity over the private address family.
 For v0.4.3, other affected engines use supported agent rollout where available;
 Neo4j and Keycloak need reviewed, data-preserving re-creation for agent-side
-listener fixes. On v0.4.6, use the
+listener fixes. On v0.4.7, use the
 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine) instead.
 
 ### Continuing limitations
 
-The following limitations describe v0.4.3. v0.4.6 adds PostgreSQL administrator
+The following limitations describe v0.4.3. v0.4.7 adds PostgreSQL administrator
 rotation, Temporal on Zerops and full PITR interval lists as described
-[above](#upgrading-to-v046). Incomplete Nomad live coverage still does not change
+[above](#upgrading-to-v047). Incomplete Nomad live coverage still does not change
 EXPERIMENTAL engine status. See current [limitations](limitations.md).
 
 **MySQL/PXC PITR window display:** `karactl ... pitr-window` and cluster status
@@ -1139,7 +1385,7 @@ a later release.
 ### Known issues in v0.4.3
 
 The archiving issue is fixed in v0.4.4; the PXC false-history issue is fixed
-in v0.4.6, not by the hotfix.
+in v0.4.7, not by the hotfix.
 
 - **MySQL PITR archiving can silently stop after a schema or account change
   — fixed in v0.4.4** (v0.4.3 only; single, Group Replication and PXC).
@@ -1181,7 +1427,7 @@ in v0.4.6, not by the hotfix.
   scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
   serving reads and writes, so leave it as it is and upgrade once the fix is
   released. This needs configured backup storage and healthy members.
-  **Fixed in v0.4.6**; not fixed by v0.4.4.
+  **Fixed in v0.4.7**; not fixed by v0.4.4.
 
 ## Upgrading to v0.4.2
 
@@ -1270,7 +1516,7 @@ Unless noted otherwise, the following issues affected both v0.4.0 and v0.4.1:
 
 ### Existing MySQL and PXC agents
 
-**For v0.4.6:** [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+**For v0.4.7:** [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
 replaces the re-creation requirement described here for v0.4.2.
 
 The MySQL Group Replication clustered-restart/primary-handoff, in-place restore
@@ -1308,7 +1554,7 @@ v0.4.0, also follow the separate v0.4.1 agent guidance below. MySQL/PXC formatio
 durability and sanitized startup/clone diagnostics include agent-side changes;
 use new v0.4.2 members, not merely a database-process restart.
 
-For v0.4.6, all of these engines support the
+For v0.4.7, all of these engines support the
 [agent rollout command](#agent-rollout-now-covers-every-member-agent-engine);
 the unsupported statement above describes v0.4.2 only.
 
@@ -1460,7 +1706,7 @@ data-preserving agent-only upgrade for these engines; consumer deletion is
 especially destructive, as explained below. Do not use volume retention or
 copying binaries as a substitute.
 
-**For v0.4.6:** all of these engines support
+**For v0.4.7:** all of these engines support
 [agent-only rollout](#agent-rollout-now-covers-every-member-agent-engine).
 The re-creation requirement above applies to v0.4.1, not the current rollout path.
 
@@ -1663,7 +1909,7 @@ credential returned by the connection endpoint.** `system-users rotate` returns
 HTTP 409 with an explanation; the other internal PostgreSQL system roles are
 also not rotatable through this command. Native application-role password
 rotation and managed binding rotation do not rotate the administrator.
-For v0.4.6, see [PostgreSQL administrator password rotation](#postgresql-administrator-password-rotation).
+For v0.4.7, see [PostgreSQL administrator password rotation](#postgresql-administrator-password-rotation).
 
 If this credential is exposed, restrict access at both private and public
 network boundaries and terminate existing privileged sessions; removing public
@@ -1830,7 +2076,7 @@ Installations mirroring native artifacts must add the following exact filenames 
 | Percona Server | `Percona-Server-8.4.11-11-Linux.x86_64.glibc2.35-minimal.tar.gz`, `Percona-Server-8.4.10-10-Linux.x86_64.glibc2.35-minimal.tar.gz`, `Percona-Server-8.0.46-37-Linux.x86_64.glibc2.35-minimal.tar.gz`, `Percona-Server-8.0.45-36-Linux.x86_64.glibc2.35-minimal.tar.gz` |
 | PXC | `Percona-XtraDB-Cluster_8.4.11-11.1_Linux.x86_64.glibc2.35-minimal.tar.gz`, `Percona-XtraDB-Cluster_8.0.46-38.1_Linux.x86_64.glibc2.35-minimal.tar.gz` |
 | XtraBackup | `percona-xtrabackup-8.4.0-7-Linux-x86_64.glibc2.35-minimal.tar.gz`, `percona-xtrabackup-8.0.35-36-Linux-x86_64.glibc2.35-minimal.tar.gz` |
-| Neo4j / Java | `neo4j-community-2026.09.0-unix.tar.gz`, `neo4j-community-2026.10.0-unix.tar.gz`, `OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz` |
+| Neo4j / Java | `neo4j-community-2026.09.0-unix.tar.gz`, `neo4j-community-2026.10.0-unix.tar.gz`, `neo4j-community-2026.10.1-unix.tar.gz`, `OpenJDK21U-jre_x64_linux_hotspot_21.0.13_9.tar.gz`; retain `OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz` for transitional replacement preparation |
 | Weaviate | `weaviate-v1.40.1-linux-amd64.tar.gz`, `weaviate-v1.39.12-linux-amd64.tar.gz` |
 
 [TimescaleDB](https://www.timescale.com/) and [Citus](https://www.citusdata.com/) bundles are Karakoram-built; development builds need a mirror or explicit `KARAKORAM_ARTIFACT_RELEASE` containing their exact locked bytes. Other additions have official upstream URLs. [Weaviate](https://weaviate.io/) is upstream-only, mixed-license and **not redistributed as a Karakoram release payload**. A private mirror is not permission to redistribute upstream software. See [native artifacts](native-artifacts.md) for resolution order, provenance and licensing.
@@ -1865,6 +2111,7 @@ After the upgrade the control plane serves the [MCP server](mcp.md) at `/mcp` be
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `KARAKORAM_MCP` | `readonly` | `off`, `readonly` or `readwrite`; invalid values fail startup |
+| `KARAKORAM_MCP_OUTPUT_SCHEMAS` | `false` | Set `true` in the server environment and restart to advertise output schemas; off keeps discovery/context smaller without changing successful structured results or text content |
 | `KARAKORAM_OAUTH` | `off` | Embedded OAuth authorization server for MCP connectors |
 | `KARAKORAM_OAUTH_DCR` | `off` | Dynamic client registration, only with OAuth on |
 | `KARAKORAM_OAUTH_CLIENT_HOSTS` | unset | Optional allowlist of client-metadata hosts |
@@ -2044,7 +2291,7 @@ Upgrading or restarting the control plane does **not** replace existing member a
 
 Inspect `karactl clusters get NAME` or `clusters status NAME`: `status.agents` reports `targetBuild`, `targetVersion`, and the `outdated` and `unknown` member names. Member output includes `agent.version`, `agent.commit` and `agent.build`. The `AgentsCurrent` condition is informational: `True/Current`, `False/Outdated`, or `Unknown/Unreported`; it never makes a cluster unready or Degraded. An `AgentsOutdated` event signals outdated member agents.
 
-Build inventory is independent of rollout execution: v0.4.6 supports
+Build inventory is independent of rollout execution: v0.4.7 supports
 `upgrade-agents` for PostgreSQL (including Citus), Supabase, MongoDB/PSMDB,
 RabbitMQ, Elasticsearch, MySQL/PXC (including ProxySQL), OpenBao, Keycloak,
 Temporal, Neo4j and Weaviate. A healthy native engine is not evidence of a current
@@ -2113,7 +2360,7 @@ It cannot deploy remaining members for the old target: that requires a new
 rollout. Success of the old operation does not imply agents match the new
 control plane; inspect inventory before requesting the new rollout.
 
-Agent rollout requires an advertised engine driver operation backed by a one-member disruption journal. [Keycloak](https://www.keycloak.org/), [OpenBao](https://openbao.org/), [Temporal](https://temporal.io/), [MySQL](https://www.oracle.com/mysql/), [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster), [Neo4j](https://neo4j.com/) and [Weaviate](https://weaviate.io/) do not currently implement that contract: automatic rollout reports unsupported agents without scheduling any disruption, and manual rollout is rejected. Enabling automatic rollout never opts these engines into a generic restart or redeployment fallback.
+Agent rollout requires an advertised engine driver operation backed by a one-member disruption journal. From v0.4.7 every member-agent engine implements that contract, including [Keycloak](https://www.keycloak.org/), [OpenBao](https://openbao.org/), [Temporal](https://temporal.io/), [MySQL](https://www.oracle.com/mysql/), [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster), [Neo4j](https://neo4j.com/) and [Weaviate](https://weaviate.io/); see [agent rollout now covers every member-agent engine](#agent-rollout-now-covers-every-member-agent-engine) for per-engine ordering and availability. On v0.4.5 and earlier control planes those engines report unsupported agents during automatic rollout without scheduling any disruption, and manual rollout is rejected. Enabling automatic rollout never opts any engine into a generic restart or redeployment fallback.
 
 Automatic rollout is **off by default**:
 

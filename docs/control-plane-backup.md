@@ -66,6 +66,23 @@ karakoram admin backup-state --out /secure/state.db.gz
 
 Local export works while the server runs: it authenticates the supplied master key against persisted encrypted state before snapshotting or publishing a fingerprint, then uses a transactionally consistent WAL-safe SQLite snapshot and checks integrity. A fresh database with no encrypted state can be exported with its configured key. Preserve both files together.
 
+The control plane uses CGO-free `modernc.org/sqlite v1.61.1` (SQLite **3.54.1**,
+matching `modernc.org/libc v1.79.0`, Go 1.26). The
+[driver changelog](https://github.com/modernc-org/sqlite/blob/v1.61.1/CHANGELOG.md)
+includes first-row cancellation cleanup, an interruption/connection-reuse race
+fix, context-aware busy waits, failed-commit rollback and WAL I/O fault handling.
+The fixed `_pragma=busy_timeout(5000)` and `_pragma=foreign_keys(1)` connection
+settings and `VACUUM INTO` snapshot format are unchanged; new DSN shorthand,
+time conversion, shared-cache and OFD-lock options are not enabled for disk state.
+Closing the last connection checkpoints the WAL and removes its sidecars; an
+online snapshot does not require closing the running server. Legacy SQLite 3.50.4
+state remains readable and is migrated on normal startup. Regression coverage
+includes an old-driver-created database, snapshot/reopen and offline restore.
+The upstream master changelog mentions v1.61.2, but the
+[published tags](https://github.com/modernc-org/sqlite/tags) and
+[Go module release metadata](https://proxy.golang.org/modernc.org/sqlite/@latest)
+established v1.61.1 as the latest available stable release when qualified.
+
 Stop the control-plane service and disable automatic restarts before restoring. Set `KARAKORAM_DATA_DIR` to the destination and supply the original `KARAKORAM_MASTER_KEY` through your secret manager. Restore before first normal startup:
 
 ```sh

@@ -4,6 +4,40 @@
 
 [PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) use [pgBackRest](https://pgbackrest.org/) physical backups and WAL in registered [S3](https://aws.amazon.com/s3/)-compatible storage. Read [shared storage, schedules, restore and clone procedures](../backups.md), including namespace permissions and endpoint verification. Database backups and control-plane state/master-key backups protect different assets.
 
+## Encryption RNG security notice
+
+pgBackRest [2.59.3](https://pgbackrest.org/release.html#2.59.3) fixes unchecked
+random-number generation failures that could create weak encryption subkeys and
+salts. The current Percona Noble pin remains 2.59.1: as of 2026-11-05, 2.59.3 is
+not in the Percona PostgreSQL 16/17/18 Noble package indexes. The binary fix is
+not yet shipped through that package source. Repositories without pgBackRest
+encryption are not affected; storage-side S3 encryption is a separate mechanism.
+
+Operators of encrypted repositories must follow the upstream
+[weak-encryption notice](https://pgbackrest.org/news.html#weak-encryption):
+
+1. Inspect the effective repository/stanza encryption configuration and every
+   repository, including retained repositories and each Citus replication group.
+   Have an authorized operator run upstream's subkey check on `archive.info` and
+   `backup.info` privately; do not paste keys, passphrases or decrypted metadata
+   into logs or support reports. Upstream considers a subkey containing six or
+   more zero bytes weak. That check cannot detect the older OpenSSL 1.0 failure
+   mode described in the notice.
+2. Upgrade all backup/restore participants to a qualified 2.59.3-or-later build
+   when available, and correct any blocked OS randomness/OpenSSL configuration.
+   **An upgrade does not replace existing weak stanza keys.** They were generated
+   by `stanza-create` and continue encrypting new WAL and manifests afterward.
+3. If either stanza subkey is weak, create the stanza in a **new repository**;
+   retain the old repository only as long as its recovery sets are required.
+   Arrange a supported new repository/cluster recovery workflow rather than
+   editing encryption metadata, rerunning `stanza-create` over the same repository
+   or rewriting historical Karakoram backup records.
+4. Take a fresh **full** backup with the fixed binary, then test restore and WAL
+   recovery from that new recovery chain. A differential/incremental still uses
+   its full backup's data subkey. A new full in an old repository does not repair
+   weak stanza subkeys. Expire old backups/WAL according to recovery and retention
+   requirements; old weak material persists until the corresponding objects expire.
+
 ## Configure and create
 
 Set `spec.backup.storage` to a storage registered in the target namespace. The default storage provides continuous archiving; a backup/schedule may select another registered destination. Repositories are isolated at `<storage-prefix>/postgres/<namespace>/<cluster>-<uid>`, stanza `kk`. Leading and trailing slashes in the storage prefix are removed from recorded [S3](https://aws.amazon.com/s3/) repository keys; [pgBackRest](https://pgbackrest.org/) receives the corresponding absolute repository path. Members transfer backup/WAL bytes directly to S3; control-plane endpoint verification alone does not prove member connectivity.

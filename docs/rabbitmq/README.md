@@ -10,7 +10,7 @@ Opt-in [cluster data MCP](../data-mcp.md) provides native Management API tools w
 
 | Setting | Value |
 | --- | --- |
-| Broker / Erlang | RabbitMQ **4.3.6** default; Erlang **27.3.4.17**, package `1:27.3.4.17-1` |
+| Broker / Erlang | RabbitMQ **4.3.7** default; Erlang **27.3.4.19**, package `1:27.3.4.19-1` |
 | Topology | `cluster`, component `engine`, **1/3/5/7** brokers; default 3; `dev` = 1, `prod` = 3 |
 | New queues | `quorum`; initial replica target 3, capped by available membership at declaration |
 | Per-broker defaults / minima | Shared CPU, 1 core, 1 GB RAM, 5 GB data volume / 1 whole core, 0.5 GB RAM, 5 GB data volume |
@@ -18,7 +18,9 @@ Opt-in [cluster data MCP](../data-mcp.md) provides native Management API tools w
 | Recovery | [Definitions only](backups.md): no messages, physical backups or PITR |
 | Public access | Opt-in AMQPS with CIDR allowlist; separate opt-in management UI/API without that restriction; [exposure rules](access-and-tls.md#public-access) |
 
-Deprecated **4.3.5** is hidden in the creation wizard but accepted explicitly through the API as an upgrade source. Creation returns `DeprecatedVersion` and a Warning event naming stream authorization disclosures [GHSA-6jvc-jx8w-m757](https://github.com/rabbitmq/rabbitmq-server/security/advisories/GHSA-6jvc-jx8w-m757) and [GHSA-342v-cj47-c9g8](https://github.com/rabbitmq/rabbitmq-server/security/advisories/GHSA-342v-cj47-c9g8), fixed in 4.3.6. Upgrade before enabling stream access. Only **4.3.5 → 4.3.6** is supported; no downgrades, uncataloged series or arbitrary [Erlang](https://www.erlang.org/) packages.
+Deprecated **4.3.5** and **4.3.6** are hidden in the creation wizard but remain accepted explicitly through the API as upgrade sources. Creation returns `DeprecatedVersion` and a Warning event recommending **4.3.7**, which fixes the October [security advisories](https://www.rabbitmq.com/security) covering memory denial of service, log amplification, SASL leakage, conversion disconnect denial of service and OAuth HTML injection (CVE identifiers pending in the vendor table). Version 4.3.5 additionally lacks the September stream authorization fixes. Supported upgrades are **4.3.5 → 4.3.6**, **4.3.5 → 4.3.7** and **4.3.6 → 4.3.7**; no downgrades, uncataloged series or arbitrary [Erlang](https://www.erlang.org/) packages.
+
+Version 4.3.7 installs the checksum-locked official release Debian package, verified against RabbitMQ's release-signing key before pinning; older brokers retain the Team RabbitMQ apt source. All fourteen Erlang packages at `1:27.3.4.19-1` were present in both configured Noble repositories on 2026-11-05, while neither broker index published `4.3.7-1`. See [artifact provenance](../native-artifacts.md). A broker upgrade redeploys each existing member with the new Erlang pin before installing the broker, gated by quorum safety, drain/stop and configuration acknowledgement before advancing to the next member.
 
 ## Topology, cost and runtime
 
@@ -38,7 +40,7 @@ CLI alternative: [install and authenticate karactl](../cli.md), then save `rabbi
 name: brokers
 spec:
   provider: rabbitmq
-  version: 4.3.6
+  version: 4.3.7
   topology:
     type: cluster
   components:

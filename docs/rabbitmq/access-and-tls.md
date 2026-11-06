@@ -16,7 +16,16 @@ See [listener ports](README.md). AMQP TLS supports password authentication witho
 
 For `userProvided`, supply `spec.tls.caCertificate` and signing `caPrivateKey` as PEM. The matching CA key must be RSA ≥2048 bits or ECDSA P-256/P-384/P-521; a certificate without its signing key is insufficient. Karakoram issues leaves if no supplied leaf pair is present. Optional `certificate`/`privateKey` must match; include intermediates in the certificate chain. The leaf must be currently valid, chain to the supplied CA, permit both server and client authentication, and cover **every broker service hostname**; with public exposure it must also cover the **selected project public IP** in its SANs. [RabbitMQ](https://www.rabbitmq.com/) does not require a supplied leaf's SANs to include `127.0.0.1`. Replace expiring supplied leaves/keys; `TLSCertificate` reports expiry. Leaf rotation does not rotate the CA, [Erlang](https://www.erlang.org/) cookie or control-plane master key.
 
-**OTP advisory:** pinned OTP 27.3.4.17 has TLS-client verification bypass [CVE-2026-89422 / GHSA-rgxr-4g4w-j875](https://github.com/erlang/otp/security/advisories/GHSA-rgxr-4g4w-j875). Generated distribution/CLI TLS clients and Osiris replication client/server force TLS 1.2, retaining peer verification; public AMQPS, Stream and HTTPS server versions are unchanged. A packaged catalog fix ≥27.3.4.18 is required before lifting this restriction. User-supplied Shovel/Federation runtime parameters need independently safe outbound TLS settings.
+**OTP advisory:** OTP 27.3.4.19 replaces the vulnerable 27.3.4.17 package, including the TLS-client verification bypass fix [CVE-2026-89422 / GHSA-rgxr-4g4w-j875](https://github.com/erlang/otp/security/advisories/GHSA-rgxr-4g4w-j875). Generated distribution/CLI TLS clients and Osiris replication client/server still force TLS 1.2 as defense in depth; public AMQPS, Stream and HTTPS server versions are unchanged. Existing members receive the fixed runtime during their broker upgrade, not just by upgrading the control plane. User-supplied Shovel/Federation runtime parameters need independent TLS review.
+
+**Management listener compatibility:** generated HTTPS configuration uses an explicit
+listener in `advanced.config`, with an Erlang IP tuple and bind IP/port outside
+`ssl_opts`. This avoids a RabbitMQ 4.3.7 web-dispatch regression that passes a
+string IP from `management.ssl.ip` through to the TLS socket. The form also works
+with 4.3.5/4.3.6 during rolling upgrades. Private HTTP/HTTPS ports, address-family
+selection, certificate verification and TLS-mode policy are unchanged. The same
+fix is needed for fresh TLS-enabled 4.3.7 clusters, not only upgrades; AMQPS uses
+the separate core listener path and does not generate the offending option.
 
 ## Private network trust boundary
 

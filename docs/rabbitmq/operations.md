@@ -97,7 +97,7 @@ curl --fail-with-body --user admin --cacert ca.pem \
   'https://brokersm0:15671/api/queues/quorum/%2F/orders/status'
 ```
 
-Use Queue recovery's values, not illustrative hostnames. Encode each vhost/queue segment once (`/` → `%2F`). With disabled TLS use private `http://BROKER:15672` without `--cacert`; never disable HTTPS verification or publish management for recovery. These are the pinned [RabbitMQ 4.3.6 routes](https://github.com/rabbitmq/rabbitmq-server/blob/v4.3.6/deps/rabbitmq_management/src/rabbit_mgmt_dispatcher.erl).
+Use Queue recovery's values, not illustrative hostnames. Encode each vhost/queue segment once (`/` → `%2F`). With disabled TLS use private `http://BROKER:15672` without `--cacert`; never disable HTTPS verification or publish management for recovery. These are the pinned [RabbitMQ 4.3.7 routes](https://github.com/rabbitmq/rabbitmq-server/blob/v4.3.7/deps/rabbitmq_management/src/rabbit_mgmt_dispatcher.erl).
 
 4. Add **one** missing replica at a time, normally growing to three. Inspect queue/Raft status after each: the new replica must be online, voting and caught up to the leader's committed log, allowing for active writes. HTTP success/member-list changes alone do not prove synchronization.
 5. Re-read membership before retrying a timeout; the replica may already exist. If all brokers are members, recover offline replicas. Never force membership, add without a majority or restart several brokers. Once safe, observe the existing workflow resume rather than submit duplicate edits/restarts.

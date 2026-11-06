@@ -98,8 +98,9 @@ credentials after recovery, without guessing the restored credential generation.
 
 Seal one journal under `admin/rotation` before native dispatch. It contains the
 operation identity, previous password, selected replacement, stable SCRAM verifier,
-immutable sorted group order, completed-group cursor and in-flight intent. Public
-operation checkpoints contain only the stage, never credentials. A completed or
+immutable group order (workers first, coordinator last for new Citus journals),
+completed-group cursor and in-flight intent. Existing journals retain their order.
+Public operation checkpoints contain only the stage, never credentials. A completed or
 rejected journal retains its identity/stage without passwords or verifiers.
 
 1. Stage and acknowledge transition configurations on all members. Peer local
@@ -108,9 +109,12 @@ rejected journal retains its identity/stage without passwords or verifiers.
    must not rewrite `postgres` during the transition, including from cached SQL.
 2. Discover each writable group primary afresh. Patroni leader-lock and recovery
    checks are repeated by the agent before SQL. On single/HA there is one group;
-   Citus needs one transaction per group because role DDL is node-local. Disable
-   Citus role-DDL propagation inside the transaction. Commit `ALTER ROLE postgres
-   PASSWORD` and the existing credential-free operation/hash/OID receipt together.
+   Citus needs one transaction per group because role DDL is node-local. Use
+   owner-local peer access without password fallback. Disable both Citus DDL
+   propagation and metadata synchronization in connection startup parameters,
+   before recovery queries or BEGIN, and retain transaction-local guards before
+   receipt schema/table DDL. Commit `ALTER ROLE postgres PASSWORD` and the
+   existing credential-free operation/hash/OID receipt together.
    Replay observes the receipt and original role identity instead of redoing ALTER.
    Replicas receive role DDL and receipts through native streaming replication.
 3. After every group acknowledges, publish `users/postgres`, bump the access
@@ -134,6 +138,43 @@ permission to roll back: retry/inspect the same intent and converge forward.
 Pending operation messages identify the group, member, proxy publication barrier
 or Supabase component that still needs acknowledgement.
 
+From v0.4.7, the rotation recovery owner can deploy the current agent artifact
+on a Citus primary that lacks `adminRotationLocalReceipts`, honoring maintenance
+windows and retaining the deployment receipt in the sealed journal. This is
+part of the existing rotation, not a second `upgrade-agents` operation. Observe
+local peer capability rather than cross-group readiness before resuming SQL;
+the latter depends on the very credentials being repaired. After 30 unsuccessful
+native receipt attempts, report an actionable error while retaining the journal
+for forward recovery. Deployment errors likewise retain the credential intent.
+Only definitive terminal deployment observations retire a saved deployment
+receipt; unknown/in-progress observations cannot authorize resubmission. Failed
+or retry-required deployments re-enter the backend's bounded same-version
+deployment lifecycle. Retry exhaustion is recorded through the normal cluster
+deployment fence; `retry-deployments` advances its epoch and re-arms recovery.
+An already-capable current primary can advance past an obsolete terminal failure.
+The journal retains the selected group/member even after a terminal receipt is
+retired. Polling and bounded resubmission of that runtime do not require its
+agent or PostgreSQL to be running: a failed singleton deployment may have stopped
+the only primary. Unknown/in-progress receipts still prevent overlapping work,
+and fresh primary/leader-lock checks remain mandatory before any native SQL.
+A candidate saved before its first submission is marked separately from a
+dispatched runtime. After any maintenance wait, first submission re-observes the
+pending group's current primary and reselects it if leadership changed; it does
+not roll the former primary replica. The dispatch intent is durable before the
+backend call, so a lost response conservatively retains that runtime for offline
+repair rather than permitting overlapping disruption of a new target.
+New recovery deployments use the retained rotation operation's own maintenance
+authorization, never a queued caller's or desired-generation override. If that
+operation record cannot be resolved and matched to the cluster, deployment
+fails closed while preserving the sealed journal.
+
+On Citus, configuration publication temporarily moves already-joined members
+back to `deployed`. The matching sealed rotation owner may continue observing
+those members through its own transition, publication and cleanup barriers;
+queued operations still require `joined`. This exception does not waive group
+formation, member-count, provisioning/recovery, structural/rolling maintenance,
+or Citus backup/restore ownership fences.
+
 ## Consequences
 
 Rotation itself requires no database restart, including on a single member.
@@ -144,8 +185,15 @@ Complete the rollout first; admission stays closed until every member proves
 password-independent local authentication.
 Supabase component refreshes restart their processes and may interrupt service.
 Citus can have transient cross-group authentication failures while the node-local
-transactions and outbound authentication converge. This is recoverable but not an
-atomic formation-wide transaction or a dual-password grace period.
+transactions and outbound authentication converge. Workers-first ordering keeps
+the coordinator usable with the published credential until its final native
+transaction. As on single/HA PostgreSQL, new administrator connections through
+ProxySQL can fail between that native transaction and proxy configuration
+acknowledgement. Publication starts only after every group receipt; no password
+is published early to mask failures. Normal progress is bounded by reconciliation
+and configuration acknowledgement, not a guaranteed wall-clock outage limit:
+an unavailable member/proxy can extend it and produces recovery diagnostics.
+This is not an atomic formation-wide transaction or dual-password grace period.
 
 External clients are not enumerable: they must obtain the newly revealed password
 and reconnect. Existing sessions are not terminated, so rotation is not session

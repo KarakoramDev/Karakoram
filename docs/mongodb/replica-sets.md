@@ -20,7 +20,7 @@ Create and maintain a managed [PSMDB](https://docs.percona.com/percona-server-fo
 ```sh
 karactl providers get psmdb
 karactl -n default clusters create demo --provider psmdb \
-  --topology replicaSet --members 3 --version 8.0.32-14 \
+  --topology replicaSet --members 3 --version 8.0.34-15 \
   --min-ram 1 --max-ram 1 --min-disk 5 --max-disk 5 \
   --tls-mode requireTLS --wait
 ```

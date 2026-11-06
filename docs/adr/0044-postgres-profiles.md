@@ -26,12 +26,20 @@ Admission is the availability authority: a profile is selectable only for a majo
 
 | Profile | Extensions | Source | Preload | Notes |
 |---|---|---|---|---|
-| `supabase` | Supabase baseline (ADR 0035) | Percona packages + `supabase-pg17-extensions` | `pg_stat_statements`, qualified selections | Implied by the `supabase` engine driver; not selectable on `postgres` |
+| `supabase` | Supabase baseline (ADR 0035) | Percona packages + `supabase-pg17-extensions` + `pgvector-pg17` | `pg_stat_statements`, qualified selections | Implied by the `supabase` engine driver; not selectable on `postgres` |
 | `postgis` | `postgis`, `postgis_topology`, `postgis_raster` | Percona `percona-postgis` packages | none | majors 16–18 |
-| `pgvector` | `vector` | Percona `percona-pgvector` packages | none | majors 16–18 |
+| `pgvector` | `vector` | Karakoram-built `pgvector-pg<major>` artifact, upstream PostgreSQL license | none | majors 16–18; upstream 0.8.7 |
 | `timescaledb` | `timescaledb` | Karakoram-built `timescaledb-pg<major>` artifact, Apache-2 edition | `timescaledb` | telemetry off; TSL features absent |
 
 The `supabase` engine driver becomes PostgreSQL core + the `supabase` profile + its application components. The cutover is byte-identical: persisted specs, the bootstrap digest and its plan, member engine specs, runtime preparation commands and native-artifact sets do not change, so existing clusters neither redeploy nor re-run migrations. The engine driver identity, wire flavour `supabase`, `_karakoram.supabase_migrations` ledger and advisory lock remain.
+
+Subsequent v0.4.7 security maintenance replaces the pgvector 0.8.6 APT payload
+with per-major locked 0.8.7 source bundles, including Supabase PG17. This later
+change intentionally changes preparation: divert package-owned files without
+unlinking live libraries or removing dependents, atomically install the verified
+bundle, complete rolling member deployment, then update installed extension SQL.
+The original profile refactor's byte-identical cutover above is not a claim that later binary updates
+are restart-free or need no SQL migration.
 
 Plain PostgreSQL selects profiles with `engineOptions.profiles` (a set; absent means none, preserving existing specs). Profiles compose when their preloads and parameters do not conflict; preload order is the registry's declaration order. Profiles are additive: adding one installs packages/artifacts, applies parameters through the existing reload or rolling-restart rules and runs its SQL plan; removing one is rejected because extension objects may already exist in user databases.
 

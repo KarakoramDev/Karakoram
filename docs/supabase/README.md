@@ -18,9 +18,36 @@ Opt-in [cluster data MCP](../data-mcp.md) uses the PostgreSQL [pgEdge](https://w
 | Database access | [PostgreSQL native access API](../postgres/access-and-tls.md); internal services use a local raw TCP leader forwarder, not ProxySQL |
 | Recovery | [pgBackRest/PITR](../postgres/backups.md) for database data, not separate S3 objects or control-plane secrets |
 
-Component versions are locked to the Karakoram release. The current lock supplies every component in `minimal`, `standard` and `full`, including Studio 2026.10.12-bc27d2661edd, Edge Runtime 1.77.4 and [Supavisor](https://github.com/supabase/supavisor) 2.9.13. Standard/full require registered Storage configuration, and development builds need an artifact mirror or explicit `KARAKORAM_ARTIFACT_RELEASE` containing the exact locked source-built services and extension bundle. See [components and artifact availability](components.md).
+Component versions are locked to the Karakoram release. The current lock supplies every component in `minimal`, `standard` and `full`, including Studio 2026.10.12-bc27d2661edd, Edge Runtime 1.77.9 and [Supavisor](https://github.com/supabase/supavisor) 2.9.13. Standard/full require registered Storage configuration, and development builds need an artifact mirror or explicit `KARAKORAM_ARTIFACT_RELEASE` containing the exact locked source-built services and extension bundle. See [components and artifact availability](components.md).
+
+The official native gateway and log collector are Envoy **1.39.6** and Vector
+**0.61.0**. The Vector newer-line security upgrade preserves authenticated
+member-log ingestion and upstream Logflare source identities; see the
+[upgrade qualification](components.md#vector-upgrade-qualification) for the
+intermediate compatibility review and native integration coverage.
+Image transformations use [imgproxy 4.0.21](https://github.com/imgproxy/imgproxy/releases/tag/v4.0.21),
+including the SVG/source-address and ICO security fixes absent from 3.31.4.
+With `storage.imageTransformation: true`, Storage passes a presigned S3 HTTP(S)
+source URL to the private imgproxy service; no shared local-filesystem root or
+S3 credentials are installed in imgproxy. Loopback and link-local source
+addresses remain forbidden, private source addresses remain allowed (the upstream
+default), and SVG sanitization remains enabled. v4 changes SVG rasterization
+DPI from 72 to 96 and changes ETags to origin-based validators; transformed bytes
+and cache validators can change. Last-Modified handling is explicitly disabled
+to preserve v3 behavior. No persistent object data is rewritten.
+Verify the running imgproxy version and a Storage transformation after release
+reconciliation; a process restart alone does not upgrade an installed artifact.
+See [component details](components.md) and [rollout semantics](operations.md#cluster-restart-and-member-software).
+
+The native Realtime 2.153.3 release includes the upstream tenant-ID security fix (GHSA-2rcv-vpjw-5g6c). Its bundled OTP/Elixir versions are 28.5.0.8/1.19.7. Supavisor 2.9.13 retains its application version with the compatible patched OTP 27.3.4.19 / Elixir 1.18.6 runtime; its locked dependencies cannot compile on Elixir 1.19. Logflare 1.50.15 retains its application version while targeting OTP 28.5.0.8 / Elixir 1.19.7. Updating host packages alone does not update these embedded runtimes. See [native artifact provenance](../native-artifacts.md#native-rebuild).
 
 The internal leader forwarder uses the provider's declared private IPv4 or IPv6 family for database connections and [Patroni](https://patroni.readthedocs.io/) probes, matching the PostgreSQL member's client-access rules. It does not fall back to a different address family when a member hostname resolves to both.
+
+PG17 native extension bundle `17.11.1-2` includes security-maintained GraphQL
+and pgsodium, updated extension SQL, and a private static libsodium build.
+Existing installations require member binary rollout/restart followed by
+[per-database extension updates](operations.md#extension-bundle-upgrades);
+replacing shared-library files alone is not an extension upgrade.
 
 On IPv6 private networks, runtime configuration selects IPv6 for GoTrue,
 PostgREST, Storage, Realtime HTTP, Edge Runtime, Logflare HTTP and the Supavisor

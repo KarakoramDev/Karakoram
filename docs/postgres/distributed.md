@@ -145,6 +145,45 @@ failure recovers forward, never silently restoring passwords on completed groups
 Plan for transient cross-group authentication failures while groups converge;
 this is not a dual-password grace period for distributed application sessions.
 
+In v0.4.7, new rotations apply workers first and the coordinator last, with
+receipt DDL and role DDL both fenced from Citus propagation and metadata sync.
+Owner-local peer management connections install these fences at connection
+startup, before status/recovery queries or BEGIN can initiate distributed work.
+Proxy credentials remain unchanged until **all** group receipts are observed.
+New administrator proxy connections can fail briefly between the final native
+change and proxy configuration acknowledgement, just as on single/HA PostgreSQL;
+unavailable consumers can extend this window. Existing sessions are not revoked.
+
+For a rotation already stuck after changing the coordinator on an older build,
+upgrade the control plane to v0.4.7 with the matching agent artifact available.
+Keep the original sealed journal and operation. Its recovery owner automatically
+updates each pending writable group primary that lacks local-receipt support,
+within the maintenance window, then resumes the same node-local transaction.
+There is no need (or concurrent admission) for a separate `upgrade-agents`
+operation while rotation owns the cluster. The pre-existing proxy authentication
+outage lasts until worker receipts and normal publication converge; the upgrade
+does not provide a grace password. Afterwards run the ordinary agent rollout to
+update remaining replicas and proxies. Do not issue manual ALTER ROLE, overwrite
+the sealed password, delete receipts, or start another rotation.
+After 30 unsuccessful native receipt attempts, the error identifies the group
+and local peer/receipt prerequisites to repair. Recovery retains the same
+credential intent and resumes when those prerequisites are restored.
+Recovery deployments use the original rotation operation's maintenance override,
+not another operation's or a desired-generation override. If the retained owner
+record cannot be resolved, no new deployment starts. Terminal failed or
+retry-required deployments resume the backend's bounded deployment recovery;
+unknown/in-progress deployment receipts are retained. If deployment retries are
+exhausted, correct the platform failure and use `clusters retry-deployments` to
+re-arm the existing rotation's deployment budget without changing credentials.
+Once deployment dispatch begins, the original member is retained through retries.
+A failed singleton's saved deployment is polled and retried even while its agent
+is unreachable or PostgreSQL is starting. This does not permit SQL on an unproven
+primary: native role changes still require fresh writable-primary and Patroni
+leader-lock checks.
+A primary selected before a maintenance-window wait is revalidated before its
+first deployment. If leadership changed meanwhile, recovery upgrades the new
+primary rather than unnecessarily rolling the former primary replica.
+
 
 Correct node metadata and successful direct logins do **not** prove distributed
 queries work. `CitusTopology` readiness additionally requires coordinator SQL

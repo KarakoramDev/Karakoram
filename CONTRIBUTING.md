@@ -65,6 +65,7 @@ Default Zerops deploy/run configuration must remain compatible with the binary p
 - Publication: `gh` authenticated with public-repository release rights; Git push rights for `origin` tags and `main`.
 - Signing key: `~/.config/karakoram/release-signing-ed25519`, overridden by `KARAKORAM_RELEASE_SIGNING_KEY`. Authorize its public key in [`deploy/allowed_signers`](deploy/allowed_signers) for `release@karakoram.dev`; never commit the private key.
 - Write `NOTES` outside the checkout (or commit before preparation): changes, security fixes, upgrade steps, state-schema/rollback compatibility. Notes are not generated. Review changes and run applicable [checks](#checks); release targets do not replace them.
+- Point the docs at the new version in the commit you release, including hotfix releases: the [README](README.md) status line (release link and its known-issues link, whose anchor must match the `## Known issues` heading in `NOTES`) and the `RELEASE=` example in [docs/install.md](docs/install.md#install-karactl). A hotfix released from a branch carries the same change back to `main` when merged.
 
 ### Tidy unreleased history
 
@@ -175,6 +176,8 @@ make openapi-check
 ```
 
 Integration tests use real database containers; read their prerequisites. Skipped tests are not evidence of passing behavior. `make lint` runs Go vet, [staticcheck](https://staticcheck.dev) 2026.2.2 and UI typecheck/[ESLint](https://eslint.org); install UI dependencies first.
+
+`make test` always checks that the shipped Nomad job calls only functions Nomad 2.0.7 jobspecs provide. With the [Nomad](https://developer.hashicorp.com/nomad) 2.0.7 CLI on `PATH` (or `KARAKORAM_NOMAD_BIN` pointing at it), it also renders `deploy/nomad/karakoram.nomad.hcl` offline for zero and positive `member_ephemeral_disk_mb` and syntax-checks the volume and ACL files; without the CLI that test is skipped. Run it when changing `deploy/nomad/`.
 
 Keep error strings lower-case at the start; when a product name leads the message,
 rephrase it without changing the product's capitalization. Use `http.Status*`

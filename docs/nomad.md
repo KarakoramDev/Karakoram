@@ -14,7 +14,7 @@ The `nomad` provider runs Karakoram clusters on a [HashiCorp Nomad](https://deve
 |Member runtime|One service job named after the member hostname, normally one allocation with an `exec` task; no Docker or `raw_exec`|
 |Member DNS name|All registrations of own-namespace Nomad native services (`provider = "nomad"`, allocation address) rendered into each allocation's watched `/etc/hosts`, including its own job name|
 |Persistent volume|A dynamic host volume using the built-in `mkdir` plugin; a separate Karakoram identity survives deletion of the runtime|
-|Placement|Karakoram selects a node when creating the volume; its runtime follows that node. Replica-set/cluster volumes are spread across distinct eligible nodes while enough nodes exist.|
+|Placement|Karakoram selects a node with sufficient currently free allocatable CPU and memory for the imported runtime before creating its volume; its runtime follows that node. Replica-set/cluster placement preserves the lowest same-cluster volume count among eligible nodes, with deterministic ties: capacity exhaustion on unused eligible nodes cannot silently co-locate a member on an occupied node. If none fits that spread tier, import fails immediately with a capacity diagnostic before creating storage. This API snapshot does not reserve capacity against concurrent submissions; Nomad remains the final scheduler.|
 |Runtime image|An operator-provided, read-only Ubuntu 24.04 minbase rootfs; Nomad copies it into each allocation before engine preparation|
 |Deployment|Nomad downloads the `karakoram` archive with an exact SHA-256 checksum; the allocation runs the engine's normal prepare commands|
 |State and secrets|Non-secret service records in Nomad Variables `karakoram/services/<hostname>`; environment and secrets in `nomad/jobs/<hostname>`, rendered under `secrets/`|
@@ -540,6 +540,17 @@ host_volume "kk-PREFIX-*" {
 }
 ```
 
+Capacity-aware volume placement checks node resources minus reservations and
+visible nonterminal allocations, then asks Nomad to plan new, node-pinned tasks
+with the requested CPU/memory. Within one import, earlier choices are deducted
+from later nodes' free capacity and included in every subsequent scheduler plan.
+The complete batch is admitted before any reservation or storage is created,
+and the reservation pass reuses those choices rather than planning independently.
+Planning accounts for allocations hidden by other namespaces' ACLs without
+granting the provider cross-namespace job read access. The plan neither registers
+a job nor creates a volume, and does not reserve capacity against concurrent
+submissions. Existing namespace-scoped ACLs suffice.
+
 Variables paths are relative to the selected Nomad namespace, not prefixed by its
 name. Keep `karakoram/*` and `nomad/jobs/*` unchanged when replacing `databases`.
 For example, `path "databases/*"` does not authorize the service records, and
@@ -762,7 +773,7 @@ stopped.
 - **Single-writer fencing is required.** Sticky `single-node-single-writer` claims alone did not prevent old and new allocations overlapping after node-loss reconciliation in our tests. The entrypoint holds an exclusive `flock` on the member volume across preparation and the final execution; a contender waits rather than writing. Do not remove the lock file or bypass the entrypoint while a writer may exist.
 - **Agent death and host reboot are different recovery boundaries.** A failed member task gets two in-allocation retries within 30 minutes, then Nomad reschedules it on the same volume's node under the policy above. The lifetime volume lock remains mandatory. New process-launch receipts record the kernel boot identity, so an interrupted launch cannot strand startup after a proven host reboot; task/agent restarts within the same boot do not clear ambiguous ownership. Older ambiguous receipts without boot evidence remain fail-closed and require reconciliation.
 - **PostgreSQL retirement can fence a reachable but stopped member.** If generic agent status explicitly reports Patroni stopped or failed with no owned PID, replacement/scale-in can use the provider runtime-stop path instead of waiting for that member to stream. This still requires a healthy surviving primary with linearizable DCS health, the exact owned runtime/volume identity, completed stop acknowledgement and terminal runtime observation before membership or storage removal. A transient demotion or an engine RPC error alone is not stopped evidence.
-- **Replacement needs headroom.** A replacement is added before its predecessor is removed. Placement ignores the replaced volume when spreading the new one, so if every eligible node is already used, the replacement may share its predecessor's node temporarily. Reserve CPU, memory, disk and host-port headroom for both, or add a node/free capacity first.
+- **Replacement needs headroom.** A replacement is added before its predecessor is removed. Placement ignores the replaced volume when spreading the new one, but still counts its nonterminal allocation's CPU and memory usage. If every eligible node is already used, the replacement may share its predecessor's node temporarily only when the new task fits alongside it. Reserve CPU, memory, disk and host-port headroom for both, or add a node/free capacity first.
 - **Volume-bearing changes retain the destructive fence.** Deployment, resource and public-port changes on volume members use explicit stop → wait for terminal allocations → register. Stop/Delete use that fence for every runtime. Allow the full 120 s shutdown timeout plus scheduling and preparation time; the lifetime writer lock remains required.
 - **Destructive resource updates are planned before stopping.** CPU/RAM changes to volume-pinned members and singleton relays first submit the proposed job to Nomad's job-plan API. A plan with failed task-group placements rejects the update with the pinned node and exhausted dimensions/filtered constraints, terminates the update operation, and leaves the running allocation and applied backend resources unchanged. Scheduler/API failures also prevent the stop. Convergence may recheck the desired resources, but cannot stop a member while its plan is infeasible. Free capacity or submit smaller bounds to proceed. Planning accounts for replaced allocations but does not reserve capacity: unrelated scheduling between plan and registration can still race the update. Stateless canary rollouts retain their existing placement behavior.
   The plan uses the new resource operation's exact replacement task specification, including its operation marker. A no-op or in-place-only plan is not replacement-placement proof and is refused; the pinned node must also be ready, scheduling-eligible and undrained. Engines that take a database offline before calling the backend can use the same read-only preflight before their own disruption boundary.

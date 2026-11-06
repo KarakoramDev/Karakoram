@@ -49,6 +49,7 @@ For source builds select `zeropsSetup: karakoram-source` in imports, `--source` 
 | `KARAKORAM_OAUTH_DCR` | `on` or `off` (default `off`): public dynamic client registration, only effective with OAuth on. |
 | `KARAKORAM_OAUTH_CLIENT_HOSTS` | Optional comma-separated host allowlist for HTTPS client ID metadata documents; never permits private destinations. |
 | `KARAKORAM_MCP` | Embedded [MCP server](mcp.md): `off`, `readonly` (default), or `readwrite`; invalid values fail startup. |
+| `KARAKORAM_MCP_OUTPUT_SCHEMAS` | `true` or `false` (default `false`): opt in to MCP `outputSchema` discovery metadata; off keeps client context smaller. Successful structured results and text content are unchanged. Environment-only server setting; restart required. |
 
 Zerops reserves `ZEROPS_`: user secrets named `ZEROPS_TOKEN` or `ZEROPS_PROJECT_ID` fail with `userDataZeropsPrefixForbidden`. Use `KARAKORAM_ZEROPS_*`.
 
@@ -190,7 +191,7 @@ Match the CLI release to the **deployed control-plane version**, not the latest 
 [Release assets](https://github.com/KarakoramDev/Karakoram/releases) cover [Linux](https://www.kernel.org/)/[macOS](https://www.apple.com/macos/) (`linux`/`darwin`, `amd64`/`arm64`) and [Windows](https://learn.microsoft.com/en-us/windows/) (`windows-amd64.exe`) from v0.1.0; signed manifests start at **v0.1.2**. Linux amd64:
 
 ```sh
-RELEASE=v0.4.3   # replace with the release your server reports
+RELEASE=v0.4.6   # replace with the release your server reports
 ASSET=karactl-linux-amd64
 BASE="https://github.com/KarakoramDev/Karakoram/releases/download/$RELEASE"
 curl --fail --location --proto '=https' --proto-redir '=https' \

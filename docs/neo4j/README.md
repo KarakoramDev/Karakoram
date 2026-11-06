@@ -9,14 +9,19 @@ Karakoram operates a native [Neo4j](https://neo4j.com/) Community server with on
 | Setting | Value |
 | --- | --- |
 | Engine driver | `neo4j` (Neo4j Community, GPLv3) |
-| Versions | 2026.09.0; **2026.10.0** (default) |
+| Versions | 2026.09.0; 2026.10.0; **2026.10.1** (default) |
 | Topology | `single`, exactly one engine replica; no additional components |
-| Runtime | Official Neo4j Unix tarball and Eclipse Temurin 21 JRE 21.0.12.1+1 |
+| Runtime | Official Neo4j Unix tarball and Eclipse Temurin 21 JRE 21.0.13+9, shared by all offered versions |
 | Resources | Default shared 1 CPU, 2 GiB RAM, 10 GB disk; minimum 1 GiB RAM, 1 GB disk |
 | TLS | Required; cluster CA, `selfSigned` by default or `userProvided` |
 | Recovery | Offline `dump` of `system` and `neo4j`; every backup is an outage |
 
 Inspect `karactl providers get neo4j -o json` for the running catalog. Native downloads have exact sizes, SHA-256 hashes and upstream provenance in the [artifact lock](../../internal/engine/nativeartifacts/lock.json). An operator mirror takes precedence but must serve identical bytes; see [native artifacts](../native-artifacts.md). The member supervises the server JVM directly rather than retaining the launcher's additional JVM.
+
+Member agents validate Neo4j versions against the embedded native artifact lock,
+including patch releases, rather than a separate version-pattern allowlist.
+Unknown or malformed versions remain rejected. When introducing a new catalog
+version, update member agents before applying its member configuration.
 
 ## Create
 
@@ -28,7 +33,7 @@ Save `neo4j.yaml` and choose a [namespace](../namespaces.md):
 name: graphdb
 spec:
   provider: neo4j
-  version: 2026.10.0
+  version: 2026.10.1
   topology:
     type: single
   components:

@@ -23,7 +23,7 @@ CLI alternative:
 ```sh
 karactl -n default clusters create analytics --provider psmdb \
   --topology sharded --shards 2 --members 3 --config-servers 3 --routers 2 \
-  --version 8.0.32-14 --min-ram 1 --max-ram 1 \
+  --version 8.0.34-15 --min-ram 1 --max-ram 1 \
   --min-disk 5 --max-disk 5 --tls-mode requireTLS --wait
 karactl -n default clusters members analytics
 ```

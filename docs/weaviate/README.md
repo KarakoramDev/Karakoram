@@ -9,7 +9,7 @@ Deploy official native [Weaviate](https://weaviate.io/) on private member runtim
 | Area | Supported configuration |
 | --- | --- |
 | Engine driver | `weaviate` |
-| Versions | `1.40.1` (default), `1.39.12`; inspect the installation catalog |
+| Versions | `1.40.3` (default), `1.39.15`; deprecated `1.40.1` and `1.39.12` remain for existing clusters |
 | Topologies | `single`: one member; `cluster`: 3–9 members, three fixed Raft voters |
 | Presets | `dev`: single; `prod`: three-member cluster |
 | Resources | Default per member: 1 shared CPU, 2 GiB RAM, 10 GiB persistent disk |
@@ -38,7 +38,7 @@ Save this API-shaped request as `weaviate.yaml`:
 name: vectors
 spec:
   provider: weaviate
-  version: 1.40.1
+  version: 1.40.3
   topology: {type: cluster}
   components:
     engine:
@@ -73,7 +73,7 @@ Equivalent convenience flags for the topology and defaults above:
 
 ```sh
 karactl -n default clusters create vectors --provider weaviate \
-  --version 1.40.1 --topology cluster --members 3 \
+  --version 1.40.3 --topology cluster --members 3 \
   --min-cpu 1 --max-cpu 1 --min-ram 2 --max-ram 2 \
   --min-disk 10 --max-disk 10 --tls-mode requireTLS --monitoring --wait
 ```
@@ -164,4 +164,4 @@ No topology conversion, voter retirement, automatic shard rebalance, arbitrary m
 
 Official release executables contain BSD-3-Clause community code **and runtime-gated enterprise code**; the artifact lock records `BSD-3-Clause AND LicenseRef-Weaviate-Enterprise`. They are not BSD-only binaries. Karakoram enables only BSD-licensed community features, forces `NAMESPACES_ENABLED=false`, `SELF_RECOVERY_ENABLED=false` and `BACKUP_DEDUPE_ENABLED=false`, never sets a license key or key-file option, and does not request backup replica deduplication.
 
-Members download exact official binaries from upstream (or an operator mirror) and verify locked SHA-256 digests. Karakoram does not redistribute Weaviate binaries. This feature boundary does not grant enterprise rights. Review [upstream licensing](https://github.com/weaviate/weaviate/blob/v1.40.1/LICENSE), [native artifact provenance](../native-artifacts.md) and [ADR 0054](../adr/0054-weaviate-engine.md).
+Members download exact official binaries from upstream (or an operator mirror) and verify locked SHA-256 digests. Karakoram does not redistribute Weaviate binaries. This feature boundary does not grant enterprise rights. Review [upstream licensing](https://github.com/weaviate/weaviate/blob/v1.40.3/LICENSE), [native artifact provenance](../native-artifacts.md) and [ADR 0054](../adr/0054-weaviate-engine.md).

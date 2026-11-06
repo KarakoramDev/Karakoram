@@ -75,12 +75,22 @@ with `ClusterHealth`/`Quorum` true before declaring recovery.
 
 ```sh
 karactl -n default clusters restart vectors --wait
-karactl -n default clusters upgrade vectors --version 1.40.1 --wait
+karactl -n default clusters upgrade vectors --version 1.40.3 --wait
 ```
 
 Rolling maintenance restarts one member at a time, non-voters before voters, checking health before disruption and after acknowledgement. Configuration, resources, version, native TLS material and restart tokens participate in restart decisions. Singleton maintenance interrupts database access. Rolling order and quorum gates are not a zero-disruption or application-consistency guarantee; choose application read/write consistency appropriately.
 
-Supported versions are `1.39.12` and `1.40.1` (default). Only same-minor patch-forward or **one minor forward at a time** is allowed, and the target must be cataloged. The current cross-minor path is `1.39.12 → 1.40.1`. Downgrades, major changes and skipped minors are rejected. Rolling members can temporarily run source/target versions; wait for actual native version acknowledgement and observed desired generation before declaring convergence. Control-plane rollback does not downgrade engine data.
+Supported patches are `1.39.15` and `1.40.3` (default). Deprecated `1.39.12` and `1.40.1` retain their immutable artifacts for existing clusters; upgrade them to the latest patch in their line. Same-minor patch-forward and **one minor forward at a time** are allowed, with cataloged targets (including `1.39.12 → 1.39.15`, `1.40.1 → 1.40.3` and either 1.39 patch → `1.40.3`). Downgrades, major changes and skipped minors are rejected. Rolling members can temporarily run source/target versions; wait for actual native version acknowledgement and observed desired generation before declaring convergence. Control-plane rollback does not downgrade engine data.
+
+### Patch maintenance considerations
+
+The reviewed [1.39.13](https://github.com/weaviate/weaviate/releases/tag/v1.39.13), [1.39.14](https://github.com/weaviate/weaviate/releases/tag/v1.39.14), [1.39.15](https://github.com/weaviate/weaviate/releases/tag/v1.39.15), [1.40.2](https://github.com/weaviate/weaviate/releases/tag/v1.40.2) and [1.40.3](https://github.com/weaviate/weaviate/releases/tag/v1.40.3) notes declare no breaking changes or new features. They include security dependency and eMudhra certificate updates; native archive inclusion does not prove the host CA store is updated. Keep host `ca-certificates` maintained separately.
+
+Property-length recount now runs before shard load, sharing a scan with requested vector-dimension rebuilds. Karakoram does not request `RECOUNT_PROPERTIES_AT_STARTUP`, `REINDEX_VECTOR_DIMENSIONS_AT_STARTUP` or `REINDEX_VECTOR_DIMENSIONS_TO_ROARING_SET_AT_STARTUP`; no automatic repair is promised. If an operator performs upstream-directed repair outside managed configuration, reserve disk/I/O and startup time, inspect completion logs, and remove one-shot recount/reindex settings afterward: recount repeats on every startup while enabled. Old compacted snapshots can be discarded and rebuilt on load. Observe readiness, query counts, vector results and recovery time rather than repeatedly restarting a warming member.
+
+The backup commit/abort/status cluster handlers now enforce the same internal basic authentication as the other cluster handlers. Existing rendered `CLUSTER_BASIC_AUTH_USERNAME` and `CLUSTER_BASIC_AUTH_PASSWORD` already provide shared member credentials; do not replace them with S3 keys or client API keys. Qualify multi-member full backup and restore after rolling convergence.
+
+On 1.39.15, runtime reindex and replica movement are mutually exclusive, and backups can refuse collections with reindex work. Finish or resolve native reindex tasks before backups or scale-down; inspect the native refusal instead of retrying disruptive maintenance concurrently. Test filtered counts (including deleted objects and empty arrays), vector/hybrid queries and restored data on a representative dataset.
 
 ### Agent upgrades
 

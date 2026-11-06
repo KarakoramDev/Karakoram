@@ -98,4 +98,4 @@ this is not a recovery-point or availability guarantee.
 
 - [MySQL engine](0052-mysql-engine.md), [PXC engine](0053-pxc-engine.md)
 - [MySQL backups](../mysql/backups.md#automatic-writer-re-anchoring)
-- [Upgrade guidance](../upgrade.md#upgrading-to-v046)
+- [Upgrade guidance](../upgrade.md#upgrading-to-v047)

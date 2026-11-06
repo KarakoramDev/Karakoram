@@ -34,6 +34,46 @@ and installed in one privileged shell inside a fresh root-owned private staging
 directory. Cleanup removes that directory on exit; installation never consumes a
 package from a fixed pathname writable by the runtime user.
 
+## Dependency package rollouts
+
+Changing a control-plane APT pin does not update an existing member in place.
+The pin is consumed by **member preparation** during deployment; an ordinary
+PostgreSQL/Patroni process restart does not run APT. Use the supported rolling
+agent deployment after installing the release containing qualified new pins:
+
+```sh
+karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m
+# To re-run preparation on members already reporting this build:
+karactl -n NS clusters upgrade-agents NAME --include-current --wait --timeout 30m
+```
+
+The rollout preserves each member's applied PostgreSQL version/options. It
+redeploys one member at a time, non-primary members first, switches away from the
+primary before its deployment, and waits for native readiness/build acknowledgement
+and replica replay before advancing. HA health gates include local etcd health
+when the agent advertises that capability. Take an etcd snapshot and a validated
+database backup first; verify all etcd endpoints and quorum before starting, and
+after **each** member returns. Never restart/redeploy all etcd members together.
+For Citus, preserve quorum independently within every replication group.
+Singletons have downtime; backend preparation/deployment semantics still apply.
+
+The current `etcd-server` and `etcd-client` pins are both `1:3.5.33-1.noble`.
+Upstream [3.5.35](https://github.com/etcd-io/etcd/blob/main/CHANGELOG/CHANGELOG-3.5.md)
+is the requested 3.5 security-maintenance target, but as of 2026-11-05 it is absent
+from the Percona Noble indexes for PG16/17/18. These pins remain unchanged rather
+than introducing an unresolvable deployment. Do not claim the newer dependency
+fixes are present until actual packages/binaries are qualified and rolled out.
+After a qualified rollout, inspect installed package versions and the running
+`etcd --version`, `etcdctl version`, Patroni health/leadership and replica replay.
+At completion the existing per-database extension updater runs for installed
+selected profile extensions; see [profile SQL maintenance](profiles.md).
+
+pgvector 0.8.7 uses locked per-major source bundles rather than the old Percona
+0.8.6 APT payload, for both the `pgvector` profile and Supabase PG17. Preparation
+diverts package-owned files to `.distrib` and atomically publishes the verified
+bundle without removing package dependents; existing database objects are retained. Follow the
+[vector binary/SQL migration and index checks](profiles.md#pgvector-security-maintenance).
+
 ## Existing version drift
 
 v0.4.0 profile installation could upgrade the actual PostgreSQL server without

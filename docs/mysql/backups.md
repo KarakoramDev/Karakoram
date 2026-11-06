@@ -24,7 +24,7 @@ sizing reserves non-pool and backup headroom, including for 1 GiB singletons;
 custom buffers and workload concurrency still need capacity planning.
 `--use-memory` is a prepare-phase setting, not a backup-time RSS limit.
 The bounded streaming options require the corrected member agent; a control-plane
-upgrade alone only updates server sizing. On v0.4.6, use the native-gated
+upgrade alone only updates server sizing. On v0.4.7, use the native-gated
 [agent rollout](operations.md#agent-rollout) on a healthy topology to install
 the corrected backup command without changing database versions.
 
@@ -274,7 +274,7 @@ Older files and events at or before that position are excluded on the original
 stream. A different writer's numeric GTID prefix cannot prove that its counters
 describe the same transactions. Foreign-source streams are therefore refused
 as replay contributors, even if their GTID sets appear compatible. After an
-archive writer/source change, v0.4.6 automatically queues a full backup from the
+archive writer/source change, v0.4.7 automatically queues a full backup from the
 current writer to establish its own exact anchor; normal service and full backups
 remain available while the previous PITR window is frozen.
 

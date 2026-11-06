@@ -4,6 +4,8 @@
 
 These cross-engine constraints define the operating model; engine-specific limits are linked below.
 
+- **PSMDB 6.0 is EOL (2025-07-31).** New empty clusters must use 7.0 or 8.0; the create wizard disables 6.0. Existing clusters remain manageable and can upgrade 6.0→7.0→8.0 with adjacent FCV gates. Validated API/CLI `spec.dataSource` recovery of existing same-major data remains admitted, not guaranteed by current vendor PBM support. Its retained mongosh 2.8.3 lacks the bundled TLS-root fix shipped for supported lines. See [MongoDB lifecycle and recovery](mongodb/README.md).
+
 ## Zerops failure domains and storage
 
 - **No anti-affinity guarantee on [Zerops](https://zerops.io/).** Separate services/volumes and dedicated CPU do not prove independent hosts, racks or zones. One host failure can remove several voters. Placement groups are best-effort observations: missing/changing signals can produce unknown, false or stale groups; distinct groups do not certify future separation. The [Dokploy](dokploy.md) and [Nomad](nomad.md) providers pin each member's volume to a node and keep one replica set or cluster on distinct nodes while enough nodes exist; they report that node as authoritative placement but cannot protect against shared racks or physical hosts below the scheduler.
@@ -78,7 +80,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   control-plane backup/restore steps; it can wait for those steps even when
   their target clusters differ. This does not lock asynchronous agent uploads
   or external storage clients. See [recovery coordination](mysql/operations.md#full-outage-recovery).
-- **PostgreSQL administrator rotation requires upgraded agents.** v0.4.6 supports
+- **PostgreSQL administrator rotation requires upgraded agents.** v0.4.7 supports
   in-place `postgres` rotation after `upgrade-agents`; existing sessions are not
   revoked, and other engine-owned identities remain unsupported. See
   [administrator rotation and containment](postgres/access-and-tls.md#administrator-credential-containment).
@@ -115,7 +117,7 @@ These cross-engine constraints define the operating model; engine-specific limit
 - **PITR does not bridge archive-writer changes.** A different physical writer
   freezes the old MySQL/PXC baseline at its last proven endpoint; newer-writer
   uploads alone cannot extend it. `WindowFrozenWriterChanged` identifies foreign
-  uploads beyond that endpoint. In v0.4.6, automatic full re-anchoring is enabled
+  uploads beyond that endpoint. In v0.4.7, automatic full re-anchoring is enabled
   by default: with PITR/storage configured, the writer must remain stable for
   five minutes, with no non-backup operation active and five minutes since the
   last finished. Pending backups and a one-hour cooldown defer the full.
@@ -128,7 +130,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   Automatic backups follow count retention with chain, newest-full anchor and
   in-use protection. Older recovery ranges expire with their retained fulls;
   see [automatic writer re-anchoring](mysql/backups.md#automatic-writer-re-anchoring).
-- **Agent deployment is not necessarily zero-downtime.** v0.4.6 supports
+- **Agent deployment is not necessarily zero-downtime.** v0.4.7 supports
   `upgrade-agents` for every member-agent engine, including MySQL/PXC and
   ProxySQL; a control-plane-only upgrade or native process restart still does
   not replace deployed agents. Singleton databases/components have downtime.
@@ -191,23 +193,50 @@ The v0.4.2 PITR memory, singleton backup-memory, PXC retirement and clone,
 PXC post-restore history, ProxySQL TLS and Zerops Weaviate issues are resolved
 in v0.4.3 with the [required rollout procedures](upgrade.md#upgrading-to-v043).
 Their old workarounds remain [historical guidance](upgrade.md#known-issues-in-v042),
-not current v0.4.6 limitations. Existing history latches are not silently cleared.
+not current v0.4.7 limitations. Existing history latches are not silently cleared.
 
 ## Known issues in v0.4.6
 
 v0.4.6 is a security hotfix that only updates the MongoDB driver's compression
 library to fix [GO-2026-6865](https://pkg.go.dev/vuln/GO-2026-6865); follow the
 [v0.4.6 upgrade procedure](upgrade.md#upgrading-to-v046). The historical
-limitations and all known issues in v0.4.5 below remain present. Fixes
-for the Data MCP closed-connection, Zerops failed-deployment resource recovery
-and false PXC GTID-history incident issues are planned for v0.4.7; the other
+limitations and all known issues in v0.4.5 below remain present. The Data MCP
+closed-connection, failed-deployment resource recovery (Zerops/Dokploy/Nomad)
+and false PXC GTID-history incident issues are **fixed in v0.4.7**; the other
 limitations keep their individually documented status.
+
+- **Creating a Percona XtraDB Cluster on Nomad fails** (also present in
+  v0.4.3–v0.4.5; Zerops and Dokploy are not affected). A new three-member PXC
+  cluster on the Nomad provider fails after about 5–9 minutes with
+  `GTIDMappingCertificationBlocked`: the last member is never started and the
+  failed create shuts down another member. No existing data is affected; this
+  happens only when creating a cluster. On v0.4.3–v0.4.6, use MySQL Group
+  Replication on Nomad, or create PXC clusters on Zerops or Dokploy.
+  **Fixed in v0.4.7:** formation no longer blocks on a fenced ProxySQL
+  deployment. Fresh three-member PXC creation with ProxySQL was live-verified
+  on Nomad; see [formation upgrade guidance](upgrade.md#pxc-formation-behind-pending-proxy-serving-health).
+- **A cluster can report Degraded while its Data MCP companion is unresponsive**
+  (also present in v0.4.1–v0.4.5). If a cluster's Data MCP companion accepts
+  connections but stops answering — for example while it restarts or when it
+  hangs — the control plane waits too long for it, the cluster's health
+  observations go stale, and the cluster reports `Degraded` (`ObservationStale`)
+  for as long as the companion stays unresponsive, even though the database
+  itself is healthy. It recovers by itself once the companion answers again.
+  If it persists, disable Data MCP for that cluster
+  (`spec.dataMcp.enabled: false`, applied with
+  `karactl clusters patch CLUSTER -f change.yaml`) and re-enable it later.
+  **Fixed in v0.4.7:** companion readiness observation is bounded by the
+  observation timeout, so native availability stays fresh and Data MCP is
+  reported unavailable while the companion is unresponsive.
 
 ## Known issues in v0.4.5
 
 The historical limitations described for [v0.4.5](upgrade.md#known-issues-in-v045)
 and the Zerops failed-deployment resource recovery and false PXC GTID-history
-incident issues below remain present in v0.4.5; the latter two are **fixed in v0.4.6**.
+incident issues below remain present in v0.4.5; the PXC issue is **fixed in v0.4.7**.
+Failed-first-deployment resource recovery on Zerops, Dokploy and Nomad is
+**fixed in v0.4.7**; it is not included in the v0.4.5 or v0.4.6 hotfixes.
+The documented workarounds remain necessary on those releases.
 v0.4.5 fixes only the imported-baseline PITR coverage freeze and empty-GTID backup metadata rejection.
 Follow the [v0.4.5 upgrade procedure](upgrade.md#upgrading-to-v045), including
 data-member agent relaunch and a new full backup.
@@ -222,7 +251,8 @@ data-member agent relaunch and a new full backup.
   the control plane restarts. Your databases are not affected. Workaround: stop
   sending Data MCP requests to that cluster for about 10 minutes, or restart
   the Karakoram control plane (clusters keep running while it restarts).
-  A fix is planned for v0.4.7, not the v0.4.6 security hotfix.
+  **Fixed in v0.4.7:** the gateway reconnects after the companion connection
+  closes, so no control-plane restart is needed.
 
 ## Known issues in v0.4.4
 
@@ -273,8 +303,10 @@ issues remain unfixed in v0.4.5.
   for RabbitMQ, Elasticsearch, Weaviate and OpenBao, leave the cluster as it
   is and upgrade once the fix is released. After cancelling or a timeout,
   check that the new member is actually gone before making further changes.
-  Neo4j and the Data MCP companion are not
-  affected. **Fixed in v0.4.6**; not fixed by the v0.4.5 hotfix.
+  Neo4j and the Data MCP companion are not affected.
+  Failed-first-deployment resource recovery on Zerops, Dokploy and Nomad is
+  **fixed in v0.4.7**; it is not included in the v0.4.5 or v0.4.6 hotfixes.
+  The documented workarounds remain necessary on those releases.
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or
@@ -298,7 +330,7 @@ issues remain unfixed in v0.4.5.
   scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
   serving reads and writes, so leave it as it is and upgrade once the fix is
   released. This needs configured backup storage and healthy members.
-  **Fixed in v0.4.6**; not fixed by the v0.4.5 hotfix.
+  **Fixed in v0.4.7**; not fixed by the v0.4.5 or v0.4.6 hotfixes.
 
 ## Known issues in v0.4.3
 
@@ -331,6 +363,7 @@ issues remain unfixed in v0.4.5.
 - [Temporal limits](temporal/README.md#limits): Zerops uses private IPv6; Dokploy and Nomad use private IPv4. Requires a PostgreSQL ≥12 source through the control plane's shared PostgreSQL binding service; no multi-cluster replication or namespace authorization. Namespace descriptions cannot be cleared. Restores require recorded manifests in Temporal cluster state, the original source/database names and shared-source acknowledgement when applicable; deleting Temporal backup records does not remove PostgreSQL archives.
 - [Neo4j Community limits](neo4j/README.md#access-and-limits): one member and one user database; every user is an administrator. No clustering, online backup, RBAC, native metrics endpoint, PITR or incremental backups. Dumps, restores, restarts and upgrades interrupt all service. [Interrupted first bootstrap](neo4j/operations.md#availability-and-lifecycle) replays isolated credential recovery before normal startup; persistent store, user-metadata or transport failures require operator repair, not marker deletion or store recreation. A v0.4.3 false-completion marker can survive an agent upgrade with `passwordChangeRequired=true`, leaving a running server's managed queries failing with `Neo.ClientError.Security.CredentialsExpired`; reload/restart and ordinary system-user rotation do not automatically repair this case. Follow the [legacy-marker maintenance procedure](neo4j/operations.md#legacy-bootstrap-marker-with-expired-credentials): after upgrading the member and excluding active/pending offline jobs, explicitly stop and verify the JVM is gone, preserve the volume, remove only the credential completion marker, then explicitly start and verify authenticated readiness. Never remove a marker on a live store or release another operation's hold.
 - [MySQL and PXC limits](mysql/README.md): engine drivers cannot be switched in place; MySQL single-primary Group Replication and PXC [Galera](https://galeracluster.com/) have distinct recovery/provenance rules. TLS is required; private replication ports need operator-enforced isolation.
+- **MySQL/PXC 8.0 is EOL:** fresh empty clusters (including import targets) must use 8.4. Existing 8.0 clusters retain updates, backups/restores and upgrades to 8.4. Recovery-only `spec.dataSource` creates remain possible with validated same-driver, same-major 8.0 backup/PITR sources and independent target-local storage; restore first, then upgrade. Retained XtraBackup 8.0 locks do not provide ongoing community security maintenance. See [MySQL lifecycle policy](mysql/README.md).
 - [Keycloak limits](keycloak/README.md): exactly one runtime, maintenance downtime, PostgreSQL binding required; recovery protects source database data separately from the coordinator's sealed administrator state.
 - [Native artifacts](native-artifacts.md) currently target [Linux](https://www.kernel.org/) amd64/[Ubuntu](https://ubuntu.com/) 24.04. Development use of source-built locked artifacts needs a configured mirror; mirrors cannot add absent capabilities.
 

@@ -35,9 +35,9 @@ identity was saved during an earlier reconciliation.
 
 | Setting | Value |
 | --- | --- |
-| Server catalog | **1.32.1** (default), **1.31.4**; `spec.version` selects the server |
-| Web UI | Release-locked `ui-server` **2.56.0** |
-| Artifacts | `temporal-server-1.32`, `temporal-server-1.31`, `temporal-ui-server`; checksum-pinned [native artifacts](../native-artifacts.md) |
+| Server catalog | **1.32.2** (default), **1.31.5**; older **1.32.1**, **1.31.4** deprecated, retained for existing clusters and upgrades |
+| Web UI | Release-locked `ui-server` **2.58.0** |
+| Artifacts | Exact-patch `temporal-server-1.32.2`, `temporal-server-1.31.5`, retained `temporal-server-1.32` / `temporal-server-1.31` for older patches, and `temporal-ui-server`; checksum-pinned [native artifacts](../native-artifacts.md) |
 | Topology | `combined` (default) or `split`; immutable after creation |
 | Frontend | Private TLS gRPC 7233; client certificates required by default |
 | Recovery | Source PostgreSQL `full` / `diff` / `incr` backup through the binding, plus a Temporal manifest |
@@ -66,7 +66,7 @@ A minimal API-shaped JSON request:
   "name": "workflows",
   "spec": {
     "provider": "temporal",
-    "version": "1.32.1",
+    "version": "1.32.2",
     "topology": {"type": "combined"},
     "engineOptions": {
       "persistence": {"postgres": {"cluster": "appdb"}},
