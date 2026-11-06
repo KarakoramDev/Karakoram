@@ -12,6 +12,7 @@ import { Badge, Card, Empty, ErrorBlock, Loading, PageHeader, Time } from '@/com
 import { BackupSummary, HealthSummary, PhaseBadge, topologySummary } from './cluster-utils';
 import { clusterPath } from './cluster-path';
 import { clusterEmptyCopy, colocatedGroups, observedVersion } from './detail/detail-state';
+import { clustersDescription } from '@/namespaces/provider-copy';
 
 export function ClustersListPage() {
   const auth = useAuth();
@@ -40,7 +41,7 @@ export function ClustersListPage() {
     <div className="page">
       <PageHeader
         title="Clusters"
-        description={namespace ? `Database clusters managed in namespace ${namespace}.` : allNamespaces ? 'Database clusters managed across every namespace you can see.' : 'Database clusters managed in this Zerops project.'}
+        description={clustersDescription(namespace, allNamespaces)}
         actions={
           auth.can('clusters', 'create') ? (
             <LinkButton to={newClusterTo} variant="primary">

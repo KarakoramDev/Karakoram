@@ -185,7 +185,7 @@ test('connection walkthrough selects HTTPS, directs CA download and explains pri
   assert.match(markup, /Reveal credentials/);
   assert.match(markup, /download <code>ca.pem<\/code>/);
   assert.match(markup, /curl --cacert ca.pem -u elastic &quot;https:\/\/search:9200\/_cluster\/health&quot;/);
-  assert.match(markup, /same Zerops project/);
+  assert.match(markup, /namespace’s private network/);
   assert.doesNotMatch(markup, /curl[^<]*dashboards/);
 });
 

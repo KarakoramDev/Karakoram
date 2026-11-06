@@ -55,7 +55,7 @@ export function TLSEditor({ value, onChange, storedCA }: { value: TLS; onChange:
   );
 }
 
-export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAddressesConfirmedChange, label, publicPort, publicPortLabel }: {
+export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAddressesConfirmedChange, label, publicPort, publicPortLabel, backend }: {
   value: Exposure;
   onChange: (e: Exposure) => void;
   allAddressesConfirmed: boolean;
@@ -63,8 +63,16 @@ export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAd
   label?: string;
   publicPort?: number;
   publicPortLabel?: string;
+  backend?: Schemas['BackendInfo'];
 }) {
   const errors = validateExposure(value, allAddressesConfirmed);
+  const zerops = backend?.kind === 'zerops';
+  const filtersSources = backend ? backend.capabilities.includes('tcpAllowlist') : undefined;
+  const routingHint = filtersSources === false
+    ? 'This provider does not enforce source-address filtering; public TCP needs an all-address allowlist with explicit acknowledgement. Restrict access at your firewall or load balancer.'
+    : filtersSources === true
+      ? 'Use the IP allowlist as defense in depth alongside required TLS and strong credentials.'
+      : 'Public exposure requires a nonempty CIDR allowlist. Check your provider’s source-address filtering support and configure any required firewall or load balancer.';
   const change = (exposure: Exposure) => {
     onAllAddressesConfirmedChange(false);
     onChange(wireExposure(exposure, false));
@@ -75,8 +83,9 @@ export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAd
       {value.public ? (
         <>
           <Callout tone="warn" title="Public exposure opens the database to the internet">
-            Public database endpoints receive internet-facing routes. Use the IP allowlist as defense in depth, not as a substitute for required TLS and strong credentials. Keep the database private when public access is not needed.
-            Zerops public TCP needs IPv6 or a dedicated IPv4 address on the project.
+            Public database endpoints receive internet-facing routes. Keep the database private when public access is not needed. Require TLS and strong credentials.
+            {zerops ? ' Zerops public TCP needs IPv6 or a dedicated IPv4 address on the project.' : ' Configure your provider’s public routing.'}
+            {' '}{routingHint}
           </Callout>
           <ChoiceGroup<Exposure['ipType']>
             name="exposure-ip"
@@ -84,8 +93,8 @@ export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAd
             value={value.ipType}
             onChange={(ipType) => change({ ...value, ipType })}
             options={[
-              { value: 'IPV6', title: 'IPv6', description: 'Included with every Zerops project.' },
-              { value: 'IPV4', title: 'Dedicated IPv4', description: 'Requires a dedicated IPv4 add-on; shared IPv4 is HTTP-only.' },
+              { value: 'IPV6', title: 'IPv6', description: zerops ? 'Included with every Zerops project.' : 'Requires provider routing with IPv6 support.' },
+              { value: 'IPV4', title: zerops ? 'Dedicated IPv4' : 'IPv4', description: zerops ? 'Requires a dedicated IPv4 add-on; shared IPv4 is HTTP-only.' : 'Requires a provider public address or an operator load balancer.' },
             ]}
           />
           <TextAreaField
@@ -102,7 +111,7 @@ export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAd
                   .filter(Boolean),
               })
             }
-            hint="Public exposure requires a nonempty CIDR allowlist. Karakoram configures Zerops routing; use the allowlist as defense in depth alongside required TLS and strong credentials."
+            hint={routingHint}
             error={errors.join(' ')}
           />
           {coversAllAddresses(value) ? (
@@ -116,7 +125,7 @@ export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAd
           ) : null}
         </>
       ) : (
-        <p className="small muted">Private: reachable only from services inside this Zerops project.</p>
+        <p className="small muted">Private: reachable only through the namespace’s private network.</p>
       )}
     </div>
   );

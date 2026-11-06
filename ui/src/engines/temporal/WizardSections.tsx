@@ -274,7 +274,7 @@ export function OptionsSection({ namespace, spec, onChange, persisted, clusterNa
           <Switch
             label={
               <span>
-                Public HTTPS access to the Web UI <span className="faint xs">Zerops subdomain with a managed certificate, protected by OIDC login; otherwise the UI is reachable only inside the project network.</span>
+                Public HTTPS access to the Web UI <span className="faint xs">Requires managed HTTPS support and configured public routing, protected by OIDC login; otherwise the UI is reachable only on the private network.</span>
               </span>
             }
             checked={options.ui.publicHttps}

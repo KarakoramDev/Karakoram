@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
-import { useBackupStorages, useCluster, useClusters, useNamespaceOptions, useNamespaces, useProviders, type ClusterSpec, type Provider } from '@/api/hooks';
+import { useBackends, useBackupStorages, useCluster, useClusters, useNamespaceOptions, useNamespaces, useProviders, type ClusterSpec, type Provider } from '@/api/hooks';
 import { useAuth } from '@/auth/session';
 import { DEFAULT_NAMESPACE, clusterObject } from '@/auth/permissions';
 import { useNamespace } from '@/namespaces/useNamespace';
@@ -37,6 +37,7 @@ import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 import { useLocalRequest } from './use-local-request';
 import { resourceRows as temporalResourceRows } from '@/engines/temporal/spec';
 import { plannedPlacementCopy } from './detail/ops-state';
+import { BillingNote, clusterNameHint, namespaceBackend, namespaceBackendInfo, namespaceHint } from '@/namespaces/provider-copy';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -71,11 +72,13 @@ export function ClusterWizardPage() {
   const providers = useProviders();
   const namespaceOptions = useNamespaceOptions();
   const namespaces = useNamespaces(auth.can('namespaces', 'read'));
+  const backends = useBackends(auth.can('namespaces', 'read', '*'));
 
   const [step, setStep] = useState<StepId>('basics');
   const [name, setName] = useState('');
   const [targetNamespace, setTargetNamespace] = useState(selectedNamespace ?? '');
   const [spec, setSpec] = useState<ClusterSpec | null>(null);
+  const backend = namespaceBackend(namespaces.data?.items, targetNamespace);
   const placementPlan = plannedPlacementCopy(namespaces.data?.items.find((ns) => ns.name === targetNamespace)?.capabilities);
   const [presetName, setPresetName] = useState('');
   const [touched, setTouched] = useState<Record<StepId, boolean>>({ basics: false, topology: false, resources: false, backups: false, access: false, review: false });
@@ -293,7 +296,7 @@ export function ClusterWizardPage() {
                       // cluster never changes meaning here; the Basics callout flags the result.
                       update((s) => ({ ...s, backup: s.backup ? { ...s.backup, storage: undefined, schedules: s.backup.schedules?.map((sc) => ({ ...sc, storage: '' })) } : s.backup }));
                     }}
-                    hint="The Zerops project that will host the cluster. Backup storages and name uniqueness are per namespace."
+                    hint={namespaceHint}
                     error={touched.basics && !targetNamespace ? 'Choose a namespace.' : undefined}
                   >
                     <option value="">Choose…</option>
@@ -311,7 +314,7 @@ export function ClusterWizardPage() {
                   value={name}
                   onChange={(e) => { editAttempt(); setName(e.target.value); }}
                   placeholder="orders"
-                  hint="2–12 lowercase letters and digits; becomes the Zerops hostname prefix (e.g. ordersm1, ordersm2)."
+                  hint={clusterNameHint(backend)}
                   error={touched.basics ? nameError(name, existingNames) : undefined}
                   autoFocus
                 />
@@ -559,7 +562,7 @@ export function ClusterWizardPage() {
                 <TLSEditor value={spec.tls ?? { mode: 'requireTLS', ca: 'selfSigned' }} onChange={(tls) => update((s) => ({ ...s, tls }))} />
               </Card>
               <Card title="Network exposure">
-                <ExposureEditor label={mongo ? rules.exposureLabel : undefined} value={spec.exposure ?? { public: false, ipType: 'IPV6', allowlist: [] }} onChange={(exposure) => update((s) => ({ ...s, exposure }))} allAddressesConfirmed={allAddressesConfirmed} onAllAddressesConfirmedChange={setAllAddressesConfirmed} {...publicExposureMetadata(engineUI, spec)} />
+                <ExposureEditor backend={namespaceBackendInfo(namespaces.data?.items, targetNamespace, backends.data?.items)} label={mongo ? rules.exposureLabel : undefined} value={spec.exposure ?? { public: false, ipType: 'IPV6', allowlist: [] }} onChange={(exposure) => update((s) => ({ ...s, exposure }))} allAddressesConfirmed={allAddressesConfirmed} onAllAddressesConfirmedChange={setAllAddressesConfirmed} {...publicExposureMetadata(engineUI, spec)} />
               </Card>
               <Card title="Monitoring">
                 <Switch label="Collect per-member metrics (dashboard and Prometheus endpoint)" checked={spec.monitoring?.enabled ?? true} onChange={(e) => update((s) => ({ ...s, monitoring: { enabled: e.target.checked } }))} />
@@ -604,7 +607,7 @@ export function ClusterWizardPage() {
                   ]}
                 />
                 {spec.provider === 'rabbitmq' && managementIsPublic(spec.engineOptions) ? <p className="small"><a href="https://karakoram.dev/docs/rabbitmq/access-and-tls/#public-access" target="_blank" rel="noreferrer">Review RabbitMQ public management access and its security boundaries</a>.</p> : null}
-                <p className="small muted">These are aggregate autoscaling bounds, not a price estimate or the initial allocation. Billing follows <a href="https://zerops.io/pricing" target="_blank" rel="noreferrer">Zerops pricing</a> for runtime CPU/RAM, runtime disks, data volumes and other enabled resources; backup storage is additional.</p>
+                <BillingNote backend={backend} />
                 <Callout tone="info" title="What this configuration means">
                   <ul style={{ margin: 0, paddingLeft: 18 }}>{engineConsequences(spec).map((consequence) => <li key={consequence}>{consequence}</li>)}</ul>
                 </Callout>

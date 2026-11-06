@@ -4,9 +4,9 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, errorMessage, unwrap } from '@/api/client';
+import { api, ApiError, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
-import { useCluster, useProviders, type Cluster, type Provider } from '@/api/hooks';
+import { useBackends, useCluster, useNamespaces, useProviders, type Cluster, type Provider } from '@/api/hooks';
 import { idempotencyHeaders } from '@/api/idempotency';
 import { useAuth } from '@/auth/session';
 import { DEFAULT_NAMESPACE, clusterObject, type Action, type Resource } from '@/auth/permissions';
@@ -24,11 +24,13 @@ import { detailTabState } from './detail-tab-state';
 import { AgentRollout } from './AgentRollout';
 import { MaintenanceBadge, MaintenanceOverride } from './Maintenance';
 import { useSubmissionKey } from './use-submission-key';
+import { namespaceBackendInfo } from '@/namespaces/provider-copy';
 
 export interface ClusterContext {
   cluster: Cluster;
   provider: Provider | undefined;
   namespace: string;
+  backend?: Schemas['BackendInfo'];
   name: string;
   /** Namespace-aware route prefix of this cluster (`/clusters/<ns>/<name>`). */
   base: string;
@@ -55,6 +57,9 @@ export function ClusterDetailLayout() {
   const queryClient = useQueryClient();
   const q = useCluster(namespace, name);
   const providers = useProviders();
+  const namespaces = useNamespaces(auth.can('namespaces', 'read'));
+  const backends = useBackends(auth.can('namespaces', 'read', '*'));
+  const backend = namespaceBackendInfo(namespaces.data?.items, namespace, backends.data?.items);
   const location = useLocation();
   const [confirm, setConfirm] = useState<null | 'restart' | 'rotate-tls' | 'resume'>(null);
   const base = clusterPath(namespace, name);
@@ -203,7 +208,7 @@ export function ClusterDetailLayout() {
           ...(engine?.detailTabs ?? []).filter((t) => !t.capability || hasCapability(provider, t.capability)).map((t) => ({ to: `${base}/${t.id}`, label: t.label })),
         ].filter((t) => tabAvailable(provider, t.to.slice(base.length + 1)))}
       />
-      <Outlet context={{ cluster, provider, namespace, name, base, can } satisfies ClusterContext} />
+      <Outlet context={{ cluster, provider, namespace, name, base, can, backend } satisfies ClusterContext} />
 
       <ConfirmDialog
         open={confirm === 'restart'}

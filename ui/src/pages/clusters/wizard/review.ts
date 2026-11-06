@@ -37,7 +37,7 @@ export function exposureSummary(spec: Schemas['ClusterSpec']): string {
   const exposure = spec.exposure;
   const database = exposure?.public
     ? `Public database (${exposure.ipType}), allowlist: ${(exposure.allowlist ?? []).join(', ') || 'missing (required)'}`
-    : 'Database private to the selected Zerops project';
+    : 'Database private to the selected namespace';
   if (spec.provider === 'supabase') return `${database}; Gateway HTTPS ${object(spec.engineOptions?.gateway).publicHttps ? 'public (authentication required, independent of database allowlist)' : 'private'}`;
   if (spec.provider !== 'elasticsearch') return database;
   const options = readOptions(spec);
@@ -49,7 +49,7 @@ export function exposureReviewRows(spec: Schemas['ClusterSpec']): [string, strin
   const rows: [string, string][] = [[spec.provider === 'rabbitmq' ? 'AMQP exposure' : 'Exposure', exposureSummary(spec)]];
   if (spec.provider === 'rabbitmq') rows.push(['Management UI exposure', managementIsPublic(spec.engineOptions)
     ? 'Public RabbitMQ management UI/API over HTTPS, using RabbitMQ credentials. Not limited by the AMQP allowlist; routing includes a private plaintext HTTP hop.'
-    : 'RabbitMQ management UI/API private to the selected Zerops project']);
+    : 'RabbitMQ management UI/API private to the selected namespace']);
   return rows;
 }
 

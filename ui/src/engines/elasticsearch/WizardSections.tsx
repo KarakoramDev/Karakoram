@@ -201,7 +201,7 @@ export function OptionsSection({ spec, onChange, persisted }: WizardSectionProps
         <Switch
           label={
             <span>
-              Public HTTPS access to Kibana <span className="faint xs">Zerops subdomain with a managed certificate; otherwise Kibana is reachable only inside the project network.</span>
+              Public HTTPS access to Kibana <span className="faint xs">Requires managed HTTPS support and configured public routing; otherwise Kibana is reachable only on the private network.</span>
             </span>
           }
           checked={options.kibana.public}

@@ -127,7 +127,7 @@ export function engineConsequences(spec: Schemas['ClusterSpec']): string[] {
     ...(spec.components.engine.replicas === 1 ? ['A single database member has no failover; maintenance makes its database unavailable.'] : []),
     spec.exposure?.public
       ? `Public TCP routes expose ${spec.topology.type === 'sharded' ? 'every router' : 'every database member'}. Replica-set discovery advertises private members; a public seed is not external HA/failover.`
-      : 'Database endpoints remain private to the selected Zerops project.',
+      : 'Database endpoints remain on the selected namespace’s private network.',
     spec.backup?.pitr?.enabled
       ? 'PITR continuously captures oplog slices to backup storage. Recovery coverage starts only after a completed base backup.'
       : 'PITR is disabled; recovery is limited to completed backups, if configured.',

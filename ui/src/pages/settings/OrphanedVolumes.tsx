@@ -15,10 +15,10 @@ export function OrphanedVolumesPage() {
     <>
       <Callout>
         <p>
-          Deletion requests for these volumes failed after their runtimes were removed. Karakoram removed them from their clusters and keeps retrying deletion in the background with exponential backoff, capped at 1 hour. These volumes may still be billed by Zerops.
+          Deletion requests for these volumes failed after their runtimes were removed. Karakoram removed them from their clusters and keeps retrying deletion in the background with exponential backoff, capped at 1 hour. These volumes may still incur infrastructure costs.
         </p>
         <p>
-          Manual cleanup requires access to the namespace&apos;s Zerops project: delete the service in the Zerops GUI or use <code>zcli service delete {'<hostname>'}</code> with that project selected. Karakoram has no manual-delete API in this version. The record disappears on the next retry after deletion.
+          Manual cleanup requires access to the namespace&apos;s infrastructure provider. Locate the retained volume using its provider ID and hostname, then follow the provider&apos;s deletion procedure. Karakoram has no manual-delete API in this version. The record disappears on the next retry after deletion.
         </p>
       </Callout>
       <Card title={namespace ? `Orphaned volumes in ${namespace}` : 'Orphaned volumes'} flush>
@@ -36,7 +36,7 @@ export function OrphanedVolumesPage() {
               <thead>
                 <tr>
                   <th scope="col">Hostname</th>
-                  <th scope="col">Zerops service ID</th>
+                  <th scope="col">Provider service ID</th>
                   {showNamespace ? <th scope="col">Namespace</th> : null}
                   <th scope="col">Cluster</th>
                   <th scope="col">Member</th>

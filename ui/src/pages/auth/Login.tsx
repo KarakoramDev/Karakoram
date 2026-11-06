@@ -70,7 +70,7 @@ export function LoginPage() {
               <h1 id="login-title" style={{ fontSize: 'var(--fs-xl)' }}>
                 Sign in to Karakoram
               </h1>
-              <p className="small muted">Database orchestration for your Zerops project.</p>
+              <p className="small muted">Database orchestration on your infrastructure.</p>
             </div>
           </div>
           {ssoError ? <Callout tone="danger">Single sign-on failed: {ssoError}</Callout> : null}
@@ -126,8 +126,8 @@ function AuthArt() {
         <path d="M0 500 L90 400 L170 460 L280 370 L370 450 L480 380 L560 470 L660 400 L760 470 L800 440 L800 600 L0 600Z" fill="url(#ridge2)" />
       </svg>
       <div className="auth-art-text">
-        <h2>Replica sets, sharding, backups and restores — on your own Zerops project.</h2>
-        <p>Karakoram runs inside your project and operates every member over the private network. Nothing leaves your account.</p>
+        <h2>Replica sets, sharding, backups and restores — on your own infrastructure.</h2>
+        <p>Karakoram operates database members over your private network. You control the infrastructure and your data.</p>
       </div>
     </aside>
   );

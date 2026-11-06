@@ -31,7 +31,7 @@ const RS_SIZES = [1, 3, 5, 7];
 
 
 export function TopologyTab() {
-  const { cluster, provider, namespace, name, base, can } = useClusterContext();
+  const { cluster, provider, namespace, name, base, can, backend } = useClusterContext();
   const roles = useMemberRoles(cluster.status.members, base);
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -195,7 +195,7 @@ export function TopologyTab() {
           <TLSEditor storedCA={cluster.spec.tls?.ca ?? 'selfSigned'} value={draft.tls} onChange={(tls) => setDraft((d) => ({ ...d, tls }))} />
         </Card>
         <Card title="Network exposure">
-          <ExposureEditor allAddressesConfirmed={allAddressesConfirmed} onAllAddressesConfirmedChange={setAllAddressesConfirmed} value={draft.exposure} onChange={(exposure) => setDraft((d) => ({ ...d, exposure }))} {...publicExposureMetadata(engineUI, { ...cluster.spec, tls: draft.tls, exposure: draft.exposure })} />
+          <ExposureEditor backend={backend} allAddressesConfirmed={allAddressesConfirmed} onAllAddressesConfirmedChange={setAllAddressesConfirmed} value={draft.exposure} onChange={(exposure) => setDraft((d) => ({ ...d, exposure }))} {...publicExposureMetadata(engineUI, { ...cluster.spec, tls: draft.tls, exposure: draft.exposure })} />
         </Card>
         <Card title="Monitoring & engine configuration">
           <div className="stack" style={{ gap: 14 }}>

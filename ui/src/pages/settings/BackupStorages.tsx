@@ -78,7 +78,7 @@ export function BackupStoragesPage() {
             <ErrorBlock error={storages.error} retry={() => storages.refetch()} />
           </div>
         ) : storages.data.items.length === 0 ? (
-          <div className="table-empty">No S3 storages yet. Zerops Object Storage or any S3-compatible endpoint works.</div>
+          <div className="table-empty">No S3 storages yet. Use any S3-compatible endpoint.</div>
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -252,7 +252,7 @@ function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { ex
         <TextField label="Name" mono required value={form.name} onChange={(e) => set({ name: e.target.value })} disabled={Boolean(existing)} hint={`2–63 lowercase letters, digits or hyphens, starting with a letter. A trailing hyphen is allowed; unique within namespace ${form.namespace || '…'}.`} error={!existing && form.name && !/^[a-z][a-z0-9-]{1,62}$/.test(form.name) ? 'Use 2–63 lowercase letters, digits or hyphens, starting with a letter.' : undefined} autoFocus={!existing} />
         <TextField label="Description" value={form.description} onChange={(e) => set({ description: e.target.value })} />
       </div>
-      <TextField label="Endpoint URL" mono required value={form.endpointURL} onChange={(e) => set({ endpointURL: e.target.value })} placeholder="https://s3.example.com" hint="S3-compatible endpoint. Zerops Object Storage: https://storage-<region>.zerops.io" />
+      <TextField label="Endpoint URL" mono required value={form.endpointURL} onChange={(e) => set({ endpointURL: e.target.value })} placeholder="https://s3.example.com" hint="The S3-compatible endpoint URL supplied by your storage provider." />
       <div className="grid-3">
         <TextField label="Bucket" mono required value={form.bucket} onChange={(e) => set({ bucket: e.target.value })} />
         <TextField label="Prefix (optional)" mono value={form.prefix} onChange={(e) => set({ prefix: e.target.value })} placeholder="karakoram/" />
@@ -263,7 +263,7 @@ function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { ex
         <TextField label={existing ? 'Secret access key (leave empty to keep)' : 'Secret access key'} type="password" autoComplete="new-password" value={form.secretAccessKey} onChange={(e) => set({ secretAccessKey: e.target.value })} required={!existing} />
       </div>
       <div className="row wrap" style={{ gap: 20 }}>
-        <Checkbox label="Force path-style addressing" description="Required by most non-AWS endpoints, including Zerops Object Storage." checked={form.forcePathStyle} onChange={(e) => set({ forcePathStyle: e.target.checked })} />
+        <Checkbox label="Force path-style addressing" description="Required by many non-AWS S3-compatible endpoints; check your storage provider’s requirements." checked={form.forcePathStyle} onChange={(e) => set({ forcePathStyle: e.target.checked })} />
         <Checkbox label="Verify TLS certificate" description="Disable only for self-signed test endpoints." checked={form.verifyTLS} onChange={(e) => set({ verifyTLS: e.target.checked })} />
       </div>
       <p className="xs faint">Credentials are encrypted at rest and never returned by the API.</p>

@@ -9,7 +9,7 @@ export function ConnectionHelp({ connection }: { connection: Schemas['Connection
   return <details>
     <summary className="small">How to connect (Elasticsearch)</summary>
     <p className="small">Use an Elasticsearch HTTPS endpoint below. Reveal credentials to obtain the <code>elastic</code> user's password and download <code>ca.pem</code>. Keep certificate verification enabled; curl prompts for the password without putting it in your command history.</p>
-    <p className="small">Private endpoints only resolve and are reachable from workloads in the same Zerops project. Run private-endpoint commands there, not on your workstation or the management relay.</p>
+    <p className="small">Private endpoints only resolve and are reachable from workloads on the namespace’s private network. Run private-endpoint commands there, not on your workstation or the management relay.</p>
     {endpoints.map((endpoint) => <div key={endpoint.url}>
       <strong className="small">{endpoint.public ? 'Public HTTPS' : 'Private HTTPS'}</strong>
       <CodeLine value={`curl --cacert ca.pem -u elastic "${endpoint.url.replace(/\/$/, '')}/_cluster/health"`} />

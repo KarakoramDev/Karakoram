@@ -49,7 +49,7 @@ export function topologyErrors(spec: Schemas['ClusterSpec'], topology: Schemas['
 
 export function validateWizard(name: string, namespace: string, spec: Schemas['ClusterSpec'], existing: string[], provider: Schemas['Provider'] | undefined, allAddressesConfirmed = false): Validation {
   const v: Validation = { basics: [], topology: [], resources: [], backups: [], access: [] };
-  if (!namespace) v.basics.push('Choose the namespace (Zerops project) that will host the cluster.');
+  if (!namespace) v.basics.push('Choose the namespace that will host the cluster.');
   const invalidName = nameError(name, existing);
   if (invalidName) v.basics.push(invalidName);
   const version = provider?.versions.find((item) => item.version === spec.version);
