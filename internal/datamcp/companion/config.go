@@ -199,6 +199,11 @@ func (c *Controller) Observe(ctx context.Context, rc *engine.Context, status *do
 		}
 		return nil
 	}
+	// Observe runs under the database availability publication gate. Bound the
+	// entire companion read (state/config lookup, dial and readiness RPC), not
+	// just the upstream probe, so a rolling companion cannot exhaust that lease.
+	ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+	defer cancel()
 	v.Phase = domain.DataMcpPhaseProvisioning
 	a, err := nativeartifacts.Get(b.Upstream)
 	if err != nil {
@@ -214,6 +219,8 @@ func (c *Controller) Observe(ctx context.Context, rc *engine.Context, status *do
 	}
 	s, err := load(ctx, rc)
 	if err != nil {
+		v.Phase = domain.DataMcpPhaseDegraded
+		v.Message = "Companion readiness unavailable"
 		return err
 	}
 	if s == nil || s.Stage != "ready" {

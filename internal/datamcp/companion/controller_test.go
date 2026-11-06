@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net"
 	"net/http"
@@ -289,5 +290,56 @@ func TestAdmissionAndCertificateRenewal(t *testing.T) {
 	next, _ := MemberConfig(t.Context(), f.rc, "demomcp")
 	if next.ConfigVersion != cfg.ConfigVersion+1 || next.AgentTLS.CertPEM == cfg.AgentTLS.CertPEM {
 		t.Fatal("certificate not renewed")
+	}
+}
+
+func TestObserveBoundsReadinessRPC(t *testing.T) {
+	f := setup(t)
+	f.converge(t)
+	release := make(chan struct{})
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}))
+	defer server.Close()
+	defer close(release)
+	client, err := agentapi.NewClient(agentapi.ClientOptions{
+		BaseURL: server.URL, Token: "test",
+		CAPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	f.rc.Agents = agents{client}
+	for _, scenario := range []string{"observation-budget", "earlier-deadline", "canceled"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctx := t.Context()
+			bound := engine.ObservationTimeout
+			switch scenario {
+			case "earlier-deadline":
+				bound = 50 * time.Millisecond
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, bound)
+				defer cancel()
+			case "canceled":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+				bound = 0
+			}
+			status := domain.ClusterStatus{DataMcp: &domain.DataMcpStatus{Phase: domain.DataMcpPhaseReady}}
+			start := time.Now()
+			_ = f.controller.Observe(ctx, f.rc, &status)
+			if elapsed := time.Since(start); elapsed > bound+time.Second {
+				t.Fatalf("readiness RPC escaped observation context: %s (bound %s)", elapsed, bound)
+			}
+			if status.DataMcp == nil || status.DataMcp.Phase != domain.DataMcpPhaseDegraded ||
+				status.DataMcp.Message != "Companion readiness unavailable" {
+				t.Fatal("unavailable RPC retained companion readiness", status.DataMcp)
+			}
+		})
 	}
 }
