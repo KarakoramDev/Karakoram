@@ -193,6 +193,16 @@ in v0.4.3 with the [required rollout procedures](upgrade.md#upgrading-to-v043).
 Their old workarounds remain [historical guidance](upgrade.md#known-issues-in-v042),
 not current v0.4.6 limitations. Existing history latches are not silently cleared.
 
+## Known issues in v0.4.6
+
+v0.4.6 is a security hotfix that only updates the MongoDB driver's compression
+library to fix [GO-2026-6865](https://pkg.go.dev/vuln/GO-2026-6865); follow the
+[v0.4.6 upgrade procedure](upgrade.md#upgrading-to-v046). The historical
+limitations and all known issues in v0.4.5 below remain present. Fixes
+for the Data MCP closed-connection, Zerops failed-deployment resource recovery
+and false PXC GTID-history incident issues are planned for v0.4.7; the other
+limitations keep their individually documented status.
+
 ## Known issues in v0.4.5
 
 The historical limitations described for [v0.4.5](upgrade.md#known-issues-in-v045)
@@ -212,7 +222,7 @@ data-member agent relaunch and a new full backup.
   the control plane restarts. Your databases are not affected. Workaround: stop
   sending Data MCP requests to that cluster for about 10 minutes, or restart
   the Karakoram control plane (clusters keep running while it restarts).
-  A fix is planned for the next release.
+  A fix is planned for v0.4.7, not the v0.4.6 security hotfix.
 
 ## Known issues in v0.4.4
 

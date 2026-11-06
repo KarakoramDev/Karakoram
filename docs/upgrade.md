@@ -353,11 +353,88 @@ queries. Stop retrying starts on failure and repair the underlying diagnostic.
 Follow the full [stopped-member procedure](neo4j/operations.md#legacy-bootstrap-marker-with-expired-credentials);
 marker deletion is not a general readiness or lost-password workaround.
 
+## Upgrading to v0.4.6
+
+v0.4.6 is a security hotfix of v0.4.5 with one change: the
+`github.com/klauspost/compress` library, used by the MongoDB driver, is updated
+from v1.18.7 to v1.20.2. It does not include the features planned for the next
+feature release, v0.4.7.
+
+### Fixed in v0.4.6
+
+**Control-plane crash from a crafted MongoDB response
+([GO-2026-6865](https://pkg.go.dev/vuln/GO-2026-6865), also
+[GHSA-fpmh-frq8-7rj8](https://github.com/klauspost/compress/security/advisories/GHSA-fpmh-frq8-7rj8)):**
+in v0.4.5 and earlier, a crafted zstd-compressed MongoDB wire response could
+make the decoder panic instead of returning an error. The control plane
+administers MongoDB clusters from background reconciliation, so such a panic
+stops the whole control-plane process: the API, UI and management of every
+cluster it serves are interrupted until it restarts, and a server that keeps
+sending crafted responses can repeat the crash. The impact is denial of
+service; no code execution or data corruption is known. A control-plane crash
+does not stop database processes directly, but management and in-flight
+operations are interrupted until the control plane is back.
+
+**Who is affected:** installations running v0.4.5 or earlier that manage
+MongoDB (PSMDB) clusters. An attacker must get crafted responses onto a
+control-plane connection to a managed `mongod` or `mongos`, either by
+compromising or controlling that server, or by impersonating it or injecting
+into its connection. With the default `requireTLS` mode, certificate
+verification stops ordinary network attackers, but a compromised server can
+still send crafted responses over its valid TLS connection. In `disabled`,
+`allowTLS` and `preferTLS` modes the control plane can use plaintext
+connections, so an attacker who can alter that network path can also inject
+responses. Storing data, ordinary database credentials or Karakoram API access
+alone are not sufficient. Disabling MongoDB network compression is not a
+mitigation: the driver decodes a compressed response from the server even
+when compression was not negotiated. Installations without MongoDB clusters
+never decode MongoDB responses and are not exposed; upgrading still removes the
+vulnerable library.
+
+### Required rollout
+
+1. **Back up state, then upgrade the control plane.** Use the
+   [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
+   the original `KARAKORAM_MASTER_KEY` separately, and retain the old executable
+   with its pre-upgrade state. Deploy v0.4.6 through your provider's documented
+   singleton control-plane deployment path. This step applies the fix. No
+   database restart, engine upgrade, backup or configuration change is needed,
+   and v0.4.5 member agents keep working with the v0.4.6 control plane.
+2. **Optionally roll MongoDB member agents.** Member agents run the same
+   executable and also contain the library, but they only connect to the
+   `mongod` or `mongos` on their own member over loopback. Exploiting this
+   path requires control of that local endpoint or the ability to inject its
+   replies, subject to the connection's TLS verification. The process that
+   crashes is that member's agent, not the shared control plane; the effect on
+   the cluster depends on the member's role and quorum. To remove the
+   vulnerable library from MongoDB members as well, run
+   `karactl clusters upgrade-agents NAME --wait` for each
+   MongoDB cluster in a maintenance window; see
+   [rolling out member agents](#rolling-out-member-agents). Agents for other
+   engines never open MongoDB connections and need no relaunch. `karactl` does
+   not contain the library.
+
+After the control-plane upgrade, reachable agents reporting the older build
+appear in `status.agents` as outdated (unreachable or unreported builds as
+unknown) until they are rolled. The `AgentsCurrent` condition is
+informational and does not make clusters unready or Degraded. If you enabled
+automatic agent rollout (`karactl settings agent-rollout`), it rolls outdated
+agents of supported engines after the upgrade, as for any release.
+
+### Known issues in v0.4.6
+
+v0.4.6 changes nothing else. The
+[continuing limitations](limitations.md#continuing-limitations) and all
+[known issues in v0.4.5](#known-issues-in-v045) remain present, including Data
+MCP failures after a companion connection closes, Zerops failed-deployment
+resource recovery and false PXC GTID-history incidents. Their workarounds still
+apply. Fixes for those three issues are planned for v0.4.7; the other
+continuing limitations keep their individually documented status.
 
 ## Upgrading to v0.4.5
 
 v0.4.5 is a hotfix of v0.4.4 with only two MySQL fixes. It does not include
-the features planned for the next feature release, v0.4.6.
+the features now planned for v0.4.7.
 
 ### Fixed in v0.4.5
 
@@ -459,12 +536,12 @@ still apply in v0.4.5. **Fixed in v0.4.6**, not included in this hotfix.
   the control plane restarts. Your databases are not affected. Workaround: stop
   sending Data MCP requests to that cluster for about 10 minutes, or restart
   the Karakoram control plane (clusters keep running while it restarts).
-  A fix is planned for the next release.
+  A fix is planned for v0.4.7, not the v0.4.6 security hotfix.
 
 ## Upgrading to v0.4.4
 
 v0.4.4 is a hotfix of v0.4.3 with only two MySQL/PXC point-in-time recovery
-corrections. It does not include the features now planned for v0.4.6.
+corrections. It does not include the features now planned for v0.4.7.
 
 ### Fixed in v0.4.4
 
