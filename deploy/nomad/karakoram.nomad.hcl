@@ -246,7 +246,7 @@ job "karakoram" {
         KARAKORAM_NOMAD_NETWORK             = var.network
         KARAKORAM_NOMAD_PUBLIC_IPV4         = var.public_ipv4
         KARAKORAM_NOMAD_PUBLIC_IPV6         = var.public_ipv6
-        KARAKORAM_NOMAD_EPHEMERAL_DISK_MB   = var.member_ephemeral_disk_mb > 0 ? tostring(var.member_ephemeral_disk_mb) : ""
+        KARAKORAM_NOMAD_EPHEMERAL_DISK_MB   = var.member_ephemeral_disk_mb > 0 ? format("%d", var.member_ephemeral_disk_mb) : ""
         KARAKORAM_NOMAD_ARTIFACT_URL        = var.artifact_url
         KARAKORAM_ARTIFACT_MIRROR          = var.native_artifact_mirror
         KARAKORAM_NOMAD_CACERT              = "/secrets/nomad-ca.pem"

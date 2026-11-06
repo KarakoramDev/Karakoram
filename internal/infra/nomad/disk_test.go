@@ -70,7 +70,7 @@ func TestControlPlaneAllocationDiskReservation(t *testing.T) {
 	if !regexp.MustCompile(`(?s)ephemeral_disk\s*\{\s*size\s*=\s*1024\s+sticky\s*=\s*false\s+migrate\s*=\s*false\s*\}`).MatchString(job) {
 		t.Fatal("control-plane rootfs/artifact disk reservation missing")
 	}
-	if !strings.Contains(job, `KARAKORAM_NOMAD_EPHEMERAL_DISK_MB   = var.member_ephemeral_disk_mb > 0 ? tostring(var.member_ephemeral_disk_mb) : ""`) {
+	if !strings.Contains(job, `KARAKORAM_NOMAD_EPHEMERAL_DISK_MB   = var.member_ephemeral_disk_mb > 0 ? format("%d", var.member_ephemeral_disk_mb) : ""`) {
 		t.Fatal("shipped control-plane job does not forward the optional member disk floor")
 	}
 }
