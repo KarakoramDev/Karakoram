@@ -4,21 +4,23 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
-## Upgrading to v0.4.6
+## Upgrading to v0.4.7
 
-v0.4.6 (unreleased) includes the [v0.4.5 MySQL hotfix](#upgrading-to-v045)
-and the [v0.4.4 PITR hotfix](#upgrading-to-v044). When upgrading directly
-from v0.4.3, v0.4.4 or v0.4.5, use the v0.4.6 agent rollout below instead
+v0.4.7 (unreleased) includes the [v0.4.6 security hotfix](#upgrading-to-v046)
+(`github.com/klauspost/compress` v1.20.2), the
+[v0.4.5 MySQL hotfix](#upgrading-to-v045) and the
+[v0.4.4 PITR hotfix](#upgrading-to-v044). When upgrading directly
+from v0.4.3, v0.4.4, v0.4.5 or v0.4.6, use the v0.4.7 agent rollout below instead
 of an intermediate resource-change rollout; then re-enable PITR if needed,
 take a successful full and verify the advancing window as described in the
-hotfix recovery steps. The two v0.4.5 MySQL fixes are inherited, not new in v0.4.6.
+hotfix recovery steps. The two v0.4.5 MySQL fixes are inherited, not new in v0.4.7.
 
 1. Back up control-plane state using the
    [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
    the original `KARAKORAM_MASTER_KEY` separately, and retain the previous
    executable with its pre-upgrade state. Review backup capacity and maintenance
    windows before proceeding.
-2. Upgrade the control plane to v0.4.6. Engine versions and deployed member
+2. Upgrade the control plane to v0.4.7. Engine versions and deployed member
    agents are separate from this upgrade; rollback does not undo engine or
    infrastructure changes.
 3. Run `karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m` for each
@@ -54,7 +56,7 @@ hotfix recovery steps. The two v0.4.5 MySQL fixes are inherited, not new in v0.4
 
 ### Agent rollout now covers every member-agent engine
 
-After upgrading the control plane to v0.4.6, run the existing rollout command for
+After upgrading the control plane to v0.4.7, run the existing rollout command for
 MySQL (single or Group Replication), PXC, OpenBao (Raft or PostgreSQL storage),
 Keycloak, Temporal, Neo4j Community and Weaviate:
 
@@ -64,7 +66,7 @@ karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m
 
 PostgreSQL (including Citus), Supabase, MongoDB, RabbitMQ and Elasticsearch retain
 their existing support. Existing v0.4.3 agents become upgradable once the control
-plane is v0.4.6; unknown legacy identities are also eligible. This installs the
+plane is v0.4.7; unknown legacy identities are also eligible. This installs the
 frozen control-plane agent build without changing applied engine versions,
 configuration, resources, bindings or persistent runtime/volume identities.
 It replaces earlier resource-change/re-creation workarounds for installing agent
@@ -524,7 +526,7 @@ window display, PostgreSQL administrator-password rotation, Temporal on Zerops
 and incomplete Nomad live coverage. The Zerops failed-deployment resource
 recovery and false PXC GTID-history incident issues documented
 [below](#known-issues-in-v044) also remain unfixed in v0.4.5; their workarounds
-still apply in v0.4.5. **Fixed in v0.4.6**, not included in this hotfix.
+still apply in v0.4.5. **Fixed in v0.4.7**, not included in the v0.4.5 or v0.4.6 hotfixes.
 
 - **Data MCP can keep failing with `tool listing unavailable` after its
   connection to a cluster's companion drops** (also present in v0.3.0–v0.4.4).
@@ -666,7 +668,7 @@ with the latest end. See [all current limitations](limitations.md).
   is and upgrade once the fix is released. After cancelling or a timeout,
   check that the new member is actually gone before making further changes.
   Neo4j and the Data MCP companion are not
-  affected. **Fixed in v0.4.6**; not fixed by the v0.4.5 hotfix.
+  affected. **Fixed in v0.4.7**; not fixed by the v0.4.5 or v0.4.6 hotfixes.
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or
@@ -690,7 +692,7 @@ with the latest end. See [all current limitations](limitations.md).
   scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
   serving reads and writes, so leave it as it is and upgrade once the fix is
   released. This needs configured backup storage and healthy members.
-  **Fixed in v0.4.6**; not fixed by the v0.4.5 hotfix.
+  **Fixed in v0.4.7**; not fixed by the v0.4.5 or v0.4.6 hotfixes.
 
 ## Upgrading to v0.4.3
 
@@ -985,7 +987,7 @@ hostgroup defaults are defensive policy, not evidence of the same defect.
 A native process restart, an unchanged spec, or a control-plane-only upgrade
 does not replace its agent. v0.4.3 MySQL/PXC do not support `upgrade-agents`.
 
-**v0.4.6 supersedes this workaround:** after upgrading the control plane, use
+**v0.4.7 supersedes this workaround:** after upgrading the control plane, use
 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine) to replace
 data and proxy agents without a resource change. The procedure below describes
 v0.4.3 only.
@@ -1032,7 +1034,7 @@ does not replace running data-member or proxy-agent executables. On v0.4.3,
 MySQL/PXC do not support `upgrade-agents`, and `karactl clusters restart`
 restarts native database/proxy processes, **not their agents**.
 
-For v0.4.6, use [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+For v0.4.7, use [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
 instead of the resource-change/new-target procedures below; their v0.4.3
 compatibility and live-verification statements remain historical.
 
@@ -1105,8 +1107,8 @@ certification unavailability rather than gaining the agent-side certificate.
 **Weaviate clusters that never formed on Zerops must be re-created.** Preserve
 the create request, confirm there is no valuable imported or external state,
 then deploy with current agents. v0.4.3 Weaviate does not support `upgrade-agents`;
-v0.4.6 rollout requires a formed cluster. Preserve data-bearing clusters and use
-the v0.4.6 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+v0.4.7 rollout requires a formed cluster. Preserve data-bearing clusters and use
+the v0.4.7 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
 only when its native safety gates can be satisfied.
 
 **Supabase poolers on IPv6-only backends require the rebuilt Supavisor native
@@ -1116,14 +1118,14 @@ lock. Use the supported [member-agent rollout](#rolling-out-member-agents)
 and verify native SQL pooler connectivity over the private address family.
 For v0.4.3, other affected engines use supported agent rollout where available;
 Neo4j and Keycloak need reviewed, data-preserving re-creation for agent-side
-listener fixes. On v0.4.6, use the
+listener fixes. On v0.4.7, use the
 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine) instead.
 
 ### Continuing limitations
 
-The following limitations describe v0.4.3. v0.4.6 adds PostgreSQL administrator
+The following limitations describe v0.4.3. v0.4.7 adds PostgreSQL administrator
 rotation, Temporal on Zerops and full PITR interval lists as described
-[above](#upgrading-to-v046). Incomplete Nomad live coverage still does not change
+[above](#upgrading-to-v047). Incomplete Nomad live coverage still does not change
 EXPERIMENTAL engine status. See current [limitations](limitations.md).
 
 **MySQL/PXC PITR window display:** `karactl ... pitr-window` and cluster status
@@ -1139,7 +1141,7 @@ a later release.
 ### Known issues in v0.4.3
 
 The archiving issue is fixed in v0.4.4; the PXC false-history issue is fixed
-in v0.4.6, not by the hotfix.
+in v0.4.7, not by the hotfix.
 
 - **MySQL PITR archiving can silently stop after a schema or account change
   — fixed in v0.4.4** (v0.4.3 only; single, Group Replication and PXC).
@@ -1181,7 +1183,7 @@ in v0.4.6, not by the hotfix.
   scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
   serving reads and writes, so leave it as it is and upgrade once the fix is
   released. This needs configured backup storage and healthy members.
-  **Fixed in v0.4.6**; not fixed by v0.4.4.
+  **Fixed in v0.4.7**; not fixed by v0.4.4.
 
 ## Upgrading to v0.4.2
 
@@ -1270,7 +1272,7 @@ Unless noted otherwise, the following issues affected both v0.4.0 and v0.4.1:
 
 ### Existing MySQL and PXC agents
 
-**For v0.4.6:** [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+**For v0.4.7:** [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
 replaces the re-creation requirement described here for v0.4.2.
 
 The MySQL Group Replication clustered-restart/primary-handoff, in-place restore
@@ -1308,7 +1310,7 @@ v0.4.0, also follow the separate v0.4.1 agent guidance below. MySQL/PXC formatio
 durability and sanitized startup/clone diagnostics include agent-side changes;
 use new v0.4.2 members, not merely a database-process restart.
 
-For v0.4.6, all of these engines support the
+For v0.4.7, all of these engines support the
 [agent rollout command](#agent-rollout-now-covers-every-member-agent-engine);
 the unsupported statement above describes v0.4.2 only.
 
@@ -1460,7 +1462,7 @@ data-preserving agent-only upgrade for these engines; consumer deletion is
 especially destructive, as explained below. Do not use volume retention or
 copying binaries as a substitute.
 
-**For v0.4.6:** all of these engines support
+**For v0.4.7:** all of these engines support
 [agent-only rollout](#agent-rollout-now-covers-every-member-agent-engine).
 The re-creation requirement above applies to v0.4.1, not the current rollout path.
 
@@ -1663,7 +1665,7 @@ credential returned by the connection endpoint.** `system-users rotate` returns
 HTTP 409 with an explanation; the other internal PostgreSQL system roles are
 also not rotatable through this command. Native application-role password
 rotation and managed binding rotation do not rotate the administrator.
-For v0.4.6, see [PostgreSQL administrator password rotation](#postgresql-administrator-password-rotation).
+For v0.4.7, see [PostgreSQL administrator password rotation](#postgresql-administrator-password-rotation).
 
 If this credential is exposed, restrict access at both private and public
 network boundaries and terminate existing privileged sessions; removing public
@@ -2044,7 +2046,7 @@ Upgrading or restarting the control plane does **not** replace existing member a
 
 Inspect `karactl clusters get NAME` or `clusters status NAME`: `status.agents` reports `targetBuild`, `targetVersion`, and the `outdated` and `unknown` member names. Member output includes `agent.version`, `agent.commit` and `agent.build`. The `AgentsCurrent` condition is informational: `True/Current`, `False/Outdated`, or `Unknown/Unreported`; it never makes a cluster unready or Degraded. An `AgentsOutdated` event signals outdated member agents.
 
-Build inventory is independent of rollout execution: v0.4.6 supports
+Build inventory is independent of rollout execution: v0.4.7 supports
 `upgrade-agents` for PostgreSQL (including Citus), Supabase, MongoDB/PSMDB,
 RabbitMQ, Elasticsearch, MySQL/PXC (including ProxySQL), OpenBao, Keycloak,
 Temporal, Neo4j and Weaviate. A healthy native engine is not evidence of a current

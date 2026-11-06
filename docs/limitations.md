@@ -78,7 +78,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   control-plane backup/restore steps; it can wait for those steps even when
   their target clusters differ. This does not lock asynchronous agent uploads
   or external storage clients. See [recovery coordination](mysql/operations.md#full-outage-recovery).
-- **PostgreSQL administrator rotation requires upgraded agents.** v0.4.6 supports
+- **PostgreSQL administrator rotation requires upgraded agents.** v0.4.7 supports
   in-place `postgres` rotation after `upgrade-agents`; existing sessions are not
   revoked, and other engine-owned identities remain unsupported. See
   [administrator rotation and containment](postgres/access-and-tls.md#administrator-credential-containment).
@@ -115,7 +115,7 @@ These cross-engine constraints define the operating model; engine-specific limit
 - **PITR does not bridge archive-writer changes.** A different physical writer
   freezes the old MySQL/PXC baseline at its last proven endpoint; newer-writer
   uploads alone cannot extend it. `WindowFrozenWriterChanged` identifies foreign
-  uploads beyond that endpoint. In v0.4.6, automatic full re-anchoring is enabled
+  uploads beyond that endpoint. In v0.4.7, automatic full re-anchoring is enabled
   by default: with PITR/storage configured, the writer must remain stable for
   five minutes, with no non-backup operation active and five minutes since the
   last finished. Pending backups and a one-hour cooldown defer the full.
@@ -128,7 +128,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   Automatic backups follow count retention with chain, newest-full anchor and
   in-use protection. Older recovery ranges expire with their retained fulls;
   see [automatic writer re-anchoring](mysql/backups.md#automatic-writer-re-anchoring).
-- **Agent deployment is not necessarily zero-downtime.** v0.4.6 supports
+- **Agent deployment is not necessarily zero-downtime.** v0.4.7 supports
   `upgrade-agents` for every member-agent engine, including MySQL/PXC and
   ProxySQL; a control-plane-only upgrade or native process restart still does
   not replace deployed agents. Singleton databases/components have downtime.
@@ -191,7 +191,7 @@ The v0.4.2 PITR memory, singleton backup-memory, PXC retirement and clone,
 PXC post-restore history, ProxySQL TLS and Zerops Weaviate issues are resolved
 in v0.4.3 with the [required rollout procedures](upgrade.md#upgrading-to-v043).
 Their old workarounds remain [historical guidance](upgrade.md#known-issues-in-v042),
-not current v0.4.6 limitations. Existing history latches are not silently cleared.
+not current v0.4.7 limitations. Existing history latches are not silently cleared.
 
 ## Known issues in v0.4.6
 
@@ -207,7 +207,7 @@ limitations keep their individually documented status.
 
 The historical limitations described for [v0.4.5](upgrade.md#known-issues-in-v045)
 and the Zerops failed-deployment resource recovery and false PXC GTID-history
-incident issues below remain present in v0.4.5; the latter two are **fixed in v0.4.6**.
+incident issues below remain present in v0.4.5; the latter two are **fixed in v0.4.7**.
 v0.4.5 fixes only the imported-baseline PITR coverage freeze and empty-GTID backup metadata rejection.
 Follow the [v0.4.5 upgrade procedure](upgrade.md#upgrading-to-v045), including
 data-member agent relaunch and a new full backup.
@@ -274,7 +274,7 @@ issues remain unfixed in v0.4.5.
   is and upgrade once the fix is released. After cancelling or a timeout,
   check that the new member is actually gone before making further changes.
   Neo4j and the Data MCP companion are not
-  affected. **Fixed in v0.4.6**; not fixed by the v0.4.5 hotfix.
+  affected. **Fixed in v0.4.7**; not fixed by the v0.4.5 or v0.4.6 hotfixes.
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or
@@ -298,7 +298,7 @@ issues remain unfixed in v0.4.5.
   scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
   serving reads and writes, so leave it as it is and upgrade once the fix is
   released. This needs configured backup storage and healthy members.
-  **Fixed in v0.4.6**; not fixed by the v0.4.5 hotfix.
+  **Fixed in v0.4.7**; not fixed by the v0.4.5 or v0.4.6 hotfixes.
 
 ## Known issues in v0.4.3
 
