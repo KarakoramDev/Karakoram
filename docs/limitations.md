@@ -207,7 +207,11 @@ limitations keep their individually documented status.
 
 The historical limitations described for [v0.4.5](upgrade.md#known-issues-in-v045)
 and the Zerops failed-deployment resource recovery and false PXC GTID-history
-incident issues below remain present in v0.4.5; the latter two are **fixed in v0.4.7**.
+incident issues below remain present in v0.4.5; the PXC issue is **fixed in v0.4.7**.
+A fix for failed-first-deployment resource recovery is implemented on the
+unreleased feature line and planned for v0.4.7; it is not included in the
+v0.4.5 or v0.4.6 hotfixes. The documented workarounds remain necessary on
+those releases.
 v0.4.5 fixes only the imported-baseline PITR coverage freeze and empty-GTID backup metadata rejection.
 Follow the [v0.4.5 upgrade procedure](upgrade.md#upgrading-to-v045), including
 data-member agent relaunch and a new full backup.
@@ -274,7 +278,10 @@ issues remain unfixed in v0.4.5.
   is and upgrade once the fix is released. After cancelling or a timeout,
   check that the new member is actually gone before making further changes.
   Neo4j and the Data MCP companion are not
-  affected. **Fixed in v0.4.7**; not fixed by the v0.4.5 or v0.4.6 hotfixes.
+  affected. A fix for failed-first-deployment resource recovery is implemented
+  on the unreleased feature line and planned for v0.4.7; it is not included in
+  the v0.4.5 or v0.4.6 hotfixes. The documented workarounds remain necessary
+  on those releases.
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or

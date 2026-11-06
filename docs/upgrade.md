@@ -526,7 +526,11 @@ window display, PostgreSQL administrator-password rotation, Temporal on Zerops
 and incomplete Nomad live coverage. The Zerops failed-deployment resource
 recovery and false PXC GTID-history incident issues documented
 [below](#known-issues-in-v044) also remain unfixed in v0.4.5; their workarounds
-still apply in v0.4.5. **Fixed in v0.4.7**, not included in the v0.4.5 or v0.4.6 hotfixes.
+still apply in v0.4.5. The PXC issue is **fixed in v0.4.7**, not included in
+the v0.4.5 or v0.4.6 hotfixes. A fix for failed-first-deployment resource
+recovery is implemented on the unreleased feature line and planned for
+v0.4.7; it is not included in the v0.4.5 or v0.4.6 hotfixes. The documented
+workarounds remain necessary on those releases.
 
 - **Data MCP can keep failing with `tool listing unavailable` after its
   connection to a cluster's companion drops** (also present in v0.3.0–v0.4.4).
@@ -668,7 +672,10 @@ with the latest end. See [all current limitations](limitations.md).
   is and upgrade once the fix is released. After cancelling or a timeout,
   check that the new member is actually gone before making further changes.
   Neo4j and the Data MCP companion are not
-  affected. **Fixed in v0.4.7**; not fixed by the v0.4.5 or v0.4.6 hotfixes.
+  affected. A fix for failed-first-deployment resource recovery is implemented
+  on the unreleased feature line and planned for v0.4.7; it is not included in
+  the v0.4.5 or v0.4.6 hotfixes. The documented workarounds remain necessary
+  on those releases.
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or
