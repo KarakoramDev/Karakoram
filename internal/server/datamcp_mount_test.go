@@ -245,6 +245,7 @@ func TestMcpModeFromEnvironment(t *testing.T) {
 	t.Setenv("KARAKORAM_BACKEND", "zerops")
 	t.Setenv("KARAKORAM_ZEROPS_TOKEN", "test-token")
 	t.Setenv("KARAKORAM_ZEROPS_PROJECT_ID", "test-project")
+	t.Setenv("KARAKORAM_MCP_OUTPUT_SCHEMAS", "")
 	for _, mode := range []string{"", "off", "readonly", "readwrite", "invalid"} {
 		t.Setenv("KARAKORAM_MCP", mode)
 		c, err := ConfigFromEnv()
@@ -260,6 +261,20 @@ func TestMcpModeFromEnvironment(t *testing.T) {
 		}
 		if err != nil || c.MCP != want {
 			t.Fatalf("%q: mode %q, error %v", mode, c.MCP, err)
+		}
+	}
+	t.Setenv("KARAKORAM_MCP", "readonly")
+	for _, value := range []string{"", "false", "true", "invalid"} {
+		t.Setenv("KARAKORAM_MCP_OUTPUT_SCHEMAS", value)
+		c, err := ConfigFromEnv()
+		if value == "invalid" {
+			if err == nil || !strings.Contains(err.Error(), "KARAKORAM_MCP_OUTPUT_SCHEMAS") {
+				t.Fatalf("invalid schema setting: %v", err)
+			}
+			continue
+		}
+		if err != nil || c.MCPOutputSchemas != (value == "true") {
+			t.Fatalf("%q: output schemas %t, error %v", value, c.MCPOutputSchemas, err)
 		}
 	}
 }

@@ -56,6 +56,7 @@ type Options struct {
 	RelayHandler        http.Handler
 	OAuth               *oauth.Service
 	MCPMode             string
+	MCPOutputSchemas    bool
 	MCPSealer           *secrets.Sealer
 	MCPResourceMetadata string
 	// DataMcpUpstreams overrides provider-backed upstreams, primarily for embedding.

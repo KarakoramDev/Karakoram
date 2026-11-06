@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/auth"
@@ -25,6 +26,7 @@ type Config struct {
 	OAuth, OAuthDCR                                                                                                                     string
 	OAuthClientHosts                                                                                                                    []string
 	MCP                                                                                                                                 string
+	MCPOutputSchemas                                                                                                                    bool
 }
 
 // ConfigFromEnv loads deployment settings and validates every endpoint before opening the DB.
@@ -51,6 +53,13 @@ func ConfigFromEnv() (Config, error) {
 		}
 	}
 	c.MCP = envDefault("KARAKORAM_MCP", "readonly")
+	if value := os.Getenv("KARAKORAM_MCP_OUTPUT_SCHEMAS"); value != "" {
+		var err error
+		c.MCPOutputSchemas, err = strconv.ParseBool(value)
+		if err != nil {
+			return Config{}, errors.New("KARAKORAM_MCP_OUTPUT_SCHEMAS must be true or false")
+		}
+	}
 	registry, err := backendRegistry(c)
 	if err != nil {
 		return Config{}, err

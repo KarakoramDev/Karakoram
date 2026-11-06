@@ -30,9 +30,9 @@ func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r.Header.Set("Authorization", "Bearer "+b.token)
 	return b.base.RoundTrip(r)
 }
-func testEndpoint(t *testing.T, mode, role string, rest http.Handler, confirm *Confirmer) (*httptest.Server, *sdk.ClientSession) {
+func testEndpoint(t *testing.T, mode, role string, rest http.Handler, confirm *Confirmer, outputSchemas ...bool) (*httptest.Server, *sdk.ClientSession) {
 	t.Helper()
-	h, err := New(Options{Mode: mode, PublicURL: "https://control.example", Authenticate: func(r *http.Request) (*auth.Principal, error) {
+	h, err := New(Options{Mode: mode, OutputSchemas: len(outputSchemas) > 0 && outputSchemas[0], PublicURL: "https://control.example", Authenticate: func(r *http.Request) (*auth.Principal, error) {
 		if r.Header.Get("Authorization") != "Bearer testing" {
 			return nil, fmt.Errorf("unauthorized")
 		}
@@ -91,7 +91,7 @@ func TestPITRWindowStructuredIntervals(t *testing.T) {
 	}
 }
 func TestProtocolErasAndModes(t *testing.T) {
-	for _, version := range []string{"2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26"} {
+	for _, version := range []string{"2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"} {
 		for _, mode := range []string{"readonly", "readwrite"} {
 			t.Run(version+"/"+mode, func(t *testing.T) {
 				server, _ := testEndpoint(t, mode, "admin", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

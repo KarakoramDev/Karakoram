@@ -4004,7 +4004,10 @@ type CreateClusterParams struct {
 
 // DeleteClusterParams defines parameters for DeleteCluster.
 type DeleteClusterParams struct {
+	// KeepVolumes Boolean, default false; true removes runtime services but retains volumes and leaves the cluster suspended for cluster_resume.
 	KeepVolumes *bool `form:"keepVolumes,omitempty" json:"keepVolumes,omitempty"`
+
+	// KeepBackups Boolean, default false; true retains recorded backups after source cluster deletion so backups_list and backup_get can still inspect them.
 	KeepBackups *bool `form:"keepBackups,omitempty" json:"keepBackups,omitempty"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -4571,10 +4574,17 @@ type GetClusterMemberParams struct {
 
 // GetMemberLogsParams defines parameters for GetMemberLogs.
 type GetMemberLogsParams struct {
-	Process *string    `form:"process,omitempty" json:"process,omitempty"`
-	Lines   *int       `form:"lines,omitempty" json:"lines,omitempty"`
-	Cursor  *string    `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Since   *time.Time `form:"since,omitempty" json:"since,omitempty"`
+	// Process Process name from the engine catalog returned by providers_list, or agent for runtime logs; defaults to the first engine process, or agent if none.
+	Process *string `form:"process,omitempty" json:"process,omitempty"`
+
+	// Lines Maximum number of log lines requested, an integer from 1 to 10000; defaults to 100.
+	Lines *int `form:"lines,omitempty" json:"lines,omitempty"`
+
+	// Cursor Reserved continuation string; currently ignored by this endpoint, which does not return nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Since Optional date-time string in RFC 3339 format; currently ignored by this endpoint and does not filter returned lines.
+	Since *time.Time `form:"since,omitempty" json:"since,omitempty"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
@@ -4663,6 +4673,7 @@ type CreateMySQLDatabaseParams struct {
 
 // DeleteMySQLDatabaseParams defines parameters for DeleteMySQLDatabase.
 type DeleteMySQLDatabaseParams struct {
+	// Force Boolean, default false; true permits dropping a nonempty database and permanently deleting its tables.
 	Force *bool `form:"force,omitempty" json:"force,omitempty"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -4689,7 +4700,10 @@ type RevokeMySQLPrivilegesParams struct {
 
 // ListMySQLGrantsParams defines parameters for ListMySQLGrants.
 type ListMySQLGrantsParams struct {
-	User     *string `form:"user,omitempty" json:"user,omitempty"`
+	// User Application account name matching [A-Za-z_][A-Za-z0-9_]{0,31}, without a host suffix; use name from mysql_users_list. Optional filter; at least user or database must be supplied.
+	User *string `form:"user,omitempty" json:"user,omitempty"`
+
+	// Database Application database name matching [A-Za-z_][A-Za-z0-9_$]{0,63}; use name from mysql_databases_list. Optional filter; at least user or database must be supplied.
 	Database *string `form:"database,omitempty" json:"database,omitempty"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -4966,7 +4980,9 @@ type ListClusterOperationsParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Phase  *string `form:"phase,omitempty" json:"phase,omitempty"`
+
+	// Phase Optional exact, case-sensitive execution phase: Pending, Running, Succeeded, Failed or Cancelled; values are returned in phase by cluster_operations_list and operation_get.
+	Phase *string `form:"phase,omitempty" json:"phase,omitempty"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
@@ -5046,6 +5062,7 @@ type CreatePostgresDatabaseParams struct {
 
 // DeletePostgresDatabaseParams defines parameters for DeletePostgresDatabase.
 type DeletePostgresDatabaseParams struct {
+	// Force Boolean, default false; true uses PostgreSQL DROP DATABASE WITH (FORCE) to terminate connections that block deletion.
 	Force *bool `form:"force,omitempty" json:"force,omitempty"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -5072,6 +5089,7 @@ type RevokePostgresPrivilegesParams struct {
 
 // ListPostgresGrantsParams defines parameters for ListPostgresGrants.
 type ListPostgresGrantsParams struct {
+	// Database Exact application database name, 1–63 UTF-8 bytes without control characters; use name from postgres_databases_list.
 	Database string `form:"database" json:"database"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -6278,12 +6296,16 @@ type ListEventsParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
 	// Order Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order.
-	Order   *ListEventsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
-	Cluster *string                `form:"cluster,omitempty" json:"cluster,omitempty"`
+	Order *ListEventsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
+
+	// Cluster Exact cluster-name filter from clusters_list: 2–12 lowercase letters or digits, beginning with a letter; combine with namespace to disambiguate names.
+	Cluster *string `form:"cluster,omitempty" json:"cluster,omitempty"`
 
 	// Type Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type.
-	Type        *ListEventsParamsType `form:"type,omitempty" json:"type,omitempty"`
-	OperationId *string               `form:"operationId,omitempty" json:"operationId,omitempty"`
+	Type *ListEventsParamsType `form:"type,omitempty" json:"type,omitempty"`
+
+	// OperationId Exact operation identifier string from cluster_operations_list or operation_get; limits results to events associated with that operation.
+	OperationId *string `form:"operationId,omitempty" json:"operationId,omitempty"`
 
 	// Actor Exact actor identity, including token name and ID when applicable.
 	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
@@ -6499,9 +6521,13 @@ type ListOperationsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
 	// Cursor Opaque cursor returned by the preceding page.
-	Cursor  *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Cluster Optional exact cluster name from clusters_list, 2–12 lowercase letters or digits beginning with a letter; filters records to that cluster within the selected namespace scope.
 	Cluster *string `form:"cluster,omitempty" json:"cluster,omitempty"`
-	Phase   *string `form:"phase,omitempty" json:"phase,omitempty"`
+
+	// Phase Optional exact, case-sensitive execution phase: Pending, Running, Succeeded, Failed or Cancelled; values are returned in phase by operations_list and operation_get.
+	Phase *string `form:"phase,omitempty" json:"phase,omitempty"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
@@ -8425,7 +8451,7 @@ type ServerInterface interface {
 	// Delete a managed database connection
 	// (DELETE /clusters/{cluster}/openbao/database-connections/{connection})
 	DeleteOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, connection string, params DeleteOpenBaoDatabaseConnectionParams)
-	// getOpenBaoDatabaseConnection
+	// Read a managed database connection
 	// (GET /clusters/{cluster}/openbao/database-connections/{connection})
 	GetOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, connection string, params GetOpenBaoDatabaseConnectionParams)
 	// Reveal OpenBao initialization material
@@ -47249,7 +47275,7 @@ type StrictServerInterface interface {
 	// Delete a managed database connection
 	// (DELETE /clusters/{cluster}/openbao/database-connections/{connection})
 	DeleteOpenBaoDatabaseConnection(ctx context.Context, request DeleteOpenBaoDatabaseConnectionRequestObject) (DeleteOpenBaoDatabaseConnectionResponseObject, error)
-	// getOpenBaoDatabaseConnection
+	// Read a managed database connection
 	// (GET /clusters/{cluster}/openbao/database-connections/{connection})
 	GetOpenBaoDatabaseConnection(ctx context.Context, request GetOpenBaoDatabaseConnectionRequestObject) (GetOpenBaoDatabaseConnectionResponseObject, error)
 	// Reveal OpenBao initialization material

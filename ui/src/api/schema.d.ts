@@ -11,10 +11,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List local accounts */
+        /**
+         * List local accounts
+         * @description Returns paginated items with names, enabled flags, mandatory password-change flags and creation/update timestamps, never passwords or hashes. Use account_get with a returned name; limit defaults to 100, accepts 1–500, and nextCursor continues the list.
+         */
         get: operations["listAccounts"];
         put?: never;
-        /** Create a local account */
+        /**
+         * Create a local account
+         * @description Creates a local login synchronously and returns its name, administrative flags and timestamps without passwords or hashes. Duplicate names return 409; use account_get to retrieve the resulting record.
+         */
         post: operations["createAccount"];
         delete?: never;
         options?: never;
@@ -27,16 +33,26 @@ export type paths = {
             query?: never;
             header?: never;
             path: {
+                /** @description Account name returned by accounts_list or account_get, passed verbatim; the path accepts 1–128 characters. Newly created local names use 1–64 characters, starting with a letter, followed by letters, digits, _, ., @ or -. */
                 account: string;
             };
             cookie?: never;
         };
-        /** Read a local account */
+        /**
+         * Read a local account
+         * @description Returns the named login’s enabled flag, mandatory password-change flag and creation/update timestamps, never passwords or hashes. Resolve names with accounts_list; a missing record returns 404.
+         */
         get: operations["getAccount"];
-        /** Replace account administrative flags */
+        /**
+         * Replace account administrative flags
+         * @description Synchronously sets enabled and mustChangePassword flags and returns the resulting name, flags and timestamps without credentials. Resolve names with accounts_list; a missing record returns 404.
+         */
         put: operations["replaceAccount"];
         post?: never;
-        /** Delete an account and revoke sessions and tokens */
+        /**
+         * Delete an account and revoke sessions and tokens
+         * @description Synchronously removes the named login and its persisted authentication records, returning 204 without a response body. Resolve names with accounts_list; a missing record returns 404.
+         */
         delete: operations["deleteAccount"];
         options?: never;
         head?: never;
@@ -48,13 +64,17 @@ export type paths = {
             query?: never;
             header?: never;
             path: {
+                /** @description Account name returned by accounts_list or account_get, passed verbatim; the path accepts 1–128 characters. Newly created local names use 1–64 characters, starting with a letter, followed by letters, digits, _, ., @ or -. */
                 account: string;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Reset an account password */
+        /**
+         * Reset an account password
+         * @description Synchronously sets a new local credential and forces a change unless mustChangePassword explicitly overrides it, returning 204 without credentials. Missing logins return 404, and OIDC identities cannot receive local passwords; inspect flags with account_get.
+         */
         post: operations["resetAccountPassword"];
         delete?: never;
         options?: never;
@@ -69,10 +89,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List API token metadata */
+        /**
+         * List API token metadata
+         * @description Returns paginated items containing IDs, owners, names, restrictions and usage/expiry timestamps, never bearer secrets or hashes. Use api_token_get with a returned ID; limit defaults to 100, accepts 1–500, and nextCursor continues the list.
+         */
         get: operations["listAPITokens"];
         put?: never;
-        /** Create an API token and return its secret once */
+        /**
+         * Create an API token and return its secret once
+         * @description Synchronously issues a credential for the authenticated owner and returns its metadata plus the bearer secret exactly once. Restrictions cannot exceed the issuer’s authority, and OAuth-authenticated callers receive 403; use api_token_get for subsequent metadata reads.
+         */
         post: operations["createAPIToken"];
         delete?: never;
         options?: never;
@@ -85,16 +111,26 @@ export type paths = {
             query?: never;
             header?: never;
             path: {
+                /** @description Opaque credential ID from api_tokens_list, api_token_get or api_token_create, passed verbatim as a 1–128 character string; not the display name or kk_-prefixed bearer secret. */
                 token: string;
             };
             cookie?: never;
         };
-        /** Read API token metadata */
+        /**
+         * Read API token metadata
+         * @description Returns the selected credential’s owner, name, restrictions and creation, usage and expiry timestamps, never its bearer secret or hash. Use api_tokens_list for IDs; missing records return 404 and other owners require global read permission.
+         */
         get: operations["getAPIToken"];
-        /** Replace API token name and expiry */
+        /**
+         * Replace API token name and expiry
+         * @description Synchronously changes the display label and expiration and returns updated owner, restrictions and timestamps without a bearer secret. Missing records return 404; OAuth callers and restricted issuers attempting to update wider authority receive 403.
+         */
         put: operations["replaceAPIToken"];
         post?: never;
-        /** Revoke an API token */
+        /**
+         * Revoke an API token
+         * @description Synchronously removes the selected credential and returns 204 without a response body, preventing subsequent authentication with it. Use api_tokens_list for IDs; missing records return 404 and other owners require global delete permission.
+         */
         delete: operations["deleteAPIToken"];
         options?: never;
         head?: never;
@@ -268,10 +304,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List S3 storage configuration without credentials */
+        /**
+         * List S3 storage configuration without credentials
+         * @description Returns permission-filtered, paginated items with endpoint, bucket, region, namespace, credential-configured flag and latest verification, never access keys. Use backup_storage_get with a returned name; limit defaults to 100, accepts 1–500, and nextCursor continues the list.
+         */
         get: operations["listBackupStorages"];
         put?: never;
-        /** Create an S3-compatible backup storage */
+        /**
+         * Create an S3-compatible backup storage
+         * @description Synchronously registers an S3 destination and returns endpoint, bucket, region, namespace and credential-configured status, never access keys. Duplicate names return 409; use backup_storage_verify to check remote access after creation.
+         */
         post: operations["createBackupStorage"];
         delete?: never;
         options?: never;
@@ -287,18 +329,25 @@ export type paths = {
             };
             header?: never;
             path: {
+                /** @description Destination name returned by backup_storages_list or backup_storage_get in the selected namespace, passed verbatim as a 1–128 character string. New names use 2–63 lowercase letters, digits or hyphens, starting with a letter. */
                 storage: string;
             };
             cookie?: never;
         };
-        /** Read backup storage configuration */
+        /**
+         * Read backup storage configuration
+         * @description Returns the selected destination’s endpoint, bucket, region, prefix, credential-configured flag and latest verification without access keys. Resolve names with backup_storages_list in the selected namespace; a missing record returns 404.
+         */
         get: operations["getBackupStorage"];
-        /** Replace backup storage configuration */
+        /**
+         * Replace backup storage configuration
+         * @description Synchronously replaces destination settings and returns the resulting public configuration without access keys, retaining omitted credential fields. Missing records return 404; use backup_storage_verify to check access after changing the endpoint or bucket.
+         */
         put: operations["replaceBackupStorage"];
         post?: never;
         /**
          * Delete an unused backup storage
-         * @description Returns 409 while referenced by active clusters, backups or restores.
+         * @description Deletes the storage record and its stored credentials, not the bucket or its objects. Returns 409 while the control-plane backup policy, a cluster's backup settings or schedules, or a retained backup still reference it; find names with backup_storages_list.
          */
         delete: operations["deleteBackupStorage"];
         options?: never;
@@ -314,13 +363,17 @@ export type paths = {
             };
             header?: never;
             path: {
+                /** @description Destination name returned by backup_storages_list or backup_storage_get in the selected namespace, passed verbatim as a 1–128 character string. New names use 2–63 lowercase letters, digits or hyphens, starting with a letter. */
                 storage: string;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Verify S3 read/write/delete access */
+        /**
+         * Verify S3 read/write/delete access
+         * @description Synchronously probes the configured S3 destination using stored credentials and persists the outcome, returning verified, checkedAt, message and optional failureReason. Remote access failures appear in the result; missing registrations return 404, and backup_storage_get exposes the saved verification.
+         */
         post: operations["verifyBackupStorage"];
         delete?: never;
         options?: never;
@@ -368,7 +421,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Read cluster desired and observed state */
+        /**
+         * Read cluster desired and observed state
+         * @description Returns namespace, name, generation, spec, status and timestamps, with operationId when associated with durable work. Use a name from clusters_list; an unknown cluster returns 404, while cluster_status_get provides only its observed status.
+         */
         get: operations["getCluster"];
         /**
          * Replace the full cluster desired spec
@@ -405,7 +461,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Rebalance shards across distributed PostgreSQL worker groups */
+        /**
+         * Rebalance shards across distributed PostgreSQL worker groups
+         * @description Queues Citus shard redistribution and returns an operation containing its identifier and status; use wait to observe completion. Requires the postgres provider and distributed topology; other topologies return 409.
+         */
         post: operations["rebalancePostgres"];
         delete?: never;
         options?: never;
@@ -426,10 +485,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List backup drills */
+        /**
+         * List backup drills
+         * @description Returns paginated reports for the source cluster, including IDs, selected backups, phases, target clusters, verification and cleanup results. Limit defaults to 100 and accepts 1–500; follow nextCursor or inspect one report with backup_drill_get, and missing sources return 404.
+         */
         get: operations["listBackupDrills"];
         put?: never;
-        /** Create backup drill */
+        /**
+         * Create backup drill
+         * @description Queues asynchronous isolated restore verification and returns a Pending report with ID and selected backup; track progress using backup_drill_get. Deleting sources, unsupported engines or absent eligible successful backups return 409; omitted selection chooses the newest eligible backup.
+         */
         post: operations["createBackupDrill"];
         delete?: never;
         options?: never;
@@ -447,11 +512,15 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Opaque report ID returned by backup_drills_list or backup_drill_create, passed verbatim as a 1–128 character string; it must belong to the source cluster in the path. */
                 drill: string;
             };
             cookie?: never;
         };
-        /** Get backup drill */
+        /**
+         * Get backup drill
+         * @description Returns the selected report’s source, backup, phase, target cluster, verification results and cleanup state for asynchronous restore testing. Resolve IDs with backup_drills_list; missing reports or reports belonging to another source cluster return 404.
+         */
         get: operations["getBackupDrill"];
         put?: never;
         post?: never;
@@ -480,7 +549,10 @@ export type paths = {
          */
         get: operations["listBackups"];
         put?: never;
-        /** Queue an on-demand backup */
+        /**
+         * Queue an on-demand backup
+         * @description Returns an accepted recovery record containing name, storage, type, phase and operationId; use wait or backup_get to observe completion. A cluster that is not formed and active, or has incompatible pending changes, returns 409.
+         */
         post: operations["createBackup"];
         delete?: never;
         options?: never;
@@ -496,6 +568,7 @@ export type paths = {
             };
             header?: never;
             path: {
+                /** @description Exact backup name from backups_list or backup_create, a nonempty string of at most 128 characters; use the recorded name, not an object-storage path or provider-native identifier. */
                 backup: string;
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -532,9 +605,15 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Read sharded-cluster balancer status */
+        /**
+         * Read sharded-cluster balancer status
+         * @description Returns enabled, running and mode observations from the database engine for supported sharded deployments. Use cluster_balancer_replace to change the enabled flag rather than modifying the returned status fields.
+         */
         get: operations["getClusterBalancer"];
-        /** Enable or disable sharded-cluster balancing */
+        /**
+         * Enable or disable sharded-cluster balancing
+         * @description Applies the requested enabled flag through the database engine and returns refreshed enabled, running and mode observations. This is a synchronous response without an operation id; cluster_balancer_get reads the current values.
+         */
         put: operations["replaceClusterBalancer"];
         post?: never;
         delete?: never;
@@ -556,7 +635,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Reveal connection credentials with separate authorization */
+        /**
+         * Reveal connection credentials with separate authorization
+         * @description Returns connection addresses, per-user authentication material and the CA certificate when available, with caching disabled. This requires cluster-credentials read permission; ordinary cluster_get access does not authorize disclosure of passwords or authenticated URIs.
+         */
         get: operations["getClusterConnection"];
         put?: never;
         post?: never;
@@ -581,11 +663,14 @@ export type paths = {
         };
         /**
          * List custom database roles
-         * @description Role administration uses the database-users RBAC resource.
+         * @description Returns custom roles with their name, database, inherited roles and privileges; pass database and name to database_role_get. Pagination defaults to 100 entries (limit 1–500); pass nextCursor as cursor until absent. Role administration uses the database-users RBAC resource.
          */
         get: operations["listDatabaseRoles"];
         put?: never;
-        /** Create a custom database role */
+        /**
+         * Create a custom database role
+         * @description Applies a named authorization definition through the provider and returns its name, database, inherited roles and privileges. This response has no durable operation id; database_roles_list and database_role_get inspect the resulting definition.
+         */
         post: operations["createDatabaseRole"];
         delete?: never;
         options?: never;
@@ -603,14 +688,22 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact database field from database_roles_list or database_role_get, a nonempty string of at most 128 characters that scopes the custom role. */
                 database: string;
+                /** @description Exact name field from database_roles_list or database_role_get, a nonempty string of at most 128 characters within the selected database. */
                 role: string;
             };
             cookie?: never;
         };
-        /** Read a custom database role */
+        /**
+         * Read a custom database role
+         * @description Returns the selected authorization definition, including name, database, inherited roles and resource-action grants. Use the database and name fields from database_roles_list to identify the definition; provider lookup failures are returned as errors.
+         */
         get: operations["getDatabaseRole"];
-        /** Replace role privileges and inherited roles */
+        /**
+         * Replace role privileges and inherited roles
+         * @description Applies complete replacement arrays of inherited identities and resource-action grants through the provider, returning the resulting authorization definition. The database and name remain fixed by the path; no durable operation id is returned.
+         */
         put: operations["replaceDatabaseRole"];
         post?: never;
         /**
@@ -636,10 +729,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List application database users without passwords */
+        /**
+         * List application database users without passwords
+         * @description Returns items containing username, database and assigned roles without credentials; use these identifiers with database_user_get. Pagination defaults to 100 entries (limit 1–500); pass nextCursor as cursor until absent, and unsupported engines return 409.
+         */
         get: operations["listDatabaseUsers"];
         put?: never;
-        /** Create an application database user */
+        /**
+         * Create an application database user
+         * @description Creates the account synchronously and returns username, database and roles, plus generatedPassword when the password was omitted. Store generated credentials securely; database_user_get cannot retrieve them, and unsupported engines return 409.
+         */
         post: operations["createDatabaseUser"];
         delete?: never;
         options?: never;
@@ -657,17 +756,28 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Database-name string of 1–128 characters from database_users_list; select the database paired with the target username. */
                 database: string;
+                /** @description Account-name string of 1–128 characters from database_users_list; identify it together with its database string. */
                 username: string;
             };
             cookie?: never;
         };
-        /** Read an application database user */
+        /**
+         * Read an application database user
+         * @description Returns username, database and assigned role references without credentials. Use the database/username pair from database_users_list; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["getDatabaseUser"];
-        /** Replace application user roles and optionally password */
+        /**
+         * Replace application user roles and optionally password
+         * @description Replaces assigned roles synchronously and optionally changes the password, returning username, database and roles without credentials. Obtain the identifier pair from database_users_list and inspect with database_user_get; unsupported engines return 409.
+         */
         put: operations["replaceDatabaseUser"];
         post?: never;
-        /** Delete an application database user */
+        /**
+         * Delete an application database user
+         * @description Deletes the account selected by its database and username synchronously, returning HTTP 204 without content. Obtain both strings from database_users_list; unsupported engines return 409 and missing clusters return 404.
+         */
         delete: operations["deleteDatabaseUser"];
         options?: never;
         head?: never;
@@ -687,10 +797,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List Elasticsearch api-keys */
+        /**
+         * List Elasticsearch api-keys
+         * @description Returns items with id, name, creation, expiration, invalidated and username, never credential material; only keys created through Karakoram are visible. Use limit (default 100, maximum 500) and cursor with nextCursor; select id for elasticsearch_api_key_invalidate.
+         */
         get: operations["listElasticAPIKeys"];
         put?: never;
-        /** Create Elasticsearch api-keys */
+        /**
+         * Create Elasticsearch api-keys
+         * @description Returns id, name, apiKey, encoded and optional expiration; store the one-time credential securely. Explicit scoped permissions are required, and elasticsearch_api_keys_list exposes metadata only; document or field restrictions require appropriate Elasticsearch licensing.
+         */
         post: operations["createElasticAPIKey"];
         delete?: never;
         options?: never;
@@ -708,6 +824,7 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Opaque Elasticsearch API key identifier string from id in elasticsearch_api_keys_list or elasticsearch_api_key_create; do not supply the secret apiKey or encoded credential. */
                 id: string;
             };
             cookie?: never;
@@ -715,7 +832,10 @@ export type paths = {
         get?: never;
         put?: never;
         post?: never;
-        /** Invalidate Elasticsearch api-keys */
+        /**
+         * Invalidate Elasticsearch api-keys
+         * @description Revokes a key created through Karakoram and returns no response body; already invalidated entries succeed without another change. Select id from elasticsearch_api_keys_list; unknown or unmanaged identifiers return 404.
+         */
         delete: operations["invalidateElasticAPIKey"];
         options?: never;
         head?: never;
@@ -735,10 +855,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List Elasticsearch roles */
+        /**
+         * List Elasticsearch roles
+         * @description Returns items with name, cluster, indices, applications and reserved flags; managed identities are hidden while built-in definitions remain readable. Use limit (default 100, maximum 500) and cursor with nextCursor; select name for elasticsearch_role_get.
+         */
         get: operations["listElasticRoles"];
         put?: never;
-        /** Create Elasticsearch roles */
+        /**
+         * Create Elasticsearch roles
+         * @description Returns the new permission definition containing name, cluster, indices and applications. Existing names return 409; built-in and managed identities are immutable; inspect available definitions with elasticsearch_roles_list.
+         */
         post: operations["createElasticRole"];
         delete?: never;
         options?: never;
@@ -756,16 +882,26 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact role name string returned as name by elasticsearch_roles_list; built-in roles are readable but cannot be changed or deleted. */
                 role: string;
             };
             cookie?: never;
         };
-        /** Get Elasticsearch roles */
+        /**
+         * Get Elasticsearch roles
+         * @description Returns name, cluster, indices, applications and reserved status for a definition from elasticsearch_roles_list. Built-in permissions are readable; an absent or hidden managed identity returns 404.
+         */
         get: operations["getElasticRole"];
-        /** Update Elasticsearch roles */
+        /**
+         * Update Elasticsearch roles
+         * @description Returns the replacement permission definition; body name must match the path identifier from elasticsearch_roles_list. Absent identities return 404; built-in and managed definitions cannot be changed.
+         */
         put: operations["updateElasticRole"];
         post?: never;
-        /** Delete Elasticsearch roles */
+        /**
+         * Delete Elasticsearch roles
+         * @description Removes the native permission definition selected from elasticsearch_roles_list and returns no response body. An absent identity returns 404; built-in and managed definitions cannot be removed.
+         */
         delete: operations["deleteElasticRole"];
         options?: never;
         head?: never;
@@ -785,10 +921,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List Elasticsearch users */
+        /**
+         * List Elasticsearch users
+         * @description Returns items containing username, roles, enabled and optional fullName and email, without passwords; reserved and managed identities are hidden. Use limit (default 100, maximum 500) and cursor with nextCursor; select username for elasticsearch_user_get.
+         */
         get: operations["listElasticUsers"];
         put?: never;
-        /** Create Elasticsearch users */
+        /**
+         * Create Elasticsearch users
+         * @description Returns username, roles, enabled and optional profile fields without the credential after creating a native realm identity. Existing identities return 409; choose assigned permissions from elasticsearch_roles_list.
+         */
         post: operations["createElasticUser"];
         delete?: never;
         options?: never;
@@ -806,16 +948,26 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact native realm username string returned as username by elasticsearch_users_list; reserved and Karakoram-managed identities are unavailable. */
                 username: string;
             };
             cookie?: never;
         };
-        /** Get Elasticsearch users */
+        /**
+         * Get Elasticsearch users
+         * @description Returns username, roles, enabled and optional fullName and email, never the credential. Select an identity through elasticsearch_users_list; an absent native account returns 404.
+         */
         get: operations["getElasticUser"];
-        /** Update Elasticsearch users */
+        /**
+         * Update Elasticsearch users
+         * @description Returns the replacement account attributes without the credential; username must match the path value from elasticsearch_users_list. An absent identity returns 404, and assigned roles must already exist.
+         */
         put: operations["updateElasticUser"];
         post?: never;
-        /** Delete Elasticsearch users */
+        /**
+         * Delete Elasticsearch users
+         * @description Removes the native realm account selected from elasticsearch_users_list and returns no response body. An absent identity returns 404; reserved and managed accounts cannot be removed.
+         */
         delete: operations["deleteElasticUser"];
         options?: never;
         head?: never;
@@ -835,7 +987,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Read member health, role and replica lag */
+        /**
+         * Read member health, role and replica lag
+         * @description Returns an unpaginated items array of observed database and service components, including names, set, state, health and available resource measurements. Pass a returned name to cluster_member_get for the corresponding individual record.
+         */
         get: operations["listClusterMembers"];
         put?: never;
         post?: never;
@@ -855,11 +1010,15 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact member name returned by cluster_members_list, a nonempty string of at most 128 characters; this is a name, not an array index. */
                 member: string;
             };
             cookie?: never;
         };
-        /** Read one member status */
+        /**
+         * Read one member status
+         * @description Returns the named component's set, role, state, health and available version, lag, resource and agent observations. Select its name from cluster_members_list; an unknown component returns 404.
+         */
         get: operations["getClusterMember"];
         put?: never;
         post?: never;
@@ -879,11 +1038,15 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Member-name string of 1–128 characters from cluster_members_list for the selected cluster. */
                 member: string;
             };
             cookie?: never;
         };
-        /** Read logs for a member process */
+        /**
+         * Read logs for a member process
+         * @description Returns member and timestamped lines containing process and message, bounded by lines rather than paginated. Obtain member names from cluster_members_list; cursor and since are currently not applied, and unsupported logging returns 409.
+         */
         get: operations["getMemberLogs"];
         put?: never;
         post?: never;
@@ -903,6 +1066,7 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Member name from cluster_get status.members[].name, passed verbatim as a 1–128 character string; not a runtime ID or host placement group. */
                 member: string;
             };
             cookie?: never;
@@ -930,13 +1094,17 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact member name, a nonempty string of at most 128 characters, returned by cluster_members_list or cluster_member_get; do not use an array index. */
                 member: string;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Replace a member with a new monotonic index */
+        /**
+         * Replace a member with a new monotonic index
+         * @description Queues replacement of an existing database member and returns a durable operation id for wait. Unknown members return 404, and provider replacement safety checks can reject the request with 409.
+         */
         post: operations["replaceClusterMember"];
         delete?: never;
         options?: never;
@@ -957,7 +1125,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Read aggregated per-member metric time series */
+        /**
+         * Read aggregated per-member metric time series
+         * @description Returns start, end, step and per-member series containing name, unit, labels and timestamp/value points for the requested time window. Select the cluster through clusters_list or cluster_get; missing clusters return 404 and unavailable monitoring returns 503.
+         */
         get: operations["getClusterMetrics"];
         put?: never;
         post?: never;
@@ -980,10 +1151,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List MySQL application databases */
+        /**
+         * List MySQL application databases
+         * @description Returns an unpaginated items array of application schemas with name, characterSet and collation. Reserved schemas are excluded; pass a returned name to mysql_database_get.
+         */
         get: operations["listMySQLDatabases"];
         put?: never;
-        /** Create a MySQL application database */
+        /**
+         * Create a MySQL application database
+         * @description Creates an application schema and returns name, characterSet and collation after completion. Reserved identifiers are rejected; inspect existing schemas with mysql_databases_list.
+         */
         post: operations["createMySQLDatabase"];
         delete?: never;
         options?: never;
@@ -1001,15 +1178,22 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application database name matching [A-Za-z_][A-Za-z0-9_$]{0,63}; use name from mysql_databases_list. */
                 database: string;
             };
             cookie?: never;
         };
-        /** Read a MySQL application database */
+        /**
+         * Read a MySQL application database
+         * @description Returns name, characterSet and collation for the selected application schema. Obtain its identifier from mysql_databases_list; reserved schemas are rejected.
+         */
         get: operations["getMySQLDatabase"];
         put?: never;
         post?: never;
-        /** Delete a MySQL application database */
+        /**
+         * Delete a MySQL application database
+         * @description Drops the application schema and returns no response body after completion. Nonempty schemas require force=true or return 409; obtain the identifier from mysql_databases_list.
+         */
         delete: operations["deleteMySQLDatabase"];
         options?: never;
         head?: never;
@@ -1035,9 +1219,15 @@ export type paths = {
          */
         get: operations["listMySQLGrants"];
         put?: never;
-        /** Grant bounded MySQL database privileges */
+        /**
+         * Grant bounded MySQL database privileges
+         * @description Applies the requested bounded privileges to an application account on one schema and returns no response body. Inspect resulting permissions with mysql_grants_list; reserved identities are rejected.
+         */
         post: operations["grantMySQLPrivileges"];
-        /** Revoke MySQL database privileges */
+        /**
+         * Revoke MySQL database privileges
+         * @description Removes the requested permissions from an application account on one schema and returns no response body. Inspect remaining permissions with mysql_grants_list; reserved identities are rejected.
+         */
         delete: operations["revokeMySQLPrivileges"];
         options?: never;
         head?: never;
@@ -1083,10 +1273,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List MySQL application users */
+        /**
+         * List MySQL application users
+         * @description Returns an unpaginated items array containing name, host, connection limit, lock state, password retention and proxy routability, without passwords. Reserved identities are hidden; pass a returned name to mysql_user_get.
+         */
         get: operations["listMySQLUsers"];
         put?: never;
-        /** Create a MySQL application user */
+        /**
+         * Create a MySQL application user
+         * @description Creates an application account at host % and returns its attributes, plus generatedPassword when no password was supplied. Reserved names are rejected; inspect accounts with mysql_users_list.
+         */
         post: operations["createMySQLUser"];
         delete?: never;
         options?: never;
@@ -1104,19 +1300,29 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application account name matching [A-Za-z_][A-Za-z0-9_]{0,31}, without a host suffix; use name from mysql_users_list. */
                 user: string;
             };
             cookie?: never;
         };
-        /** Read a MySQL application user */
+        /**
+         * Read a MySQL application user
+         * @description Returns account attributes including host, maxUserConnections, locked, passwordRetained and routableThroughProxy, never password material. Select name from mysql_users_list; an absent account returns 404.
+         */
         get: operations["getMySQLUser"];
         put?: never;
         post?: never;
-        /** Delete a MySQL application user */
+        /**
+         * Delete a MySQL application user
+         * @description Removes the application account and returns no response body on success. Select its name using mysql_users_list; reserved identities cannot be removed.
+         */
         delete: operations["deleteMySQLUser"];
         options?: never;
         head?: never;
-        /** Update selected MySQL user attributes */
+        /**
+         * Update selected MySQL user attributes
+         * @description Changes only supplied connection-limit and lock settings, then returns the refreshed account attributes without password material. Select the account using mysql_users_list; reserved identities are rejected.
+         */
         patch: operations["patchMySQLUser"];
         trace?: never;
     };
@@ -1130,13 +1336,17 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application account name matching [A-Za-z_][A-Za-z0-9_]{0,31}, without a host suffix; use name from mysql_users_list. */
                 user: string;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Rotate a MySQL user password, optionally retaining the current password */
+        /**
+         * Rotate a MySQL user password, optionally retaining the current password
+         * @description Returns generatedPassword after replacing the account credential, optionally preserving the previous credential for migration. Select the account through mysql_users_list; mysql_user_old_password_discard removes a retained credential.
+         */
         post: operations["rotateMySQLUserPassword"];
         delete?: never;
         options?: never;
@@ -1154,13 +1364,17 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application account name matching [A-Za-z_][A-Za-z0-9_]{0,31}, without a host suffix; use name from mysql_users_list. */
                 user: string;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Discard a MySQL user's retained password */
+        /**
+         * Discard a MySQL user's retained password
+         * @description Removes the secondary credential retained during a previous rotation and returns no response body. Select the account through mysql_users_list; its current credential remains the active password.
+         */
         post: operations["discardMySQLUserOldPassword"];
         delete?: never;
         options?: never;
@@ -1208,13 +1422,14 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Community account name matching [A-Za-z][A-Za-z0-9_.-]{0,63}; use name from neo4j_users_list. The managed neo4j administrator is reserved. */
                 user: string;
             };
             cookie?: never;
         };
         /**
          * Read a Neo4j Community user
-         * @description Every Community user has full administrative privileges.
+         * @description Returns the user's name and passwordChangeRequired flag, never a password. Every Community user has full administrative privileges. Use a name from neo4j_users_list; an unknown user returns 404 and reserved names such as neo4j are rejected.
          */
         get: operations["getNeo4jUser"];
         put?: never;
@@ -1239,6 +1454,7 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Community account name matching [A-Za-z][A-Za-z0-9_.-]{0,63}; use name from neo4j_users_list. The managed neo4j administrator is reserved. */
                 user: string;
             };
             cookie?: never;
@@ -1269,10 +1485,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List managed database connections */
+        /**
+         * List managed database connections
+         * @description Returns an unpaginated items array containing targetCluster, targetProvider, mountPath, phase, roles and creation time for each managed integration. Pass a returned name to openbao_database_connection_get for its individual record.
+         */
         get: operations["listOpenBaoDatabaseConnections"];
         put?: never;
-        /** Create a managed database connection */
+        /**
+         * Create a managed database connection
+         * @description Configures an integration with another PostgreSQL, MongoDB replica-set or RabbitMQ cluster in the same namespace and returns its target, mount, phase and roles. Requires database-users create permission on the target; a conflicting existing definition returns 409.
+         */
         post: operations["createOpenBaoDatabaseConnection"];
         delete?: never;
         options?: never;
@@ -1290,15 +1512,22 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact integration name from openbao_database_connections_list; names assigned at creation match [a-z][a-z0-9-]{0,30}. */
                 connection: string;
             };
             cookie?: never;
         };
-        /** getOpenBaoDatabaseConnection */
+        /**
+         * Read a managed database connection
+         * @description Returns targetCluster, targetProvider, mountPath, phase, roles and creation time for the selected integration without revealing its stored administrator credential. Obtain its name from openbao_database_connections_list; an unknown name returns 404.
+         */
         get: operations["getOpenBaoDatabaseConnection"];
         put?: never;
         post?: never;
-        /** Delete a managed database connection */
+        /**
+         * Delete a managed database connection
+         * @description Revokes issued leases and removes the managed integration and its target identity, returning 204 without an operation id. Requires database-users delete permission on the target; an unknown name returns 404.
+         */
         delete: operations["deleteOpenBaoDatabaseConnection"];
         options?: never;
         head?: never;
@@ -1320,7 +1549,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Reveal OpenBao initialization material */
+        /**
+         * Reveal OpenBao initialization material
+         * @description Returns seal type, threshold, recovery-share metadata, shares and the initial root token with caching disabled. The confirmation must match the cluster name, and this disclosure requires the separate openbao-unseal-keys reveal permission.
+         */
         post: operations["revealOpenBaoUnsealKeys"];
         delete?: never;
         options?: never;
@@ -1341,7 +1573,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List cluster operations */
+        /**
+         * List cluster operations
+         * @description Returns durable execution records containing id, type, phase, target and available progress, timing or error details. Pagination uses limit (default 100, maximum 500) and cursor from nextCursor; operation_get reads individual records and wait tracks completion.
+         */
         get: operations["listClusterOperations"];
         put?: never;
         post?: never;
@@ -1390,7 +1625,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Read detected member co-location and placement warnings */
+        /**
+         * Read detected member co-location and placement warnings
+         * @description Returns observed placement groups, a warning, guaranteedAntiAffinity and the observation source when available. Distinct hosts are guaranteed only when the backend supports authoritative placement and all observed groups are distinct.
+         */
         get: operations["getClusterPlacement"];
         put?: never;
         post?: never;
@@ -1413,7 +1651,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List inbound PostgreSQL consumer bindings without credentials */
+        /**
+         * List inbound PostgreSQL consumer bindings without credentials
+         * @description Returns up to the first 100 items containing id, consumer identity, databases, extensions, role, credentialGeneration and state, without credentials. This operation does not expose limit or cursor parameters. Pass an id to postgres_binding_rotate.
+         */
         get: operations["listPostgresBindings"];
         put?: never;
         post?: never;
@@ -1431,6 +1672,7 @@ export type paths = {
             };
             header?: never;
             path: {
+                /** @description Opaque binding identifier string from id in postgres_bindings_list; it must belong to the selected source cluster. */
                 binding: string;
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -1439,7 +1681,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Rotate binding credentials and refresh the consumer */
+        /**
+         * Rotate binding credentials and refresh the consumer
+         * @description Returns updated binding metadata including credentialGeneration and state, without exposing the replacement credential. Obtain id from postgres_bindings_list; a binding belonging to another source cluster returns 404.
+         */
         post: operations["rotatePostgresBinding"];
         delete?: never;
         options?: never;
@@ -1460,10 +1705,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List PostgreSQL application databases */
+        /**
+         * List PostgreSQL application databases
+         * @description Returns an unpaginated items array containing name, owner, encoding, locale, allowConnections and extensions. Select a returned name for postgres_database_get; reserved databases are excluded.
+         */
         get: operations["listPostgresDatabases"];
         put?: never;
-        /** Create a database from template0 with immutable encoding and locale */
+        /**
+         * Create a database from template0 with immutable encoding and locale
+         * @description Returns name, owner, encoding, locale, allowConnections and extensions after creating the application database. Select the owner through postgres_roles_list; reserved identifiers are rejected.
+         */
         post: operations["createPostgresDatabase"];
         delete?: never;
         options?: never;
@@ -1481,15 +1732,22 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact application database name, 1–63 UTF-8 bytes without control characters; use name from postgres_databases_list. */
                 database: string;
             };
             cookie?: never;
         };
-        /** Read a PostgreSQL application database */
+        /**
+         * Read a PostgreSQL application database
+         * @description Returns name, owner, encoding, locale, allowConnections and installed extensions for the selected application database. Obtain its identifier through postgres_databases_list; reserved identifiers are rejected.
+         */
         get: operations["getPostgresDatabase"];
         put?: never;
         post?: never;
-        /** Delete a PostgreSQL application database */
+        /**
+         * Delete a PostgreSQL application database
+         * @description Drops the entire application database selected from postgres_databases_list, including all schemas and their contents, and returns no response body. Reserved identifiers return 409; force requests PostgreSQL termination of connections blocking removal.
+         */
         delete: operations["deletePostgresDatabase"];
         options?: never;
         head?: never;
@@ -1509,12 +1767,21 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List explicit database and schema grants in a database */
+        /**
+         * List explicit database and schema grants in a database
+         * @description Returns an unpaginated items array containing role, database, optional schema and privileges for the selected target. Reserved identities are excluded; use postgres_roles_list to inspect the grantees.
+         */
         get: operations["listPostgresGrants"];
         put?: never;
-        /** Grant whitelisted database or schema privileges */
+        /**
+         * Grant whitelisted database or schema privileges
+         * @description Applies explicit permissions to an application identity and returns no response body. Inspect results with postgres_grants_list; unsupported permissions and writes to protected system schemas are rejected.
+         */
         post: operations["grantPostgresPrivileges"];
-        /** Revoke whitelisted database or schema privileges */
+        /**
+         * Revoke whitelisted database or schema privileges
+         * @description Removes explicit permissions from an application identity and returns no response body. Inspect remaining entries with postgres_grants_list; unsupported target permissions and reserved identities are rejected.
+         */
         delete: operations["revokePostgresPrivileges"];
         options?: never;
         head?: never;
@@ -1534,10 +1801,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List application PostgreSQL roles */
+        /**
+         * List application PostgreSQL roles
+         * @description Returns an unpaginated items array with name, login, administrative flags, connectionLimit and memberOf, without passwords. Reserved engine identities are hidden; select a name for postgres_role_get.
+         */
         get: operations["listPostgresRoles"];
         put?: never;
-        /** Create a PostgreSQL role */
+        /**
+         * Create a PostgreSQL role
+         * @description Returns role attributes and generatedPassword when a login credential was generated. Privileged flags or memberships require clusters/update permission; poll cluster_status_get until CredentialsPublished is True before using ProxySQL credentials.
+         */
         post: operations["createPostgresRole"];
         delete?: never;
         options?: never;
@@ -1555,20 +1828,33 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact application role name, 1–63 UTF-8 bytes without control characters; use name from postgres_roles_list. */
                 role: string;
             };
             cookie?: never;
         };
-        /** Read a PostgreSQL application role */
+        /**
+         * Read a PostgreSQL application role
+         * @description Returns login capability, administrative flags, connectionLimit, memberOf and optional validUntil, never the credential. Obtain name from postgres_roles_list; an absent application identity returns 404.
+         */
         get: operations["getPostgresRole"];
-        /** Replace PostgreSQL role attributes and optionally its password */
+        /**
+         * Replace PostgreSQL role attributes and optionally its password
+         * @description Replaces attributes and returns the resulting role; body name must match the path identifier from postgres_roles_list. Privileged changes require clusters/update permission; poll cluster_status_get until CredentialsPublished is True before using changed ProxySQL credentials.
+         */
         put: operations["updatePostgresRole"];
         post?: never;
-        /** Delete a PostgreSQL application role */
+        /**
+         * Delete a PostgreSQL application role
+         * @description Removes the application identity selected from postgres_roles_list and returns no response body; reserved identities cannot be removed. ProxySQL removal is asynchronous: poll cluster_status_get until CredentialsPublished is True; existing sessions are not terminated by this barrier.
+         */
         delete: operations["deletePostgresRole"];
         options?: never;
         head?: never;
-        /** Update selected PostgreSQL role attributes */
+        /**
+         * Update selected PostgreSQL role attributes
+         * @description Preserves omitted attributes and returns the resulting role selected from postgres_roles_list. Privileged changes require clusters/update permission; poll cluster_status_get until CredentialsPublished is True before using changed ProxySQL credentials.
+         */
         patch: operations["patchPostgresRole"];
         trace?: never;
     };
@@ -1582,13 +1868,17 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact application role name, 1–63 UTF-8 bytes without control characters; use name from postgres_roles_list. */
                 role: string;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Generate and rotate a login role password */
+        /**
+         * Generate and rotate a login role password
+         * @description Returns generatedPassword after changing the login credential for an identity from postgres_roles_list. Privileged identities require clusters/update permission; poll cluster_status_get until CredentialsPublished is True before using the new ProxySQL credential.
+         */
         post: operations["rotatePostgresRolePassword"];
         delete?: never;
         options?: never;
@@ -1609,10 +1899,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List RabbitMQ OperatorPolicy */
+        /**
+         * List RabbitMQ OperatorPolicy
+         * @description Returns an unpaginated items array containing vhost, name, pattern, applyTo, priority and definition. Use the returned vhost and name with rabbitmq_operator_policy_get; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["listRabbitMQOperatorPolicies"];
         put?: never;
-        /** Create RabbitMQ OperatorPolicy */
+        /**
+         * Create RabbitMQ OperatorPolicy
+         * @description Applies the supplied vhost, name, pattern, applyTo, priority and definition synchronously and returns the created resource with HTTP 201. Inspect existing vhost and name strings through rabbitmq_operator_policies_list; unsupported engines return 409 and missing clusters return 404.
+         */
         post: operations["createRabbitMQOperatorPolicy"];
         delete?: never;
         options?: never;
@@ -1630,18 +1926,28 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty policy-name string from rabbitmq_operator_policies_list; select it together with its vhost string. */
                 name: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
         };
-        /** Get RabbitMQ OperatorPolicy */
+        /**
+         * Get RabbitMQ OperatorPolicy
+         * @description Returns vhost, name, pattern, applyTo, priority and definition for the selected resource. Obtain the vhost and name strings from rabbitmq_operator_policies_list; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["getRabbitMQOperatorPolicy"];
-        /** Replace RabbitMQ OperatorPolicy */
+        /**
+         * Replace RabbitMQ OperatorPolicy
+         * @description Applies replacement vhost, name, pattern, applyTo, priority and definition synchronously and returns the submitted resource. Body identifiers must match the path; obtain vhost and name strings from rabbitmq_operator_policies_list, and inspect results with rabbitmq_operator_policy_get; unsupported engines return 409.
+         */
         put: operations["replaceRabbitMQOperatorPolicy"];
         post?: never;
-        /** Delete RabbitMQ OperatorPolicy */
+        /**
+         * Delete RabbitMQ OperatorPolicy
+         * @description Removes the selected resource synchronously and returns HTTP 204 without a response body. Obtain vhost and name strings from rabbitmq_operator_policies_list; unsupported engines return 409 and missing clusters return 404.
+         */
         delete: operations["deleteRabbitMQOperatorPolicy"];
         options?: never;
         head?: never;
@@ -1661,10 +1967,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List RabbitMQ Permission */
+        /**
+         * List RabbitMQ Permission
+         * @description Returns an unpaginated items array containing vhost, user and configure/write/read expressions. Use the returned vhost and user with rabbitmq_permission_get; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["listRabbitMQPermissions"];
         put?: never;
-        /** Create RabbitMQ Permission */
+        /**
+         * Create RabbitMQ Permission
+         * @description Applies the supplied vhost, user and configure/write/read expressions synchronously and returns the created resource with HTTP 201. Inspect existing vhost and user strings through rabbitmq_permissions_list; unsupported engines return 409 and missing clusters return 404.
+         */
         post: operations["createRabbitMQPermission"];
         delete?: never;
         options?: never;
@@ -1682,18 +1994,28 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
         };
-        /** Get RabbitMQ Permission */
+        /**
+         * Get RabbitMQ Permission
+         * @description Returns vhost, user and configure/write/read expressions for the selected resource. Obtain the vhost and user strings from rabbitmq_permissions_list; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["getRabbitMQPermission"];
-        /** Replace RabbitMQ Permission */
+        /**
+         * Replace RabbitMQ Permission
+         * @description Applies replacement vhost, user and configure/write/read expressions synchronously and returns the submitted resource. Body identifiers must match the path; obtain vhost and user strings from rabbitmq_permissions_list, and inspect results with rabbitmq_permission_get; unsupported engines return 409.
+         */
         put: operations["replaceRabbitMQPermission"];
         post?: never;
-        /** Delete RabbitMQ Permission */
+        /**
+         * Delete RabbitMQ Permission
+         * @description Removes the selected resource synchronously and returns HTTP 204 without a response body. Obtain vhost and user strings from rabbitmq_permissions_list; unsupported engines return 409 and missing clusters return 404.
+         */
         delete: operations["deleteRabbitMQPermission"];
         options?: never;
         head?: never;
@@ -1713,10 +2035,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List RabbitMQ Policy */
+        /**
+         * List RabbitMQ Policy
+         * @description Returns an unpaginated items array containing vhost, name, pattern, applyTo, priority and definition. Use the returned vhost and name with rabbitmq_policy_get; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["listRabbitMQPolicies"];
         put?: never;
-        /** Create RabbitMQ Policy */
+        /**
+         * Create RabbitMQ Policy
+         * @description Applies the supplied vhost, name, pattern, applyTo, priority and definition synchronously and returns the created resource with HTTP 201. Inspect existing vhost and name strings through rabbitmq_policies_list; unsupported engines return 409 and missing clusters return 404.
+         */
         post: operations["createRabbitMQPolicy"];
         delete?: never;
         options?: never;
@@ -1734,18 +2062,28 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty policy-name string from rabbitmq_policies_list; select it together with its vhost string. */
                 name: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
         };
-        /** Get RabbitMQ Policy */
+        /**
+         * Get RabbitMQ Policy
+         * @description Returns vhost, name, pattern, applyTo, priority and definition for the selected resource. Obtain the vhost and name strings from rabbitmq_policies_list; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["getRabbitMQPolicy"];
-        /** Replace RabbitMQ Policy */
+        /**
+         * Replace RabbitMQ Policy
+         * @description Applies replacement vhost, name, pattern, applyTo, priority and definition synchronously and returns the submitted resource. Body identifiers must match the path; obtain vhost and name strings from rabbitmq_policies_list, and inspect results with rabbitmq_policy_get; unsupported engines return 409.
+         */
         put: operations["replaceRabbitMQPolicy"];
         post?: never;
-        /** Delete RabbitMQ Policy */
+        /**
+         * Delete RabbitMQ Policy
+         * @description Removes the selected resource synchronously and returns HTTP 204 without a response body. Obtain vhost and name strings from rabbitmq_policies_list; unsupported engines return 409 and missing clusters return 404.
+         */
         delete: operations["deleteRabbitMQPolicy"];
         options?: never;
         head?: never;
@@ -1765,10 +2103,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List RabbitMQ TopicPermission */
+        /**
+         * List RabbitMQ TopicPermission
+         * @description Returns an unpaginated items array containing vhost, user, exchange and write/read expressions. Use the returned vhost and user with rabbitmq_topic_permission_get; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["listRabbitMQTopicPermissions"];
         put?: never;
-        /** Create RabbitMQ TopicPermission */
+        /**
+         * Create RabbitMQ TopicPermission
+         * @description Applies the supplied vhost, user, exchange and write/read expressions synchronously and returns the created resource with HTTP 201. Inspect existing vhost and user strings through rabbitmq_topic_permissions_list; unsupported engines return 409 and missing clusters return 404.
+         */
         post: operations["createRabbitMQTopicPermission"];
         delete?: never;
         options?: never;
@@ -1786,18 +2130,28 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
         };
-        /** Get RabbitMQ TopicPermission */
+        /**
+         * Get RabbitMQ TopicPermission
+         * @description Returns an unpaginated items array of exchange-specific write/read expressions for one virtual host and account. Obtain the vhost and user strings from rabbitmq_topic_permissions_list; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["getRabbitMQTopicPermission"];
-        /** Replace RabbitMQ TopicPermission */
+        /**
+         * Replace RabbitMQ TopicPermission
+         * @description Applies replacement vhost, user, exchange and write/read expressions synchronously and returns the submitted resource. Body identifiers must match the path; obtain vhost and user strings from rabbitmq_topic_permissions_list, and inspect results with rabbitmq_topic_permission_get; unsupported engines return 409.
+         */
         put: operations["replaceRabbitMQTopicPermission"];
         post?: never;
-        /** Delete RabbitMQ TopicPermission */
+        /**
+         * Delete RabbitMQ TopicPermission
+         * @description Removes topic permissions for the selected virtual host and account synchronously, returning HTTP 204 without content. Obtain vhost and user strings from rabbitmq_topic_permissions_list; unsupported engines return 409 and missing clusters return 404.
+         */
         delete: operations["deleteRabbitMQTopicPermission"];
         options?: never;
         head?: never;
@@ -1817,7 +2171,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List RabbitMQ User */
+        /**
+         * List RabbitMQ User
+         * @description Returns an unpaginated items array containing name and tags, without passwords. Use the returned name with rabbitmq_user_get; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["listRabbitMQUsers"];
         put?: never;
         /**
@@ -1841,11 +2198,15 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
             };
             cookie?: never;
         };
-        /** Get RabbitMQ User */
+        /**
+         * Get RabbitMQ User
+         * @description Returns the selected account name and assigned tags, never its password or password hash. Obtain the nonempty name string from rabbitmq_users_list; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["getRabbitMQUser"];
         /**
          * Replace RabbitMQ User
@@ -1853,7 +2214,10 @@ export type paths = {
          */
         put: operations["replaceRabbitMQUser"];
         post?: never;
-        /** Delete RabbitMQ User */
+        /**
+         * Delete RabbitMQ User
+         * @description Removes the selected resource synchronously and returns HTTP 204 without a response body. Obtain name strings from rabbitmq_users_list; unsupported engines return 409 and missing clusters return 404.
+         */
         delete: operations["deleteRabbitMQUser"];
         options?: never;
         head?: never;
@@ -1873,10 +2237,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List RabbitMQ Vhost */
+        /**
+         * List RabbitMQ Vhost
+         * @description Returns an unpaginated items array containing name, tags, defaultQueueType, description and limits. Use the returned name with rabbitmq_vhost_get; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["listRabbitMQVhosts"];
         put?: never;
-        /** Create RabbitMQ Vhost */
+        /**
+         * Create RabbitMQ Vhost
+         * @description Applies the supplied name, tags, defaultQueueType, description and limits synchronously and returns the created resource with HTTP 201. Inspect existing name strings through rabbitmq_vhosts_list; unsupported engines return 409 and missing clusters return 404.
+         */
         post: operations["createRabbitMQVhost"];
         delete?: never;
         options?: never;
@@ -1899,12 +2269,21 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Get RabbitMQ Vhost */
+        /**
+         * Get RabbitMQ Vhost
+         * @description Returns name, tags, defaultQueueType, description and limits for the selected resource. Obtain the name strings from rabbitmq_vhosts_list; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["getRabbitMQVhost"];
-        /** Replace RabbitMQ Vhost */
+        /**
+         * Replace RabbitMQ Vhost
+         * @description Applies replacement name, tags, defaultQueueType, description and limits synchronously and returns the submitted resource. Body identifiers must match the path; obtain name strings from rabbitmq_vhosts_list, and inspect results with rabbitmq_vhost_get; unsupported engines return 409.
+         */
         put: operations["replaceRabbitMQVhost"];
         post?: never;
-        /** Delete RabbitMQ Vhost */
+        /**
+         * Delete RabbitMQ Vhost
+         * @description Removes the selected resource synchronously and returns HTTP 204 without a response body. Obtain name strings from rabbitmq_vhosts_list; unsupported engines return 409 and missing clusters return 404.
+         */
         delete: operations["deleteRabbitMQVhost"];
         options?: never;
         head?: never;
@@ -1926,7 +2305,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Explicitly raise feature compatibility version */
+        /**
+         * Explicitly raise feature compatibility version
+         * @description Queues MongoDB compatibility promotion and returns a durable operation id for wait. The requested major version must match the deployed engine, and an unfinished binary rollout returns 409 before promotion is accepted.
+         */
         post: operations["raiseClusterFCV"];
         delete?: never;
         options?: never;
@@ -1949,7 +2331,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Start a quorum-safe rolling restart */
+        /**
+         * Start a quorum-safe rolling restart
+         * @description Queues a durable restart operation for the selected cluster and returns its id, phase and target. Use wait for completion rather than treating acceptance as evidence that all database members have restarted.
+         */
         post: operations["restartCluster"];
         delete?: never;
         options?: never;
@@ -1970,7 +2355,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List restore history */
+        /**
+         * List restore history
+         * @description Returns recovery records with name, source, phase, operationId and available timing or error details. Pagination uses limit (default 100, maximum 500) and cursor from nextCursor; pass a returned name to restore_get for individual progress.
+         */
         get: operations["listRestores"];
         put?: never;
         /**
@@ -1994,11 +2382,15 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact restore name from restores_list or restore_create, a nonempty string of at most 128 characters; this is the recovery-record name, not its operationId. */
                 restore: string;
             };
             cookie?: never;
         };
-        /** Read restore progress and result */
+        /**
+         * Read restore progress and result
+         * @description Returns the selected recovery record's source, phase, operationId and available start, completion or error details. Obtain its name from restores_list or restore_create; use wait with operationId to observe durable execution.
+         */
         get: operations["getRestore"];
         put?: never;
         post?: never;
@@ -2023,7 +2415,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Recreate runtimes on retained volumes */
+        /**
+         * Recreate runtimes on retained volumes
+         * @description Queues recovery of a suspended cluster's runtimes using retained volumes and returns the accepted cluster with operationId and generation. Use wait to observe completion; retained volume sizing must satisfy backend capabilities before resumption.
+         */
         post: operations["resumeCluster"];
         delete?: never;
         options?: never;
@@ -2096,7 +2491,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Read observed cluster status */
+        /**
+         * Read observed cluster status
+         * @description Returns phase, conditions, observedGeneration, members and available version, backup, placement and maintenance observations without secret credentials. Compare observedGeneration with generation from cluster_get to track convergence of accepted configuration.
+         */
         get: operations["getClusterStatus"];
         put?: never;
         post?: never;
@@ -2119,7 +2517,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Reveal Supabase endpoints and credentials */
+        /**
+         * Reveal Supabase endpoints and credentials
+         * @description Returns API and Studio URLs, anonymous and service-role keys, publishable and secret keys, dashboard login and JWT signing material. Requires cluster-credentials read permission and disables caching; ordinary cluster_get responses do not expose these values.
+         */
         get: operations["getSupabaseCredentials"];
         put?: never;
         post?: never;
@@ -2142,7 +2543,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List deployed edge function names */
+        /**
+         * List deployed edge function names
+         * @description Returns an unpaginated items array of stored deployment names sorted alphabetically, without their source contents. Pass a returned name to supabase_function_get to retrieve its relative file paths and text.
+         */
         get: operations["listSupabaseFunctions"];
         put?: never;
         post?: never;
@@ -2162,11 +2566,15 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact deployment name from supabase_functions_list; 1–63 lowercase letters, digits, underscores or hyphens, starting with a letter or digit (pattern [a-z0-9][a-z0-9_-]{0,62}). */
                 name: string;
             };
             cookie?: never;
         };
-        /** Read edge function source files */
+        /**
+         * Read edge function source files
+         * @description Returns an object mapping relative file paths to stored source text, with caching disabled. Select a deployment name from supabase_functions_list; an unknown deployment returns 404, and supabase_function_replace writes its replacement contents.
+         */
         get: operations["getSupabaseFunction"];
         /**
          * Deploy or replace an edge function
@@ -2174,7 +2582,10 @@ export type paths = {
          */
         put: operations["putSupabaseFunction"];
         post?: never;
-        /** Delete an edge function */
+        /**
+         * Delete an edge function
+         * @description Removes the stored source bundle, triggers reconciliation and returns 204 without a durable operation id. Select its deployment name from supabase_functions_list; an unknown deployment returns 404 rather than silently succeeding.
+         */
         delete: operations["deleteSupabaseFunction"];
         options?: never;
         head?: never;
@@ -2196,7 +2607,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Queue JWT signing secret and API key rotation */
+        /**
+         * Queue JWT signing secret and API key rotation
+         * @description Returns a durable operation id after accepting signing-material replacement; use wait to observe completion. Retrieve resulting authentication values through supabase_credentials_get, which requires separate permission to disclose sensitive connection material.
+         */
         post: operations["rotateSupabaseJWTSecret"];
         delete?: never;
         options?: never;
@@ -2218,7 +2632,10 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        /** Set the write-only SMTP password */
+        /**
+         * Set the write-only SMTP password
+         * @description Stores the outbound-mail credential encrypted, triggers reconciliation and returns 204 without echoing its value or a durable operation id. Values longer than 4096 bytes are rejected before storage.
+         */
         put: operations["setSupabaseSMTPPassword"];
         post?: never;
         delete?: never;
@@ -2240,7 +2657,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List system-user metadata without passwords */
+        /**
+         * List system-user metadata without passwords
+         * @description Returns an unpaginated items array containing identity names, usernames, assigned roles and lastRotatedAt when available. Select the name field for system_user_rotate; credential values are not included in this response.
+         */
         get: operations["listSystemUsers"];
         put?: never;
         post?: never;
@@ -2260,13 +2680,17 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact managed identity name from system_users_list, not a database role or arbitrary login; nonempty string, at most 128 characters, with supported identities varying by engine. */
                 user: string;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Rotate a generated system-user password */
+        /**
+         * Rotate a generated system-user password
+         * @description Queues credential rotation for the selected managed identity and returns a durable operation id for wait. Obtain supported identity names from system_users_list; acceptance does not mean database authentication has already changed.
+         */
         post: operations["rotateSystemUser"];
         delete?: never;
         options?: never;
@@ -2287,10 +2711,16 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List non-secret Temporal client certificate metadata */
+        /**
+         * List non-secret Temporal client certificate metadata
+         * @description Returns an unpaginated items array containing serial, subject, fingerprints, issuance and expiry times, and whether the issuing CA is current. PEM material is not returned; temporal_client_certificate_issue provides newly issued authentication material.
+         */
         get: operations["listTemporalClientCertificates"];
         put?: never;
-        /** Issue a Temporal client certificate and return its private key once */
+        /**
+         * Issue a Temporal client certificate and return its private key once
+         * @description Returns PEM certificate, private key, CA bundle, frontend address, server name and validity metadata with caching disabled. Save the response securely: only non-secret issuance metadata remains available through temporal_client_certificates_list.
+         */
         post: operations["issueTemporalClientCertificate"];
         delete?: never;
         options?: never;
@@ -2311,7 +2741,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List Temporal namespaces */
+        /**
+         * List Temporal namespaces
+         * @description Returns an unpaginated items array containing name, retention, state, description when available, and whether each entry is managed by configuration. Use a returned unmanaged name with temporal_namespace_delete; reserved entries cannot be removed.
+         */
         get: operations["listTemporalNamespaces"];
         put?: never;
         post?: never;
@@ -2331,6 +2764,7 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact nonempty namespace name from temporal_namespaces_list whose managed flag is false; default, temporal-system and names declared in engineOptions are protected. */
                 temporalNamespace: string;
             };
             cookie?: never;
@@ -2338,7 +2772,10 @@ export type paths = {
         get?: never;
         put?: never;
         post?: never;
-        /** Request asynchronous deletion of an unmanaged Temporal namespace */
+        /**
+         * Request asynchronous deletion of an unmanaged Temporal namespace
+         * @description Returns 202 after the frontend accepts removal, without a Karakoram operation id; inspect temporal_namespaces_list for subsequent state. Reserved names and entries declared in engineOptions return 409, while invalid names return 422.
+         */
         delete: operations["deleteTemporalNamespace"];
         options?: never;
         head?: never;
@@ -2359,7 +2796,10 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        /** Seal the write-only Temporal UI OIDC client secret */
+        /**
+         * Seal the write-only Temporal UI OIDC client secret
+         * @description Stores the credential encrypted for the next configuration roll, triggers reconciliation and returns 204 without echoing its value. Empty values or values exceeding 4096 bytes return 422; no durable operation id is returned.
+         */
         put: operations["setTemporalUIOIDCClientSecret"];
         post?: never;
         delete?: never;
@@ -2383,7 +2823,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Upgrade cluster agents */
+        /**
+         * Upgrade cluster agents
+         * @description Queues an asynchronous rollout and returns an operation record to track with operation_get or wait. Deleting or suspended clusters return 409, as do already-current agents unless includeCurrent is true; the target is the control plane’s current build.
+         */
         post: operations["upgradeClusterAgents"];
         delete?: never;
         options?: never;
@@ -2404,7 +2847,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List Weaviate RBAC roles */
+        /**
+         * List Weaviate RBAC roles
+         * @description Returns an unpaginated items array with names and native permission objects, including action and applicable scopes. Use returned names with weaviate_role_get; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["listWeaviateRoles"];
         put?: never;
         /**
@@ -2428,11 +2874,15 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty role-name string from weaviate_roles_list; use the exact returned name. */
                 role: string;
             };
             cookie?: never;
         };
-        /** Get a Weaviate RBAC role */
+        /**
+         * Get a Weaviate RBAC role
+         * @description Returns the selected name and native permission objects, including action and applicable collection or other scopes. Obtain the nonempty identifier from weaviate_roles_list; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["getWeaviateRole"];
         /**
          * Replace a Weaviate RBAC role
@@ -2463,7 +2913,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** List Weaviate database users */
+        /**
+         * List Weaviate database users
+         * @description Returns an unpaginated items array with account name, userType, active state, roles and available creation/last-use timestamps, never API keys. Use returned names with weaviate_user_get; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["listWeaviateUsers"];
         put?: never;
         /**
@@ -2487,11 +2940,15 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from weaviate_users_list; use the exact returned name, not an API key or password. */
                 user: string;
             };
             cookie?: never;
         };
-        /** Get a Weaviate database user */
+        /**
+         * Get a Weaviate database user
+         * @description Returns account name, userType, active state, roles and available creation/last-use timestamps, without the API key. Obtain the nonempty name string from weaviate_users_list; unsupported engines return 409 and missing clusters return 404.
+         */
         get: operations["getWeaviateUser"];
         /**
          * Update Weaviate database user roles and activation
@@ -2519,6 +2976,7 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from weaviate_users_list; use the exact returned name, not an API key or password. */
                 user: string;
             };
             cookie?: never;
@@ -2543,9 +3001,15 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Get control plane backup policy */
+        /**
+         * Get control plane backup policy
+         * @description Returns scheduled snapshot enablement, the S3 destination reference, five-field UTC cron expression and retention count. Defaults use `0 3 * * *` and retain 14 records; use control_plane_backups_list to inspect execution history.
+         */
         get: operations["getControlPlaneBackupPolicy"];
-        /** Update control plane backup policy */
+        /**
+         * Update control plane backup policy
+         * @description Synchronously validates and persists scheduling, retention and destination settings, returning the normalized policy. Retention outside 1–1000 returns 400. Invalid cron or a required destination that is not an existing S3 registration returns 422.
+         */
         put: operations["updateControlPlaneBackupPolicy"];
         post?: never;
         delete?: never;
@@ -2561,10 +3025,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List control plane backups */
+        /**
+         * List control plane backups
+         * @description Returns paginated records with IDs, phases, destination references and available object metadata, checksums and timestamps. Limit defaults to 100 and accepts 1–500; follow nextCursor and match the ID returned by control_plane_backup_create to track completion.
+         */
         get: operations["listControlPlaneBackups"];
         put?: never;
-        /** Create control plane backup */
+        /**
+         * Create control plane backup
+         * @description Queues an asynchronous snapshot and returns a Pending record with its ID and destination reference; track it through control_plane_backups_list. Missing or invalid S3 policy settings return 422, and another pending or running snapshot returns 409.
+         */
         post: operations["createControlPlaneBackup"];
         delete?: never;
         options?: never;
@@ -2584,7 +3054,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Preview validation and effects without domain side effects */
+        /**
+         * Preview validation and effects without domain side effects
+         * @description Runs admission for cluster_create and returns the proposed cluster, changes, effects and warnings without persisting desired state or queuing provisioning. A successful preview does not guarantee later infrastructure or recovery completion.
+         */
         post: operations["dryRunCreateCluster"];
         delete?: never;
         options?: never;
@@ -2606,13 +3079,19 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        /** Preview validation and effects without domain side effects */
+        /**
+         * Preview validation and effects without domain side effects
+         * @description Runs admission for cluster_replace against the existing cluster and returns the proposed configuration, field changes, effects and warnings. No desired state is persisted and no reconciliation work is queued.
+         */
         put: operations["dryRunReplaceCluster"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Preview validation and effects without domain side effects */
+        /**
+         * Preview validation and effects without domain side effects
+         * @description Applies the proposed merge patch for cluster_update in memory and returns the resulting configuration, field changes, effects and warnings. No desired state is persisted and no reconciliation work is queued.
+         */
         patch: operations["dryRunPatchCluster"];
         trace?: never;
     };
@@ -2631,7 +3110,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Preview validation and effects without domain side effects */
+        /**
+         * Preview validation and effects without domain side effects
+         * @description Runs admission for restore_create and returns the proposed recovery record, target cluster, effects and warnings without queuing recovery. Passing admission does not guarantee that the eventual recovery will complete.
+         */
         post: operations["dryRunCreateRestore"];
         delete?: never;
         options?: never;
@@ -2705,7 +3187,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Read control-plane health */
+        /**
+         * Read control-plane health
+         * @description Checks database access by reading cluster inventory and returns status `ok` with database=true on success. This public endpoint does not probe individual members or confirm workload readiness.
+         */
         get: operations["getHealth"];
         put?: never;
         post?: never;
@@ -2772,7 +3257,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Read namespace project, token status and relay health */
+        /**
+         * Read namespace project, token status and relay health
+         * @description Returns backend target identity, capabilities, lifecycle phase, cluster count, credential validation status and relay connectivity, never the stored token. Resolve names with namespaces_list; a missing registration returns 404.
+         */
         get: operations["getNamespace"];
         put?: never;
         post?: never;
@@ -2825,7 +3313,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Revalidate a namespace token and project */
+        /**
+         * Revalidate a namespace token and project
+         * @description Synchronously checks stored backend credentials against the registered target and persists validation results and lifecycle phase, returning namespace details without the token. Inspect token.valid and token.lastError for validation failure; missing registrations return 404 and deleting registrations return 409.
+         */
         post: operations["validateNamespace"];
         delete?: never;
         options?: never;
@@ -2840,10 +3331,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List notification channels */
+        /**
+         * List notification channels
+         * @description Returns paginated destinations with names, types, enabled flags, category/namespace filters and delivery status; stored credentials are never returned. Use notification_channel_get with a returned name; limit defaults to 100, accepts 1–500, and nextCursor continues the list.
+         */
         get: operations["listNotificationChannels"];
         put?: never;
-        /** Create notification channel */
+        /**
+         * Create notification channel
+         * @description Synchronously registers a webhook, Slack or email destination and returns its public settings and credential-configured flags, never stored secrets. Duplicate names return 409 and invalid destination configuration returns 400; use notification_channel_test to exercise delivery.
+         */
         post: operations["createNotificationChannel"];
         delete?: never;
         options?: never;
@@ -2856,16 +3353,26 @@ export type paths = {
             query?: never;
             header?: never;
             path: {
+                /** @description Destination name returned by notification_channels_list or notification_channel_get, passed verbatim. New names contain 1–40 lowercase letters, digits or hyphens and start with a letter. */
                 channel: string;
             };
             cookie?: never;
         };
-        /** Get notification channel */
+        /**
+         * Get notification channel
+         * @description Returns destination type, enablement, category/namespace filters, public connection settings and delivery status without stored credentials. Resolve names with notification_channels_list; a missing record returns 404.
+         */
         get: operations["getNotificationChannel"];
-        /** Replace notification channel */
+        /**
+         * Replace notification channel
+         * @description Synchronously replaces destination settings and returns public configuration without stored credentials, retaining compatible omitted secrets. A body name differing from the path returns 400 and a missing record returns 404; changed destinations may require re-entering credentials.
+         */
         put: operations["replaceNotificationChannel"];
         post?: never;
-        /** Delete notification channel */
+        /**
+         * Delete notification channel
+         * @description Synchronously removes the selected delivery destination and returns 204 without a response body. Resolve names with notification_channels_list; a missing record returns 404, and this does not remove the underlying event history.
+         */
         delete: operations["deleteNotificationChannel"];
         options?: never;
         head?: never;
@@ -2877,13 +3384,17 @@ export type paths = {
             query?: never;
             header?: never;
             path: {
+                /** @description Destination name returned by notification_channels_list or notification_channel_get, passed verbatim. New names contain 1–40 lowercase letters, digits or hyphens and start with a letter. */
                 channel: string;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Test notification channel */
+        /**
+         * Test notification channel
+         * @description Synchronously sends a synthetic event through the stored destination and returns delivered plus a generic error on delivery failure. Missing records return 404; credentials are loaded internally and never included in the result.
+         */
         post: operations["testNotificationChannel"];
         delete?: never;
         options?: never;
@@ -2898,7 +3409,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List connected OAuth applications (own grants unless administrator) */
+        /**
+         * List connected OAuth applications (own grants unless administrator)
+         * @description Returns unpaginated items containing grant IDs, owners, client details, scopes, namespaces and usage/expiry timestamps, plus an enabled flag. Visibility is limited to owned grants unless authorized globally; no bearer credentials are returned, and oauth_grant_delete revokes a returned ID.
+         */
         get: operations["listOAuthGrants"];
         put?: never;
         post?: never;
@@ -2918,7 +3432,10 @@ export type paths = {
         get?: never;
         put?: never;
         post?: never;
-        /** Revoke a connected application grant */
+        /**
+         * Revoke a connected application grant
+         * @description Synchronously revokes the selected connected application authorization and returns 204 without a response body. Use oauth_grants_list for IDs; disabled OAuth or missing grants return 404, and deleting another owner’s grant requires global permission.
+         */
         delete: operations["deleteOAuthGrant"];
         options?: never;
         head?: never;
@@ -2970,6 +3487,7 @@ export type paths = {
             query?: never;
             header?: never;
             path: {
+                /** @description Exact durable operation id from operations_list, cluster_operations_list or an accepted mutation's operationId; nonempty string of at most 128 characters, not a cluster or backup name. */
                 operation: string;
             };
             cookie?: never;
@@ -2992,6 +3510,7 @@ export type paths = {
             query?: never;
             header?: never;
             path: {
+                /** @description Exact durable operation id from operations_list, cluster_operations_list or an accepted mutation's operationId; nonempty string of at most 128 characters, not a cluster or backup name. */
                 operation: string;
             };
             cookie?: never;
@@ -3059,7 +3578,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List engine providers and their catalogs */
+        /**
+         * List engine providers and their catalogs
+         * @description Returns an unpaginated items array of compiled-in database engines, including identifiers, capabilities, supported releases, deployment shapes, presets and backup types. Use provider_get with a returned name to inspect one catalog.
+         */
         get: operations["listProviders"];
         put?: never;
         post?: never;
@@ -3074,11 +3596,15 @@ export type paths = {
             query?: never;
             header?: never;
             path: {
+                /** @description Engine name returned by providers_list, passed verbatim as a 1–128 character string; provider_get returns that engine’s catalog. */
                 provider: string;
             };
             cookie?: never;
         };
-        /** Read versions, topologies, presets and upgrade paths */
+        /**
+         * Read versions, topologies, presets and upgrade paths
+         * @description Returns the selected engine’s identifier, display label, capabilities, supported releases, deployment shapes, presets and backup types. Resolve engine names with providers_list; an unknown identifier returns 404.
+         */
         get: operations["getProvider"];
         put?: never;
         post?: never;
@@ -3115,9 +3641,15 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Read Casbin policy */
+        /**
+         * Read Casbin policy
+         * @description Returns canonical CSV authorization rules in the policy field, including explicit allow or deny effects. Use rbac_policy_replace to validate and persist a complete replacement rather than editing individual rules.
+         */
         get: operations["getRBACPolicy"];
-        /** Validate and atomically replace Casbin policy */
+        /**
+         * Validate and atomically replace Casbin policy
+         * @description Validates the supplied CSV, persists it and swaps the live authorization model synchronously, returning canonical policy text. Replacement must preserve unrestricted administration for an enabled account or verified active OIDC group identity without denies.
+         */
         put: operations["replaceRBACPolicy"];
         post?: never;
         delete?: never;
@@ -3133,9 +3665,15 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Read OIDC configuration without client secrets */
+        /**
+         * Read OIDC configuration without client secrets
+         * @description Returns the OIDC issuer URL, client identifier, scopes, groups claim, enabled flag and computed callback URL. Stored client credentials are never returned; use settings_replace to change the configuration.
+         */
         get: operations["getSettings"];
-        /** Replace OIDC configuration */
+        /**
+         * Replace OIDC configuration
+         * @description Persists OIDC login settings synchronously and returns the resulting public configuration, including the callback URL but never the client secret. Omitting clientSecret retains its stored value; disabling login clears the issuer URL.
+         */
         put: operations["replaceSettings"];
         post?: never;
         delete?: never;
@@ -3151,9 +3689,15 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Get agent rollout settings */
+        /**
+         * Get agent rollout settings
+         * @description Returns automatic enablement, the maximum number of concurrently upgraded clusters and the current target build. Defaults are automatic=false and maxConcurrentClusters=1; use agent_rollout_settings_update to persist a different installation-wide policy.
+         */
         get: operations["getAgentRolloutSettings"];
-        /** Update agent rollout settings */
+        /**
+         * Update agent rollout settings
+         * @description Synchronously persists automatic enablement and the concurrency limit, returning saved values together with the current target build. Limits outside 1–5 return 400; this updates scheduling policy rather than directly queuing a particular cluster upgrade.
+         */
         put: operations["updateAgentRolloutSettings"];
         post?: never;
         delete?: never;
@@ -3169,7 +3713,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Read server build and API version */
+        /**
+         * Read server build and API version
+         * @description Returns the running release label, commit, build date, API version and whether OIDC login is enabled. This public endpoint does not report cluster engine versions; use providers_list for engine catalogs.
+         */
         get: operations["getVersion"];
         put?: never;
         post?: never;
@@ -5729,6 +6276,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required name and password for a local login; the name starts with a letter and contains 1–64 letters, digits, _, ., @ or -. Passwords require at least 12 Unicode characters and at most 1024 UTF-8 bytes; enabled and mustChangePassword both default to true. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateAccountRequest"];
@@ -5763,6 +6311,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Account name returned by accounts_list or account_get, passed verbatim; the path accepts 1–128 characters. Newly created local names use 1–64 characters, starting with a letter, followed by letters, digits, _, ., @ or -. */
                 account: string;
             };
             cookie?: never;
@@ -5799,10 +6348,12 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Account name returned by accounts_list or account_get, passed verbatim; the path accepts 1–128 characters. Newly created local names use 1–64 characters, starting with a letter, followed by letters, digits, _, ., @ or -. */
                 account: string;
             };
             cookie?: never;
         };
+        /** @description Required enabled and mustChangePassword booleans replace both administrative flags. This body does not rename the account or change its password. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateAccountRequest"];
@@ -5839,6 +6390,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Account name returned by accounts_list or account_get, passed verbatim; the path accepts 1–128 characters. Newly created local names use 1–64 characters, starting with a letter, followed by letters, digits, _, ., @ or -. */
                 account: string;
             };
             cookie?: never;
@@ -5873,10 +6425,12 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Account name returned by accounts_list or account_get, passed verbatim; the path accepts 1–128 characters. Newly created local names use 1–64 characters, starting with a letter, followed by letters, digits, _, ., @ or -. */
                 account: string;
             };
             cookie?: never;
         };
+        /** @description Required password with at least 12 Unicode characters and at most 1024 UTF-8 bytes. Optional mustChangePassword defaults to true and controls whether the next login requires another change. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ResetPasswordRequest"];
@@ -5965,6 +6519,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required nonblank name of 1–128 characters; duplicate labels are allowed. Optional expiresAt is a future RFC 3339 timestamp; restrictions supports readOnly, namespaces, clusters, permissions and allowCredentialReveal, constrained by the issuer’s authority. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateAPITokenRequest"];
@@ -5999,6 +6554,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Opaque credential ID from api_tokens_list, api_token_get or api_token_create, passed verbatim as a 1–128 character string; not the display name or kk_-prefixed bearer secret. */
                 token: string;
             };
             cookie?: never;
@@ -6035,10 +6591,12 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Opaque credential ID from api_tokens_list, api_token_get or api_token_create, passed verbatim as a 1–128 character string; not the display name or kk_-prefixed bearer secret. */
                 token: string;
             };
             cookie?: never;
         };
+        /** @description Required nonblank name of 1–128 characters and optional expiresAt, a future RFC 3339 timestamp or null to remove expiry. Restrictions and bearer secret cannot be changed here. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateAPITokenRequest"];
@@ -6075,6 +6633,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Opaque credential ID from api_tokens_list, api_token_get or api_token_create, passed verbatim as a 1–128 character string; not the display name or kk_-prefixed bearer secret. */
                 token: string;
             };
             cookie?: never;
@@ -6454,6 +7013,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required name, type=s3, endpointURL, region, bucket and credentials containing accessKeyId and secretAccessKey. Optional prefix, description, forcePathStyle and verifyTLS configure object placement and transport; both boolean flags default to true. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateBackupStorageRequest"];
@@ -6492,6 +7052,7 @@ export interface operations {
             };
             header?: never;
             path: {
+                /** @description Destination name returned by backup_storages_list or backup_storage_get in the selected namespace, passed verbatim as a 1–128 character string. New names use 2–63 lowercase letters, digits or hyphens, starting with a letter. */
                 storage: string;
             };
             cookie?: never;
@@ -6547,6 +7108,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Destination name returned by backup_storages_list or backup_storage_get in the selected namespace, passed verbatim as a 1–128 character string. New names use 2–63 lowercase letters, digits or hyphens, starting with a letter. */
                 storage: string;
             };
             cookie?: never;
@@ -6590,6 +7152,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Destination name returned by backup_storages_list or backup_storage_get in the selected namespace, passed verbatim as a 1–128 character string. New names use 2–63 lowercase letters, digits or hyphens, starting with a letter. */
                 storage: string;
             };
             cookie?: never;
@@ -6627,6 +7190,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Destination name returned by backup_storages_list or backup_storage_get in the selected namespace, passed verbatim as a 1–128 character string. New names use 2–63 lowercase letters, digits or hyphens, starting with a letter. */
                 storage: string;
             };
             cookie?: never;
@@ -6722,6 +7286,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required name and spec describe the new cluster; spec.provider selects the engine, with optional version, topology, components, backup, TLS and exposure settings. Name contains 2–12 lowercase letters or digits, beginning with a letter; optional openbaoUnsealShares supplies OpenBao recovery shares. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateClusterRequest"];
@@ -6875,7 +7440,9 @@ export interface operations {
     deleteCluster: {
         parameters: {
             query?: {
+                /** @description Boolean, default false; true retains recorded backups after source cluster deletion so backups_list and backup_get can still inspect them. */
                 keepBackups?: boolean;
+                /** @description Boolean, default false; true removes runtime services but retains volumes and leaves the cluster suspended for cluster_resume. */
                 keepVolumes?: boolean;
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
@@ -7028,6 +7595,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Optional strategy names an installed Citus rebalance strategy; send an empty object to use the Citus default. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RebalanceRequest"];
@@ -7128,6 +7696,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Optional backup names a successful, engine-compatible backup returned by backups_list for the source cluster and matching any drill schedule filter. Omission selects the newest eligible backup; no fields are required. */
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["CreateBackupDrillRequest"];
@@ -7166,6 +7735,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Opaque report ID returned by backup_drills_list or backup_drill_create, passed verbatim as a 1–128 character string; it must belong to the source cluster in the path. */
                 drill: string;
             };
             cookie?: never;
@@ -7267,6 +7837,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name, storage and type select the recovery-record name, configured storage name and engine-supported backup type. Name and storage are nonempty strings up to 128 characters; type must appear in the provider catalog's backupTypes. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateBackupRequest"];
@@ -7305,6 +7876,7 @@ export interface operations {
             };
             header?: never;
             path: {
+                /** @description Exact backup name from backups_list or backup_create, a nonempty string of at most 128 characters; use the recorded name, not an object-storage path or provider-native identifier. */
                 backup: string;
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -7346,6 +7918,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Exact backup name from backups_list or backup_create, a nonempty string of at most 128 characters; use the recorded name, not an object-storage path or provider-native identifier. */
                 backup: string;
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -7580,6 +8153,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name, database, roles and privileges define the custom role; name and database are nonempty strings up to 128 characters. Roles lists inherited role references, while privileges lists resource and action grants; either array may be empty. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DatabaseRole"];
@@ -7619,7 +8193,9 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact database field from database_roles_list or database_role_get, a nonempty string of at most 128 characters that scopes the custom role. */
                 database: string;
+                /** @description Exact name field from database_roles_list or database_role_get, a nonempty string of at most 128 characters within the selected database. */
                 role: string;
             };
             cookie?: never;
@@ -7678,11 +8254,14 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact database field from database_roles_list or database_role_get, a nonempty string of at most 128 characters that scopes the custom role. */
                 database: string;
+                /** @description Exact name field from database_roles_list or database_role_get, a nonempty string of at most 128 characters within the selected database. */
                 role: string;
             };
             cookie?: never;
         };
+        /** @description Required roles and privileges arrays replace all inherited role references and resource-action grants for the selected definition; an empty array removes that category of grants. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateDatabaseRoleRequest"];
@@ -7724,7 +8303,9 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact database field from database_roles_list or database_role_get, a nonempty string of at most 128 characters that scopes the custom role. */
                 database: string;
+                /** @description Exact name field from database_roles_list or database_role_get, a nonempty string of at most 128 characters within the selected database. */
                 role: string;
             };
             cookie?: never;
@@ -7864,7 +8445,9 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Database-name string of 1–128 characters from database_users_list; select the database paired with the target username. */
                 database: string;
+                /** @description Account-name string of 1–128 characters from database_users_list; identify it together with its database string. */
                 username: string;
             };
             cookie?: never;
@@ -7923,11 +8506,14 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Database-name string of 1–128 characters from database_users_list; select the database paired with the target username. */
                 database: string;
+                /** @description Account-name string of 1–128 characters from database_users_list; identify it together with its database string. */
                 username: string;
             };
             cookie?: never;
         };
+        /** @description Required roles array of objects containing role and db strings; optional password changes the credential and must meet the creation password rules. Omit password to retain the current credential. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateDatabaseUserRequest"];
@@ -7969,7 +8555,9 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Database-name string of 1–128 characters from database_users_list; select the database paired with the target username. */
                 database: string;
+                /** @description Account-name string of 1–128 characters from database_users_list; identify it together with its database string. */
                 username: string;
             };
             cookie?: never;
@@ -8064,6 +8652,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name labels the key and roleDescriptors is a nonempty map of explicit permission descriptors containing cluster, indices and applications arrays. Optional expiration is an Elasticsearch duration such as 1d. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ElasticAPIKeyCreate"];
@@ -8102,6 +8691,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Opaque Elasticsearch API key identifier string from id in elasticsearch_api_keys_list or elasticsearch_api_key_create; do not supply the secret apiKey or encoded credential. */
                 id: string;
             };
             cookie?: never;
@@ -8191,6 +8781,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name, cluster, indices and applications define the role and its permission arrays; use empty arrays for unused scopes. Index entries can include fieldSecurity and query restrictions subject to Elasticsearch licensing. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ElasticRoleInput"];
@@ -8224,6 +8815,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact role name string returned as name by elasticsearch_roles_list; built-in roles are readable but cannot be changed or deleted. */
                 role: string;
             };
             cookie?: never;
@@ -8276,10 +8868,12 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact role name string returned as name by elasticsearch_roles_list; built-in roles are readable but cannot be changed or deleted. */
                 role: string;
             };
             cookie?: never;
         };
+        /** @description Required name, cluster, indices and applications define the role and its permission arrays; use empty arrays for unused scopes. Index entries can include fieldSecurity and query restrictions subject to Elasticsearch licensing. The name must match the path identifier. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ElasticRoleInput"];
@@ -8316,6 +8910,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact role name string returned as name by elasticsearch_roles_list; built-in roles are readable but cannot be changed or deleted. */
                 role: string;
             };
             cookie?: never;
@@ -8405,6 +9000,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required username, roles, enabled and password define the native account; password must contain at least eight characters. Optional fullName and email supply profile metadata. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ElasticUserCreate"];
@@ -8438,6 +9034,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact native realm username string returned as username by elasticsearch_users_list; reserved and Karakoram-managed identities are unavailable. */
                 username: string;
             };
             cookie?: never;
@@ -8490,10 +9087,12 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact native realm username string returned as username by elasticsearch_users_list; reserved and Karakoram-managed identities are unavailable. */
                 username: string;
             };
             cookie?: never;
         };
+        /** @description Required username, roles and enabled replace the account attributes; username must match the path. Optional password must contain at least eight characters; fullName and email replace profile metadata. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ElasticUserWrite"];
@@ -8530,6 +9129,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact native realm username string returned as username by elasticsearch_users_list; reserved and Karakoram-managed identities are unavailable. */
                 username: string;
             };
             cookie?: never;
@@ -8598,6 +9198,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact member name returned by cluster_members_list, a nonempty string of at most 128 characters; this is a name, not an array index. */
                 member: string;
             };
             cookie?: never;
@@ -8629,17 +9230,22 @@ export interface operations {
     getMemberLogs: {
         parameters: {
             query?: {
+                /** @description Reserved continuation string; currently ignored by this endpoint, which does not return nextCursor. */
                 cursor?: string;
+                /** @description Maximum number of log lines requested, an integer from 1 to 10000; defaults to 100. */
                 lines?: number;
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
+                /** @description Process name from the engine catalog returned by providers_list, or agent for runtime logs; defaults to the first engine process, or agent if none. */
                 process?: string;
+                /** @description Optional date-time string in RFC 3339 format; currently ignored by this endpoint and does not filter returned lines. */
                 since?: string;
             };
             header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Member-name string of 1–128 characters from cluster_members_list for the selected cluster. */
                 member: string;
             };
             cookie?: never;
@@ -8700,6 +9306,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Member name from cluster_get status.members[].name, passed verbatim as a 1–128 character string; not a runtime ID or host placement group. */
                 member: string;
             };
             cookie?: never;
@@ -8760,6 +9367,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact member name, a nonempty string of at most 128 characters, returned by cluster_members_list or cluster_member_get; do not use an array index. */
                 member: string;
             };
             cookie?: never;
@@ -8881,6 +9489,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name identifies the new schema; optional characterSet defaults to utf8mb4 and collation defaults to utf8mb4_0900_ai_ci. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MySQLDatabaseWrite"];
@@ -8917,6 +9526,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application database name matching [A-Za-z_][A-Za-z0-9_$]{0,63}; use name from mysql_databases_list. */
                 database: string;
             };
             cookie?: never;
@@ -8944,6 +9554,7 @@ export interface operations {
     deleteMySQLDatabase: {
         parameters: {
             query?: {
+                /** @description Boolean, default false; true permits dropping a nonempty database and permanently deleting its tables. */
                 force?: boolean;
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
@@ -8955,6 +9566,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application database name matching [A-Za-z_][A-Za-z0-9_$]{0,63}; use name from mysql_databases_list. */
                 database: string;
             };
             cookie?: never;
@@ -8980,9 +9592,11 @@ export interface operations {
     listMySQLGrants: {
         parameters: {
             query?: {
+                /** @description Application database name matching [A-Za-z_][A-Za-z0-9_$]{0,63}; use name from mysql_databases_list. Optional filter; at least user or database must be supplied. */
                 database?: string;
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
+                /** @description Application account name matching [A-Za-z_][A-Za-z0-9_]{0,31}, without a host suffix; use name from mysql_users_list. Optional filter; at least user or database must be supplied. */
                 user?: string;
             };
             header?: never;
@@ -9030,6 +9644,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required user and database identify an application account and schema from mysql_users_list and mysql_databases_list; privileges is a nonempty array of allowed MySQLGrantPrivileges values. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MySQLGrant"];
@@ -9070,6 +9685,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required user and database identify an application account and schema from mysql_users_list and mysql_databases_list; privileges is a nonempty array of allowed MySQLGrantPrivileges values. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MySQLGrant"];
@@ -9126,6 +9742,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required confirmation must be the literal all-absent-members-fenced, acknowledging absent-member fencing before PXC quorum recovery. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MySQLQuorumRecoveryRequest"];
@@ -9222,6 +9839,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name identifies the new account; an optional password must contain at least 12 characters, occupy no more than 1024 UTF-8 bytes and contain no control characters. maxUserConnections defaults to 0 and locked defaults to false. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MySQLUserWrite"];
@@ -9261,6 +9879,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application account name matching [A-Za-z_][A-Za-z0-9_]{0,31}, without a host suffix; use name from mysql_users_list. */
                 user: string;
             };
             cookie?: never;
@@ -9298,6 +9917,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application account name matching [A-Za-z_][A-Za-z0-9_]{0,31}, without a host suffix; use name from mysql_users_list. */
                 user: string;
             };
             cookie?: never;
@@ -9333,10 +9953,12 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application account name matching [A-Za-z_][A-Za-z0-9_]{0,31}, without a host suffix; use name from mysql_users_list. */
                 user: string;
             };
             cookie?: never;
         };
+        /** @description Optional maxUserConnections is a nonnegative integer and locked is a boolean; omitted attributes remain unchanged. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MySQLUserPatch"];
@@ -9392,10 +10014,12 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application account name matching [A-Za-z_][A-Za-z0-9_]{0,31}, without a host suffix; use name from mysql_users_list. */
                 user: string;
             };
             cookie?: never;
         };
+        /** @description Optional retainCurrent defaults to false; true keeps the previous password valid alongside the newly generated password. */
         requestBody: {
             content: {
                 "application/json": {
@@ -9441,6 +10065,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Application account name matching [A-Za-z_][A-Za-z0-9_]{0,31}, without a host suffix; use name from mysql_users_list. */
                 user: string;
             };
             cookie?: never;
@@ -9530,6 +10155,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name identifies the new Community account; optional password supplies its credential, otherwise a generated password is returned once. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["Neo4jUserCreate"];
@@ -9569,6 +10195,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Community account name matching [A-Za-z][A-Za-z0-9_.-]{0,63}; use name from neo4j_users_list. The managed neo4j administrator is reserved. */
                 user: string;
             };
             cookie?: never;
@@ -9622,6 +10249,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Community account name matching [A-Za-z][A-Za-z0-9_.-]{0,63}; use name from neo4j_users_list. The managed neo4j administrator is reserved. */
                 user: string;
             };
             cookie?: never;
@@ -9674,10 +10302,12 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Community account name matching [A-Za-z][A-Za-z0-9_.-]{0,63}; use name from neo4j_users_list. The managed neo4j administrator is reserved. */
                 user: string;
             };
             cookie?: never;
         };
+        /** @description Optional password supplies the replacement credential; omit it or send an empty object to generate a password returned once. */
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["Neo4jUserPassword"];
@@ -9774,6 +10404,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name, targetCluster and nonempty roles define the integration. Connection and role names match [a-z][a-z0-9-]{0,30}; each role requires name and access (readonly or readwrite), with optional database and TTL seconds. Select targetCluster from clusters_list in the same namespace. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["OpenBaoDatabaseConnectionWrite"];
@@ -9810,6 +10441,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact integration name from openbao_database_connections_list; names assigned at creation match [a-z][a-z0-9-]{0,30}. */
                 connection: string;
             };
             cookie?: never;
@@ -9849,6 +10481,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact integration name from openbao_database_connections_list; names assigned at creation match [a-z][a-z0-9-]{0,30}. */
                 connection: string;
             };
             cookie?: never;
@@ -9889,6 +10522,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required confirm must exactly equal the selected OpenBao cluster name; obtain the name from clusters_list or cluster_get. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["OpenBaoUnsealKeysReveal"];
@@ -9925,6 +10559,7 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
+                /** @description Optional exact, case-sensitive execution phase: Pending, Running, Succeeded, Failed or Cancelled; values are returned in phase by cluster_operations_list and operation_get. */
                 phase?: string;
             };
             header?: never;
@@ -10094,6 +10729,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Opaque binding identifier string from id in postgres_bindings_list; it must belong to the selected source cluster. */
                 binding: string;
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -10188,6 +10824,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name and owner identify the new database and owning role; optional encoding defaults to UTF8, locale to C.UTF-8, allowConnections to true, and extensions lists requested extensions. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PostgresDatabase"];
@@ -10224,6 +10861,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact application database name, 1–63 UTF-8 bytes without control characters; use name from postgres_databases_list. */
                 database: string;
             };
             cookie?: never;
@@ -10251,6 +10889,7 @@ export interface operations {
     deletePostgresDatabase: {
         parameters: {
             query?: {
+                /** @description Boolean, default false; true uses PostgreSQL DROP DATABASE WITH (FORCE) to terminate connections that block deletion. */
                 force?: boolean;
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
@@ -10262,6 +10901,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact application database name, 1–63 UTF-8 bytes without control characters; use name from postgres_databases_list. */
                 database: string;
             };
             cookie?: never;
@@ -10287,6 +10927,7 @@ export interface operations {
     listPostgresGrants: {
         parameters: {
             query: {
+                /** @description Exact application database name, 1–63 UTF-8 bytes without control characters; use name from postgres_databases_list. */
                 database: string;
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
@@ -10352,6 +10993,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required role and database identify entries from postgres_roles_list and postgres_databases_list; privileges is nonempty. Omit schema for CONNECT, CREATE, TEMP or TEMPORARY database permissions; supply schema for USAGE or CREATE schema permissions. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PostgresGrant"];
@@ -10392,6 +11034,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required role and database identify entries from postgres_roles_list and postgres_databases_list; privileges is nonempty. Omit schema for CONNECT, CREATE, TEMP or TEMPORARY database permissions; supply schema for USAGE or CREATE schema permissions. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PostgresGrant"];
@@ -10483,6 +11126,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name identifies the role; optional login, superuser, createdb, createrole, replication, bypassrls, connectionLimit, memberOf, validUntil and password configure its attributes. Password must contain at least 12 characters, occupy no more than 1024 UTF-8 bytes, contain no control characters and be accepted by SASLprep. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PostgresRoleWrite"];
@@ -10522,6 +11166,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact application role name, 1–63 UTF-8 bytes without control characters; use name from postgres_roles_list. */
                 role: string;
             };
             cookie?: never;
@@ -10575,10 +11220,12 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact application role name, 1–63 UTF-8 bytes without control characters; use name from postgres_roles_list. */
                 role: string;
             };
             cookie?: never;
         };
+        /** @description Required name identifies the role; optional login, superuser, createdb, createrole, replication, bypassrls, connectionLimit, memberOf, validUntil and password configure its attributes. Password must contain at least 12 characters, occupy no more than 1024 UTF-8 bytes, contain no control characters and be accepted by SASLprep. The name must match the path; omitted attributes use replacement defaults. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PostgresRoleWrite"];
@@ -10618,6 +11265,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact application role name, 1–63 UTF-8 bytes without control characters; use name from postgres_roles_list. */
                 role: string;
             };
             cookie?: never;
@@ -10669,10 +11317,12 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact application role name, 1–63 UTF-8 bytes without control characters; use name from postgres_roles_list. */
                 role: string;
             };
             cookie?: never;
         };
+        /** @description Optional login, superuser, createdb, createrole, replication, bypassrls, connectionLimit, memberOf, validUntil and password change selected attributes; password must contain at least 12 characters, occupy no more than 1024 UTF-8 bytes, contain no control characters and be accepted by SASLprep. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PostgresRolePatch"];
@@ -10728,6 +11378,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact application role name, 1–63 UTF-8 bytes without control characters; use name from postgres_roles_list. */
                 role: string;
             };
             cookie?: never;
@@ -10821,6 +11472,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description All fields are required: vhost, name and pattern strings, applyTo enum, nonnegative priority integer and definition object. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQPolicy"];
@@ -10854,6 +11506,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty policy-name string from rabbitmq_operator_policies_list; select it together with its vhost string. */
                 name: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
@@ -10908,12 +11561,14 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty policy-name string from rabbitmq_operator_policies_list; select it together with its vhost string. */
                 name: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
         };
+        /** @description All fields are required: vhost, name and pattern strings, applyTo enum, nonnegative priority integer and definition object. Body identifiers must match their path values. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQPolicy"];
@@ -10950,6 +11605,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty policy-name string from rabbitmq_operator_policies_list; select it together with its vhost string. */
                 name: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
@@ -11037,6 +11693,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description All fields are required: vhost and user strings plus configure, write and read regular-expression strings. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQPermission"];
@@ -11070,6 +11727,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
@@ -11124,12 +11782,14 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
         };
+        /** @description All fields are required: vhost and user strings plus configure, write and read regular-expression strings. Body identifiers must match their path values. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQPermission"];
@@ -11166,6 +11826,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
@@ -11253,6 +11914,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description All fields are required: vhost, name and pattern strings, applyTo enum, nonnegative priority integer and definition object. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQPolicy"];
@@ -11286,6 +11948,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty policy-name string from rabbitmq_policies_list; select it together with its vhost string. */
                 name: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
@@ -11340,12 +12003,14 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty policy-name string from rabbitmq_policies_list; select it together with its vhost string. */
                 name: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
         };
+        /** @description All fields are required: vhost, name and pattern strings, applyTo enum, nonnegative priority integer and definition object. Body identifiers must match their path values. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQPolicy"];
@@ -11382,6 +12047,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty policy-name string from rabbitmq_policies_list; select it together with its vhost string. */
                 name: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
@@ -11469,6 +12135,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description All fields are required: vhost, user and exchange strings plus write and read regular-expression strings. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQTopicPermission"];
@@ -11502,6 +12169,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
@@ -11556,12 +12224,14 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
         };
+        /** @description All fields are required: vhost, user and exchange strings plus write and read regular-expression strings. Body identifiers must match their path values. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQTopicPermission"];
@@ -11598,6 +12268,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
                 /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
@@ -11685,6 +12356,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name string and tags array; optionally supply password or passwordHash, but not both. Omitting both credential fields generates a password returned in generatedPassword. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQUserWrite"];
@@ -11718,6 +12390,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
             };
             cookie?: never;
@@ -11770,10 +12443,12 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
             };
             cookie?: never;
         };
+        /** @description Required name string and tags array; optionally supply password or passwordHash, but not both. The name must match the user path value. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQUserWrite"];
@@ -11810,6 +12485,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from rabbitmq_users_list; use the exact returned name, not an API key or password. */
                 user: string;
             };
             cookie?: never;
@@ -11895,6 +12571,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name string and tags array, with optional description, defaultQueueType (classic, quorum or stream) and limits (maxConnections/maxQueues). */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQVhost"];
@@ -11986,6 +12663,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name string and tags array, with optional description, defaultQueueType (classic, quorum or stream) and limits (maxConnections/maxQueues). The name must match the vhost path value. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RabbitMQVhost"];
@@ -12078,6 +12756,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required version is the deployed engine major in numeric major.minor form, for example 8.0, not a full package version; every member must finish the binary rollout first. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RaiseFCVRequest"];
@@ -12240,6 +12919,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name and source select the recovery-record name and backup, pitrTime or restorePoint; sourceCluster and sourceNamespace are optional. Optional acknowledgement flags cover bound or shared consumers, and openbaoUnsealShares supplies OpenBao recovery shares; restore_create_dry_run previews admission. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateRestoreRequest"];
@@ -12280,6 +12960,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact restore name from restores_list or restore_create, a nonempty string of at most 128 characters; this is the recovery-record name, not its operationId. */
                 restore: string;
             };
             cookie?: never;
@@ -12594,6 +13275,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact deployment name from supabase_functions_list; 1–63 lowercase letters, digits, underscores or hyphens, starting with a letter or digit (pattern [a-z0-9][a-z0-9_-]{0,62}). */
                 name: string;
             };
             cookie?: never;
@@ -12648,6 +13330,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact deployment name from supabase_functions_list; 1–63 lowercase letters, digits, underscores or hyphens, starting with a letter or digit (pattern [a-z0-9][a-z0-9_-]{0,62}). */
                 name: string;
             };
             cookie?: never;
@@ -12689,6 +13372,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact deployment name from supabase_functions_list; 1–63 lowercase letters, digits, underscores or hyphens, starting with a letter or digit (pattern [a-z0-9][a-z0-9_-]{0,62}). */
                 name: string;
             };
             cookie?: never;
@@ -12796,6 +13480,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required password contains the write-only SMTP authentication value, at most 4096 bytes; the value is stored encrypted and is not included in the response. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SupabaseSMTPPassword"];
@@ -12886,6 +13571,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact managed identity name from system_users_list, not a database role or arbitrary login; nonempty string, at most 128 characters, with supported identities varying by engine. */
                 user: string;
             };
             cookie?: never;
@@ -12961,6 +13647,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required commonName identifies the certificate subject (1–253 characters); optional ttlHours is an integer from 1 to 9528 and defaults to 720. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TemporalClientCertificateRequest"];
@@ -13029,6 +13716,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Exact nonempty namespace name from temporal_namespaces_list whose managed flag is false; default, temporal-system and names declared in engineOptions are protected. */
                 temporalNamespace: string;
             };
             cookie?: never;
@@ -13082,6 +13770,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required clientSecret contains the nonempty OIDC application credential, at most 4096 bytes; it is write-only and is never returned by this endpoint. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TemporalUIOIDCClientSecret"];
@@ -13139,6 +13828,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Optional includeCurrent boolean defaults to false and excludes agents already reporting the current build. Set true to request their rollout as well; the target build is selected by the server. */
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["UpgradeAgentsRequest"];
@@ -13232,6 +13922,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required nonempty name string and permissions array; each permission requires an action string and may include native scopes such as collections or data. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["WeaviateRole"];
@@ -13265,6 +13956,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty role-name string from weaviate_roles_list; use the exact returned name. */
                 role: string;
             };
             cookie?: never;
@@ -13317,10 +14009,12 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty role-name string from weaviate_roles_list; use the exact returned name. */
                 role: string;
             };
             cookie?: never;
         };
+        /** @description Required nonempty name string and permissions array; each permission requires an action string and may include native scopes such as collections or data. The name must match the role path value. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["WeaviateRole"];
@@ -13357,6 +14051,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty role-name string from weaviate_roles_list; use the exact returned name. */
                 role: string;
             };
             cookie?: never;
@@ -13442,6 +14137,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required nonempty name string and roles array of role-name strings; discover available assignments with weaviate_roles_list. The response includes the generated API key. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["WeaviateUserCreate"];
@@ -13478,6 +14174,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from weaviate_users_list; use the exact returned name, not an API key or password. */
                 user: string;
             };
             cookie?: never;
@@ -13530,10 +14227,12 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from weaviate_users_list; use the exact returned name, not an API key or password. */
                 user: string;
             };
             cookie?: never;
         };
+        /** @description Required roles array of role-name strings, with optional active boolean controlling account activation; discover available assignments with weaviate_roles_list. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["WeaviateUserUpdate"];
@@ -13568,6 +14267,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from weaviate_users_list; use the exact returned name, not an API key or password. */
                 user: string;
             };
             cookie?: never;
@@ -13618,6 +14318,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Nonempty account-name string from weaviate_users_list; use the exact returned name, not an API key or password. */
                 user: string;
             };
             cookie?: never;
@@ -13701,6 +14402,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required enabled, storage, schedule and retainCount fields. Storage contains namespace and name from backup_storages_list; schedule is a five-field UTC cron expression and retainCount ranges from 1 through 1000. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ControlPlaneBackupPolicy"];
@@ -13830,6 +14532,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required name and spec describe the proposed cluster; spec.provider selects the engine. Name contains 2–12 lowercase letters or digits, beginning with a letter; optional openbaoUnsealShares supplies recovery shares for an OpenBao restore. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateClusterRequest"];
@@ -13956,6 +14659,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required name and source identify the proposed restore and its recovery source: backup, pitrTime or restorePoint, with optional sourceCluster and sourceNamespace. Optional acknowledgement flags cover bound or shared consumers; openbaoUnsealShares supplies OpenBao recovery shares. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateRestoreRequest"];
@@ -13987,6 +14691,7 @@ export interface operations {
             query?: {
                 /** @description Exact actor identity, including token name and ID when applicable. */
                 actor?: string;
+                /** @description Exact cluster-name filter from clusters_list: 2–12 lowercase letters or digits, beginning with a letter; combine with namespace to disambiguate names. */
                 cluster?: string;
                 /** @description Opaque cursor returned by the preceding page. */
                 cursor?: components["parameters"]["Cursor"];
@@ -13994,6 +14699,7 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
+                /** @description Exact operation identifier string from cluster_operations_list or operation_get; limits results to events associated with that operation. */
                 operationId?: string;
                 /** @description Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order. */
                 order?: "asc" | "desc";
@@ -14202,6 +14908,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required name, projectId and write-only token identify and authorize the backend target. Optional backend defaults to zerops; config supplies non-secret backend settings, and description labels the registration. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["NamespaceCreate"];
@@ -14311,6 +15018,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required description string replaces the displayed text; an empty string clears it. Backend identity, credentials and relay status cannot be changed here. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["NamespaceUpdate"];
@@ -14353,6 +15061,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Required write-only token containing replacement backend credentials that can access the same registered target. The environment-managed default namespace cannot be rotated through this request. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["NamespaceTokenRotate"];
@@ -14481,6 +15190,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required name, type (webhook, slack or email) and enabled, plus exactly one matching destination object containing its connection settings and necessary write-only credentials. Optional categories and namespaces filter delivery; empty lists match all. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["NotificationChannel"];
@@ -14514,6 +15224,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Destination name returned by notification_channels_list or notification_channel_get, passed verbatim. New names contain 1–40 lowercase letters, digits or hyphens and start with a letter. */
                 channel: string;
             };
             cookie?: never;
@@ -14566,10 +15277,12 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Destination name returned by notification_channels_list or notification_channel_get, passed verbatim. New names contain 1–40 lowercase letters, digits or hyphens and start with a letter. */
                 channel: string;
             };
             cookie?: never;
         };
+        /** @description Required name matching the path, type and enabled, plus exactly one matching webhook, slack or email configuration. Optional categories and namespaces filter delivery; compatible omitted credentials are retained, but changed destinations can require re-entry. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["NotificationChannel"];
@@ -14622,6 +15335,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Destination name returned by notification_channels_list or notification_channel_get, passed verbatim. New names contain 1–40 lowercase letters, digits or hyphens and start with a letter. */
                 channel: string;
             };
             cookie?: never;
@@ -14672,6 +15386,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Destination name returned by notification_channels_list or notification_channel_get, passed verbatim. New names contain 1–40 lowercase letters, digits or hyphens and start with a letter. */
                 channel: string;
             };
             cookie?: never;
@@ -14731,6 +15446,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Opaque connected-application grant ID from oauth_grants_list, passed verbatim as a 1–128 character string; not a client identifier or bearer token. */
                 grant: string;
             };
             cookie?: never;
@@ -14776,6 +15492,7 @@ export interface operations {
     listOperations: {
         parameters: {
             query?: {
+                /** @description Optional exact cluster name from clusters_list, 2–12 lowercase letters or digits beginning with a letter; filters records to that cluster within the selected namespace scope. */
                 cluster?: string;
                 /** @description Opaque cursor returned by the preceding page. */
                 cursor?: components["parameters"]["Cursor"];
@@ -14783,6 +15500,7 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
+                /** @description Optional exact, case-sensitive execution phase: Pending, Running, Succeeded, Failed or Cancelled; values are returned in phase by operations_list and operation_get. */
                 phase?: string;
             };
             header?: never;
@@ -14818,6 +15536,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Exact durable operation id from operations_list, cluster_operations_list or an accepted mutation's operationId; nonempty string of at most 128 characters, not a cluster or backup name. */
                 operation: string;
             };
             cookie?: never;
@@ -14854,6 +15573,7 @@ export interface operations {
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
+                /** @description Exact durable operation id from operations_list, cluster_operations_list or an accepted mutation's operationId; nonempty string of at most 128 characters, not a cluster or backup name. */
                 operation: string;
             };
             cookie?: never;
@@ -14977,6 +15697,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Engine name returned by providers_list, passed verbatim as a 1–128 character string; provider_get returns that engine’s catalog. */
                 provider: string;
             };
             cookie?: never;
@@ -15015,6 +15736,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required resource, action and object strings specify the authorization tuple. Optional subject selects another identity, such as `user:<account>`; omission evaluates the caller. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CanRequest"];
@@ -15084,6 +15806,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required policy string containing Casbin CSV permission rows `p, subject, resource, action, object, allow|deny` and role assignments `g, subject, role`. Replacement must preserve unrestricted administration for an enabled account or verified active OIDC group. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RBACPolicy"];
@@ -15153,6 +15876,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required oidc object with enabled; optional issuerURL, clientId, clientSecret, scopes and groupsClaim configure login. The client secret is write-only and retained when omitted. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["Settings"];
@@ -15238,6 +15962,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description Required automatic boolean and maxConcurrentClusters integer from 1 through 5 control installation-wide rollout scheduling. currentBuild is server-reported and is not a configurable target. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AgentRolloutSettings"];

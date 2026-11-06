@@ -22,7 +22,7 @@ func (s *Server) newMCPHandler() (http.Handler, error) {
 	if s.OAuth != nil {
 		metadata = s.OAuth.ResourceMetadata()
 	}
-	options := agentmcp.Options{Mode: s.MCPMode, PublicURL: s.PublicURL, ResourceMetadata: metadata, Authenticate: s.authenticateMCP, Allowed: s.mcpAllowed, REST: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	options := agentmcp.Options{Mode: s.MCPMode, OutputSchemas: s.MCPOutputSchemas, PublicURL: s.PublicURL, ResourceMetadata: metadata, Authenticate: s.authenticateMCP, Allowed: s.mcpAllowed, REST: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		once.Do(func() { rest = s.Handler() })
 		rest.ServeHTTP(w, r)
 	})}

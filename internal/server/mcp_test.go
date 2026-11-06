@@ -121,3 +121,42 @@ func TestMCPModesAndRoleDiscovery(t *testing.T) {
 		t.Fatalf("off returned %d", w.Code)
 	}
 }
+
+func TestMCPOutputSchemasMount(t *testing.T) {
+	s, _, token := testServer(t)
+	for _, enabled := range []bool{false, true, false} {
+		s.MCPOutputSchemas = enabled
+		var err error
+		s.mcpHandler, err = s.newMCPHandler()
+		if err != nil {
+			t.Fatal(err)
+		}
+		server := httptest.NewServer(s.Handler())
+		client := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "1"}, nil)
+		session, err := client.Connect(t.Context(), &sdk.StreamableClientTransport{Endpoint: server.URL + "/mcp", HTTPClient: &http.Client{Transport: mcpBearerTransport{token}}}, nil)
+		if err != nil {
+			server.Close()
+			t.Fatal(err)
+		}
+		list, err := session.ListTools(t.Context(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{api.OperationAgent["getCluster"].Tool, "cluster_diagnose"} {
+			found := false
+			for _, tool := range list.Tools {
+				if tool.Name == name {
+					found = true
+					if (tool.OutputSchema != nil) != enabled {
+						t.Errorf("%s: output schema present=%t, enabled=%t", name, tool.OutputSchema != nil, enabled)
+					}
+				}
+			}
+			if !found {
+				t.Errorf("missing tool %s", name)
+			}
+		}
+		session.Close()
+		server.Close()
+	}
+}
