@@ -70,7 +70,7 @@ These cross-engine constraints define the operating model; engine-specific limit
 - Result/rate/concurrency bounds are not query-cost guarantees. Stored data can inject prompts; confirmations do not provide rollback. RabbitMQ peeking consumes/requeues and therefore needs write access. Elasticsearch hidden/system/dot indices and streams backed by them are refused.
 - PostgreSQL's companion connects to the first scoped database (default `postgres`); existing PUBLIC grants are not revoked and can weaken scope isolation. See [scope and identity caveats](data-mcp.md#managed-identities-and-rotation).
 
-## Continuing limitations in v0.4.5
+## Continuing limitations in v0.4.6
 
 - **PostgreSQL administrator password rotation remains unavailable.** The
   `postgres` administrator password cannot be rotated in place; follow
@@ -148,14 +148,25 @@ The v0.4.2 PITR memory, singleton backup-memory, PXC retirement and clone,
 PXC post-restore history, ProxySQL TLS and Zerops Weaviate issues are resolved
 in v0.4.3 with the [required rollout procedures](upgrade.md#upgrading-to-v043).
 Their old workarounds remain [historical guidance](upgrade.md#known-issues-in-v042),
-not current v0.4.5 limitations. Existing history latches are not silently cleared.
+not current v0.4.6 limitations. Existing history latches are not silently cleared.
+
+## Known issues in v0.4.6
+
+v0.4.6 is a security hotfix that only updates the MongoDB driver's compression
+library to fix [GO-2026-6865](https://pkg.go.dev/vuln/GO-2026-6865); follow the
+[v0.4.6 upgrade procedure](upgrade.md#upgrading-to-v046). The continuing
+limitations above and all known issues in v0.4.5 below remain present. Fixes
+for the Data MCP closed-connection, Zerops failed-deployment resource recovery
+and false PXC GTID-history incident issues are planned for v0.4.7; the other
+limitations keep their individually documented status.
 
 ## Known issues in v0.4.5
 
-The continuing limitations above and the Zerops failed-deployment resource
-recovery and false PXC GTID-history incident issues below remain present.
-Their fixes are planned for v0.4.6, not this hotfix. v0.4.5 fixes only the
-imported-baseline PITR coverage freeze and empty-GTID backup metadata rejection.
+The continuing limitations above remain present. Fixes for the Data MCP
+closed-connection, Zerops failed-deployment resource recovery and false PXC
+GTID-history incident issues below are planned for v0.4.7, not the v0.4.5 or
+v0.4.6 hotfixes. v0.4.5 fixes only the imported-baseline PITR coverage freeze
+and empty-GTID backup metadata rejection.
 Follow the [v0.4.5 upgrade procedure](upgrade.md#upgrading-to-v045), including
 data-member agent relaunch and a new full backup.
 
@@ -169,7 +180,7 @@ data-member agent relaunch and a new full backup.
   the control plane restarts. Your databases are not affected. Workaround: stop
   sending Data MCP requests to that cluster for about 10 minutes, or restart
   the Karakoram control plane (clusters keep running while it restarts).
-  A fix is planned for the next release.
+  A fix is planned for v0.4.7, not the v0.4.6 security hotfix.
 
 ## Known issues in v0.4.4
 
@@ -221,7 +232,7 @@ issues remain unfixed in v0.4.5.
   is and upgrade once the fix is released. After cancelling or a timeout,
   check that the new member is actually gone before making further changes.
   Neo4j and the Data MCP companion are not
-  affected. A fix is planned for v0.4.6, not the v0.4.5 hotfix.
+  affected. A fix is planned for v0.4.7, not the v0.4.5 or v0.4.6 hotfixes.
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or
@@ -245,7 +256,7 @@ issues remain unfixed in v0.4.5.
   scheduled full can stay Pending and the cluster stays stuck; the cluster keeps
   serving reads and writes, so leave it as it is and upgrade once the fix is
   released. This needs configured backup storage and healthy members. A fix is
-  planned for v0.4.6, not the v0.4.5 hotfix.
+  planned for v0.4.7, not the v0.4.5 or v0.4.6 hotfixes.
 
 ## Known issues in v0.4.3
 
