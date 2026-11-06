@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -205,10 +206,59 @@ func TestBoundsAndTimeout(t *testing.T) {
 			}
 		})
 	}
-	c, _ := plainClient(t, func(w http.ResponseWriter, r *http.Request) { <-r.Context().Done() }, func(cfg *Config) { cfg.Timeout = 20 * time.Millisecond })
-	if err := c.Ready(context.Background()); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("timeout: %v", err)
-	}
+	t.Run("request deadline", func(t *testing.T) {
+		c, _ := plainClient(t, func(w http.ResponseWriter, r *http.Request) { <-r.Context().Done() }, func(cfg *Config) { cfg.Timeout = 20 * time.Millisecond })
+		if err := c.Ready(context.Background()); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("timeout: %v", err)
+		}
+	})
+	t.Run("dial deadline failover", func(t *testing.T) {
+		var timedOut atomic.Int32
+		c, _ := plainClient(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }, func(cfg *Config) {
+			cfg.Timeout = time.Minute
+			cfg.Endpoints = append([]string{"offline.invalid:8080"}, cfg.Endpoints...)
+			cfg.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+				if address == "offline.invalid:8080" {
+					timedOut.Add(1)
+					return nil, &net.OpError{Op: "dial", Net: network, Err: context.DeadlineExceeded}
+				}
+				return (&net.Dialer{}).DialContext(ctx, network, address)
+			}
+		})
+		if err := c.Ready(context.Background()); err != nil {
+			t.Fatalf("did not fail over after dial-local timeout: %v", err)
+		}
+		if timedOut.Load() != 1 {
+			t.Fatalf("timed-out dial attempts = %d, want 1", timedOut.Load())
+		}
+	})
+	t.Run("response header deadline", func(t *testing.T) {
+		var replayed atomic.Bool
+		second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { replayed.Store(true) }))
+		defer second.Close()
+		c, _ := plainClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("method = %s, want POST", r.Method)
+			}
+			if _, err := io.Copy(io.Discard, r.Body); err != nil {
+				t.Error(err)
+				return
+			}
+			<-r.Context().Done()
+		}, func(cfg *Config) {
+			cfg.Timeout = time.Minute
+			cfg.Endpoints = append(cfg.Endpoints, second.URL)
+		})
+		// Separate the transport timer from the request deadline so this
+		// always exercises a timeout while the request context is live.
+		c.http.Transport.(*http.Transport).ResponseHeaderTimeout = 20 * time.Millisecond
+		if _, err := c.CreateCollection(context.Background(), Collection{Class: "Article"}); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("response header timeout: %v", err)
+		}
+		if replayed.Load() {
+			t.Fatal("replayed mutation after response header timeout")
+		}
+	})
 }
 
 func TestConcurrentRequests(t *testing.T) {

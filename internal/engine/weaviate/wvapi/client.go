@@ -228,6 +228,11 @@ func (c *Client) do(ctx context.Context, method, path string, q url.Values, body
 				return ctx.Err()
 			}
 			if connected.Load() {
+				// Transport deadlines (notably ResponseHeaderTimeout) can fire
+				// before the request context's independent deadline timer.
+				if errors.Is(err, context.DeadlineExceeded) {
+					return context.DeadlineExceeded
+				}
 				return errors.New("connection to Weaviate failed after establishment")
 			}
 			continue
