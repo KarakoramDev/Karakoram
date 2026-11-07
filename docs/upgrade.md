@@ -82,6 +82,15 @@ resource recovery and false PXC GTID-history incidents. Their workarounds still
 apply. Fixes for those three issues are planned for v0.4.7; the other
 continuing limitations keep their individually documented status.
 
+- **Creating a Percona XtraDB Cluster on Nomad fails** (also present in
+  v0.4.3–v0.4.5; Zerops and Dokploy are not affected). A new three-member PXC
+  cluster on the Nomad provider fails after about 5–9 minutes with
+  `GTIDMappingCertificationBlocked`: the last member is never started and the
+  failed create shuts down another member. No existing data is affected; this
+  happens only when creating a cluster. There is no workaround on Nomad: PXC
+  requires its proxy. Until the fix, use MySQL Group Replication on Nomad, or
+  create PXC clusters on Zerops or Dokploy. A fix is planned for the next
+  release.
 - **A cluster can report Degraded while its Data MCP companion is unresponsive**
   (also present in v0.4.1–v0.4.5). If a cluster's Data MCP companion accepts
   connections but stops answering — for example while it restarts or when it

@@ -6,6 +6,8 @@ The `nomad` provider runs Karakoram clusters on a [HashiCorp Nomad](https://deve
 
 [PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use native preparation/supervision under this provider and have not been accepted here. Allow egress to [Percona](https://www.percona.com/) repositories, locked native artifacts/operator mirror and registered [S3](https://aws.amazon.com/s3/) storage. `native_artifact_mirror` configures the shipped control-plane job's artifact mirror. Supabase `gateway.publicHttps` is rejected because this provider has no managed HTTPS capability; keep the private gateway and supply application ingress outside that option. Public PostgreSQL TCP needs the existing operator load balancer/firewall arrangement and allow-all acknowledgement.
 
+Creating PXC clusters on Nomad fails in v0.4.3–v0.4.6; see the [known issue and alternatives](upgrade.md#known-issues-in-v046).
+
 ## How it maps
 
 |Karakoram|Nomad|
