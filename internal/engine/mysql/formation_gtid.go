@@ -136,6 +136,9 @@ func (o pxcMappingOwner) block(ctx context.Context, rc *engine.Context, s *state
 	return engine.Invalid("%s", o.Formation.Blocked)
 }
 func (o pxcMappingOwner) cleanup(ctx context.Context, rc *engine.Context, s *state, cp *backupCheckpoint) error {
+	if o.Formation != nil {
+		checkpointGaleraFormation(ctx, rc, s)
+	}
 	if err := o.release(ctx, rc, s, true); err != nil {
 		return err
 	}
@@ -421,6 +424,11 @@ func reconcilePXCFormationCertification(ctx context.Context, rc *engine.Context,
 			return false, nil
 		}
 		return true, engine.Invalid("%s", c.Blocked)
+	}
+	// Native admission receipts must be observed before the stall decision.
+	// Proxy serving health can deliberately remain pending behind our fence.
+	if !c.StartedAt.IsZero() {
+		checkpointGaleraFormation(ctx, rc, s)
 	}
 	if pxcFormationAdmissionExpired(rc, s, c) {
 		return true, owner.block(freshMySQLReads(ctx), rc, s, cp, "PXC join admission made no native Synced/certification progress within five minutes; recover the stalled joiner before retrying")

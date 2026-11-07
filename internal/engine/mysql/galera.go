@@ -98,8 +98,62 @@ func selectGaleraPosition(observations map[string]myspec.WSRepRecoverResponse) (
 	}
 	return seed, fmt.Sprintf("%s:%d", uuid, highest), nil
 }
+
+// checkpointGaleraFormation observes native progress without launching a member.
+// Keep this independent of serving deployments and run it before admission expiry
+// or fence cleanup: a Synced member must not lose its launch receipt on reload.
+func checkpointGaleraFormation(ctx context.Context, rc *engine.Context, s *state) bool {
+	f := &s.Formation
+	if f.Reformation != nil && f.Reformation.State == "observing" {
+		return false
+	}
+	if f.State == "bootstrapping" {
+		seed := s.find(f.Seed)
+		if seed == nil {
+			return false
+		}
+		var st myspec.StatusResponse
+		err := mysqlAction(ctx, rc, seed.Name, myspec.ActionStatus, struct{}{}, &st)
+		native, nativeErr := galeraStatus(ctx, rc, seed.Name)
+		if err != nil || nativeErr != nil || !native.Eligible() || st.DataIdentity.FormationEpoch < f.FormationEpoch {
+			return false
+		}
+		seed.Initialized, seed.ServerUUID, seed.Stage = true, st.ServerUUID, "joined"
+		f.State, f.Blocked, f.StartPosition = "formed", "", ""
+		for _, m := range s.data() {
+			m.Offline = false
+		}
+		if f.Reformation != nil {
+			f.Reformation.State = "formed"
+		}
+		publishRevision(s)
+		return true
+	}
+	changed := false
+	if f.State == "formed" {
+		for _, m := range s.data() {
+			if m.Offline || m.Removing || m.ConfirmedVolumeLost || m.Stage != "deployed" {
+				continue
+			}
+			st, err := live(ctx, rc, m.Name)
+			native, nativeErr := galeraStatus(ctx, rc, m.Name)
+			if err == nil && nativeErr == nil && st.MemberState == "ONLINE" && native.Eligible() {
+				m.Stage, m.Initialized, m.ServerUUID = "joined", true, st.ServerUUID
+				changed = true
+			}
+		}
+	}
+	if changed {
+		publishRevision(s)
+	}
+	return changed
+}
+
 func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	f := &s.Formation
+	if checkpointGaleraFormation(ctx, rc, s) {
+		return true, nil
+	}
 	if r := f.Reformation; r != nil && r.State == "observing" {
 		// Preserve configuration/reload failures as reconcile errors, before
 		// starting native recovery on any member.
@@ -169,23 +223,6 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 		if seed == nil {
 			return true, engine.ErrNotFound
 		}
-		var st myspec.StatusResponse
-		err := mysqlAction(ctx, rc, seed.Name, myspec.ActionStatus, struct{}{}, &st)
-		native, nativeErr := galeraStatus(ctx, rc, seed.Name)
-		// A restored proxy initially has no joined backends. Native formation
-		// must publish the seed before routing can discover that writer.
-		if err == nil && nativeErr == nil && native.Eligible() && st.DataIdentity.FormationEpoch >= f.FormationEpoch {
-			seed.Initialized, seed.ServerUUID, seed.Stage = true, st.ServerUUID, "joined"
-			f.State, f.Blocked, f.StartPosition = "formed", "", ""
-			for _, m := range s.data() {
-				m.Offline = false
-			}
-			if f.Reformation != nil {
-				f.Reformation.State = "formed"
-			}
-			publishRevision(s)
-			return true, nil
-		}
 		applied, err := configApplied(ctx, rc, seed)
 		if err != nil || !applied {
 			return true, err
@@ -206,11 +243,6 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 			}
 			st, err := live(ctx, rc, m.Name)
 			if err == nil && st.MemberState == "ONLINE" {
-				if m.Stage != "joined" {
-					m.Stage, m.Initialized, m.ServerUUID = "joined", true, st.ServerUUID
-					publishRevision(s)
-					return true, nil
-				}
 				continue
 			}
 			applied, err := configApplied(ctx, rc, m)

@@ -503,7 +503,15 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			return result, e
 		}
 		if !st.Done && !st.Failed {
-			deploymentsBusy = true
+			// Certification deliberately stops ProxySQL until all data members
+			// join and prove their mapping. Preserve the serving receipt, but do
+			// not make native formation depend on that impossible health check.
+			c := s.Formation.GTIDCertification
+			fencedFormationProxy := m.Role == "proxy" && c != nil && !c.JoinOnly &&
+				c.Owner != "" && s.RestoreGTIDFence == c.Owner
+			if !fencedFormationProxy {
+				deploymentsBusy = true
+			}
 			continue
 		}
 		m.DeployOp = nil
