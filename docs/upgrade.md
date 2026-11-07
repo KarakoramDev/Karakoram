@@ -82,6 +82,18 @@ resource recovery and false PXC GTID-history incidents. Their workarounds still
 apply. Fixes for those three issues are planned for v0.4.7; the other
 continuing limitations keep their individually documented status.
 
+- **A cluster can report Degraded while its Data MCP companion is unresponsive**
+  (also present in v0.4.1–v0.4.5). If a cluster's Data MCP companion accepts
+  connections but stops answering — for example while it restarts or when it
+  hangs — the control plane waits too long for it, the cluster's health
+  observations go stale, and the cluster reports `Degraded` (`ObservationStale`)
+  for as long as the companion stays unresponsive, even though the database
+  itself is healthy. It recovers by itself once the companion answers again.
+  If it persists, disable Data MCP for that cluster
+  (`spec.dataMcp.enabled: false`, applied with
+  `karactl clusters patch CLUSTER -f change.yaml`) and re-enable it later.
+  A fix is planned for the next release.
+
 ## Upgrading to v0.4.5
 
 v0.4.5 is a hotfix of v0.4.4 with only two MySQL fixes. It does not include
