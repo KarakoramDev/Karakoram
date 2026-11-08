@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The Karakoram Authors
-"""Throwaway v0.4.3 control plane for Glama's stdio MCP inspection, not deployment.
+"""Throwaway v0.4.7 control plane for Glama's stdio MCP inspection, not deployment.
 
-Inspection only: no provider is reachable. v0.4.3 requires a default backend,
+Inspection only: no provider is reachable. The control plane requires a default backend,
 so Nomad points to a closed loopback port with an obviously fake credential.
 Tools that need a provider will report it as unavailable. No cluster is created.
 """
@@ -33,14 +33,15 @@ def main():
     # State, credentials and SQLite files are private and removed on exit.
     os.umask(0o077)
     with tempfile.TemporaryDirectory(prefix="glama-", dir=os.getcwd()) as state:
-        origin = "http://127.0.0.1:8080"
+        # Glama's mcp-proxy uses 8080; keep the control plane on a separate port.
+        origin = "http://127.0.0.1:18080"
         password = secrets.token_urlsafe(32)
         environment = os.environ.copy()
         environment.update(
             KARAKORAM_DATA_DIR=state,
             KARAKORAM_MASTER_KEY=secrets.token_hex(32),
             KARAKORAM_ADMIN_PASSWORD=password,
-            KARAKORAM_LISTEN="127.0.0.1:8080",
+            KARAKORAM_LISTEN="127.0.0.1:18080",
             KARAKORAM_INTERNAL_LISTEN="127.0.0.1:9443",
             KARAKORAM_PUBLIC_URL=origin,
             KARAKORAM_ADVERTISE_URL="https://127.0.0.1:9443",
@@ -49,6 +50,8 @@ def main():
             KARAKORAM_NOMAD_NAMESPACE="glama-inspection",
             KARAKORAM_NOMAD_TOKEN="glama-inspection-placeholder",
             KARAKORAM_MCP="readonly",
+            # Improves tool completeness for registry inspection; read-only token unchanged.
+            KARAKORAM_MCP_OUTPUT_SCHEMAS="true",
             KARAKORAM_OAUTH="off",
             KARAKORAM_OAUTH_DCR="off",
         )
