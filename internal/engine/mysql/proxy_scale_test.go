@@ -113,17 +113,18 @@ func proxyScaleFixture(t *testing.T, rc *engine.Context, s *state) (*proxyScaleB
 		t.Fatal("missing proxy")
 	}
 	stale := new([2]bool)
+	base := rc.Backend.(*fakeBackend)
 	writerUnready := new([2]bool)
 	agents := admissionAgents{fakeAgents: rc.Agents.(fakeAgents), proxy: proxy.Name, peers: map[string]string{}}
 	for i, instance := range []string{"first", "second"} {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/v1/status" {
-				current, err := load(rc.Cluster)
-				if err != nil {
-					http.Error(w, "checkpoint unavailable", http.StatusServiceUnavailable)
-					return
-				}
-				version := current.find(proxy.Name).ConfigVersion
+				// Report the durable config applied by the fake agent, just as
+				// a remote agent would. Reading rc.Cluster here races with the
+				// concurrent PXC status sweep's GTID journal checkpoints.
+				base.mu.Lock()
+				version := base.applied[proxy.Name]
+				base.mu.Unlock()
 				if stale[i] {
 					version = 0
 				}

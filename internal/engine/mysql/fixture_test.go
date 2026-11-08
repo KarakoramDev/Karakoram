@@ -294,7 +294,9 @@ func (b *fakeBackend) apply(t *testing.T, p *Core, rc *engine.Context) {
 		if err = json.Unmarshal(cfg.EngineSpec, &sp); err != nil {
 			t.Fatal(err)
 		}
+		b.mu.Lock()
 		b.applied[m.Name] = cfg.ConfigVersion
+		b.mu.Unlock()
 		if m.Role == "proxy" {
 			// The fake agent serves its last applied immutable config, not
 			// mutable control-plane state during concurrent Status reads.
