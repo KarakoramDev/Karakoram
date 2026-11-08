@@ -69,7 +69,7 @@ func (f supabaseFlavour) AdminConsumers(ctx context.Context, rc *engine.Context)
 	return "", nil
 }
 func (f supabaseFlavour) PostReady(ctx context.Context, rc *engine.Context) error {
-	if err := ensureCredentials(ctx, rc); err != nil {
+	if err := f.provider.ensureCredentials(ctx, rc); err != nil {
 		return err
 	}
 	credentials, err := loadCredentials(ctx, rc)

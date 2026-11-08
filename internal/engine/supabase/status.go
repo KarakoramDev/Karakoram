@@ -4,7 +4,6 @@ package supabase
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"sort"
 	"strings"
@@ -14,7 +13,6 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
-	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbkeys"
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbspec"
 )
 
@@ -231,7 +229,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 	// The operation identity is sealed with the new keys before rolling starts.
 	// Retrying a lost operation checkpoint cannot generate a second secret.
 	if credentials.RotationID != op.ID {
-		keys, err := sbkeys.Generate(rand.Reader, clockNow(rc))
+		keys, err := p.generateKeys(clockNow(rc))
 		if err != nil {
 			return engine.OpResult{}, err
 		}

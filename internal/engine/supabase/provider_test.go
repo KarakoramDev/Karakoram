@@ -20,6 +20,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/enginetest"
 	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgprofile"
@@ -231,6 +232,7 @@ func setupProvider(t *testing.T) (*Provider, *engine.Context, *testBackend) {
 	}
 	t.Cleanup(func() { st.Close() })
 	p := New(postgres.Options{Store: st})
+	p.keyRandom = enginetest.SupabaseKeyRandom{}
 	cluster := &domain.Cluster{Name: "demo", Namespace: "default", Generation: 1}
 	p.ApplyDefaults(&cluster.Spec)
 	backend := &testBackend{services: map[string]*infra.Service{}, deployed: map[string]bool{}}
@@ -1046,7 +1048,7 @@ func TestRealtimeAdminSecretMigrationAndProjection(t *testing.T) {
 	if len(spec.RealtimeAdminSecret) < 32 || spec.RealtimeAdminSecret == before.Keys.JWTSecret || spec.JWTSecret != before.Keys.JWTSecret || spec.RealtimeAdminSecret != after.RealtimeAdminSecret || after.Keys.AnonKey != before.Keys.AnonKey {
 		t.Fatal("admin secret migration changed tenant credentials or was not sealed independently")
 	}
-	if err := ensureCredentials(t.Context(), rc); err != nil {
+	if err := p.ensureCredentials(t.Context(), rc); err != nil {
 		t.Fatal(err)
 	}
 	stable, err := loadCredentials(t.Context(), rc)

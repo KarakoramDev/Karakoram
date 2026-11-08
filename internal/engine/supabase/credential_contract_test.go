@@ -18,7 +18,7 @@ var generatedRolePasswordLimit = enginetest.CredentialLimit{Min: 12, Max: 1024, 
 func TestProviderGeneratedCredentialContracts(t *testing.T) {
 	p, rc, _ := setupProvider(t)
 	recorded := enginetest.RecordCredentials(rc)
-	if err := ensureCredentials(t.Context(), rc); err != nil {
+	if err := p.ensureCredentials(t.Context(), rc); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := p.syncComponents(t.Context(), rc); err != nil {
@@ -164,7 +164,7 @@ func TestRuntimeCredentialContracts(t *testing.T) {
 	if err := storeCredentials(t.Context(), rc, after); err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureCredentials(t.Context(), rc); err != nil {
+	if err := p.ensureCredentials(t.Context(), rc); err != nil {
 		t.Fatal(err)
 	}
 	convergeProvider(t, p, rc)

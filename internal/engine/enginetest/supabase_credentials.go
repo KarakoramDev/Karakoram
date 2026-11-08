@@ -3,6 +3,7 @@
 package enginetest
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -13,6 +14,19 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbkeys"
 )
+
+// SupabaseKeyRandom keeps frozen fake-cluster snapshots visibly non-production.
+// Generate requests 17 bytes only for opaque API keys. Feed those requests a
+// TESTONLY body; all other credentials retain their runtime test randomness.
+// OpaqueKey still computes the real upstream checksum and format.
+type SupabaseKeyRandom struct{}
+
+func (SupabaseKeyRandom) Read(p []byte) (int, error) {
+	if len(p) == 17 {
+		return base64.RawURLEncoding.Decode(p, []byte("TESTONLYnotarealkey000AA"[:23]))
+	}
+	return rand.Read(p)
+}
 
 // SupabaseCredentialContracts checks every persisted field, not a password proxy.
 // Formats: https://supabase.com/docs/guides/self-hosting/self-hosted-auth-keys

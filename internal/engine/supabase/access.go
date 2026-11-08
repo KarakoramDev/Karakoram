@@ -56,7 +56,15 @@ func storeCredentials(ctx context.Context, rc *engine.Context, c sealedCredentia
 	}
 	return rc.Secrets.SetClusterSecret(ctx, rc.Cluster.Ref(), credentialsKey, b)
 }
-func ensureCredentials(ctx context.Context, rc *engine.Context) error {
+
+func (p *Provider) generateKeys(now time.Time) (sbkeys.Keys, error) {
+	random := p.keyRandom
+	if random == nil {
+		random = rand.Reader
+	}
+	return sbkeys.Generate(random, now)
+}
+func (p *Provider) ensureCredentials(ctx context.Context, rc *engine.Context) error {
 	c, err := loadCredentials(ctx, rc)
 	if err == nil {
 		if c.RealtimeAdminSecret != "" {
@@ -71,7 +79,7 @@ func ensureCredentials(ctx context.Context, rc *engine.Context) error {
 	if !missing(err) {
 		return err
 	}
-	keys, err := sbkeys.Generate(rand.Reader, clockNow(rc))
+	keys, err := p.generateKeys(clockNow(rc))
 	if err != nil {
 		return err
 	}

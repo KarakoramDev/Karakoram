@@ -139,7 +139,7 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 		return out, err
 	}
 	if c.RealtimeAdminSecret == "" {
-		if err = ensureCredentials(ctx, rc); err != nil {
+		if err = p.ensureCredentials(ctx, rc); err != nil {
 			return out, err
 		}
 		c, err = loadCredentials(ctx, rc)

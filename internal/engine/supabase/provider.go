@@ -5,6 +5,7 @@ package supabase
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"regexp"
 	"strings"
 	"sync"
@@ -57,6 +58,7 @@ type Provider struct {
 	*postgres.Core
 	options     postgres.Options
 	functionsMu sync.Mutex
+	keyRandom   io.Reader // nil uses crypto/rand.Reader; tests inject opaque-key entropy.
 }
 
 func New(o postgres.Options) *Provider {
