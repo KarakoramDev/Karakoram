@@ -17,6 +17,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/enginetest"
 	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
 type cpUpgradeProvider struct {
@@ -70,6 +71,7 @@ func restoreCompanionCP(t *testing.T, upstream, path string) (*fixture, *cpUpgra
 	}
 	f.controller.Registry = registry
 	backend := &cpUpgradeBackend{Backend: f.backend, service: &snapshot.Services[0]}
+	f.rc.Artifact = cpUpgradeArtifact{identity: "current-agent-build"}
 	f.rc.Backend = backend
 	return f, backend, snapshot
 }
@@ -87,7 +89,7 @@ func TestCPUpgradeCompanionLockedBytes(t *testing.T) {
 		redeploy             bool
 	}{
 		{"mongodb-rebuilt", companionspec.UpstreamMongoDB, "testdata/cp_upgrade_eea8bd7.json", true},
-		{"pgedge-unchanged", companionspec.UpstreamPostgres, "testdata/cp_upgrade_pgedge_eea8bd7.json", false},
+		{"pgedge-unchanged", companionspec.UpstreamPostgres, "testdata/cp_upgrade_pgedge_eea8bd7.json", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f, backend, snapshot := restoreCompanionCP(t, tc.upstream, tc.path)
@@ -176,6 +178,78 @@ func TestCPUpgradeCompanionLockedBytes(t *testing.T) {
 	}
 }
 
+type cpUpgradeArtifact struct {
+	artifact
+	identity string
+}
+
+func (a cpUpgradeArtifact) ArtifactIdentity() string { return a.identity }
+
+func TestCompanionAgentArchiveUpgrade(t *testing.T) {
+	for _, upstream := range []string{companionspec.UpstreamPostgres, companionspec.UpstreamMongoDB} {
+		t.Run(upstream, func(t *testing.T) {
+			path := "testdata/cp_upgrade_eea8bd7.json"
+			if upstream == companionspec.UpstreamPostgres {
+				path = "testdata/cp_upgrade_pgedge_eea8bd7.json"
+			}
+			f, backend, _ := restoreCompanionCP(t, upstream, path)
+			events := &cpUpgradeEvents{}
+			f.rc.Events = events
+			f.rc.Artifact = cpUpgradeArtifact{identity: "agent-build-one"}
+			_, b, err := f.controller.backend(f.rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			runtime, err := f.controller.runtime(f.rc, b)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s, err := load(t.Context(), f.rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := json.Marshal(runtime)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.RuntimeHash = secrets.Hash(string(raw))
+			if err = save(t.Context(), f.rc, s); err != nil {
+				t.Fatal(err)
+			}
+			f.converge(t)
+			// Reconstruct the CP controller and source with the same archive.
+			f.controller = &Controller{Registry: f.controller.Registry, InternalCAPEM: f.controller.InternalCAPEM}
+			f.rc.Artifact = cpUpgradeArtifact{identity: "agent-build-one"}
+			f.converge(t)
+			if len(backend.submitted) != 0 || len(events.events) != 0 {
+				t.Fatal("unchanged archive or CP restart triggered a rollout")
+			}
+			f.rc.Artifact = cpUpgradeArtifact{identity: "agent-build-two"}
+			closed := &domain.MaintenancePolicy{TimeZone: "UTC", Windows: []domain.MaintenanceWindow{{Schedule: "0 1 * * *", Duration: "1h"}}}
+			f.rc.Cluster.Spec.Maintenance = closed
+			for range 3 {
+				result, err := f.controller.Sync(t.Context(), f.rc)
+				if err != nil || result.RequeueAfter == 0 || len(backend.submitted) != 0 {
+					t.Fatal("archive upgrade bypassed maintenance window", result, err)
+				}
+			}
+			f.rc.Cluster.Spec.Maintenance = nil
+			if _, err = f.controller.Sync(t.Context(), f.rc); err != nil {
+				t.Fatal(err)
+			}
+			f.rc.Cluster.Spec.Maintenance = closed
+			f.converge(t)
+			f.controller = &Controller{Registry: f.controller.Registry, InternalCAPEM: f.controller.InternalCAPEM}
+			for range 3 {
+				f.converge(t)
+			}
+			if len(backend.submitted) != 1 || len(events.events) != 1 || events.events[0].Reason != "DataMcpCompanionRollout" {
+				t.Fatalf("archive upgrade submitted %d rollouts and %d events, want exactly one each", len(backend.submitted), len(events.events))
+			}
+		})
+	}
+}
+
 func TestCPUpgradeCompanionFailuresBounded(t *testing.T) {
 	for _, mode := range []string{"rejected", "failed-receipt"} {
 		t.Run(mode, func(t *testing.T) {
@@ -219,6 +293,14 @@ func TestCPUpgradeCompanionFailuresBounded(t *testing.T) {
 			_, _ = f.controller.Sync(t.Context(), f.rc)
 			if len(backend.submitted) != deploymentAttemptLimit+1 {
 				t.Fatal("explicit retry did not rearm companion")
+			}
+			f.rc.Artifact = cpUpgradeArtifact{identity: "next-agent-build"}
+			for range 20 {
+				_, _ = f.controller.Sync(t.Context(), f.rc)
+				f.controller = &Controller{Registry: f.controller.Registry, InternalCAPEM: f.controller.InternalCAPEM}
+			}
+			if len(backend.submitted) != 2*deploymentAttemptLimit+1 {
+				t.Fatal("changed agent archive did not receive its own bounded retry budget", len(backend.submitted))
 			}
 		})
 	}

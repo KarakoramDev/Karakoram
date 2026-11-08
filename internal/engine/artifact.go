@@ -23,7 +23,9 @@ func (ExecutableArtifact) ArtifactIdentity() string {
 	return version.BuildIdentity()
 }
 
-func artifactIdentity(source ArtifactSource) string {
+// ArtifactIdentity returns the identity of the agent archive a source deploys,
+// or an empty string for custom sources without identity support.
+func ArtifactIdentity(source ArtifactSource) string {
 	if source, ok := source.(interface{ ArtifactIdentity() string }); ok {
 		return source.ArtifactIdentity()
 	}

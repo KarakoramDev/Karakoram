@@ -143,7 +143,10 @@ func (c *Controller) runtime(rc *engine.Context, b engine.DataMcpBackend) (infra
 	deps := append([]string{"ca-certificates", "curl", "xz-utils", "python3"}, a.RuntimeDeps...)
 	prepare := []string{"sudo apt-get update && sudo apt-get install -y " + strings.Join(deps, " ")}
 	prepare = append(prepare, nativeartifacts.PrepareCommands(a, u, installDir(a), rc.Backend.Layout().User)...)
-	return (engine.AgentRuntime{Cluster: rc.Cluster.Name, Member: Member(rc.Cluster.Name), Engine: companionspec.Engine, AgentURL: rc.AgentURL, InternalCAPEM: c.InternalCAPEM, Ports: []infra.Port{{Port: 9443, Protocol: "tcp"}}, Prepare: prepare}).Spec(rc.Backend.Layout()), nil
+	// The agent archive is shipped separately from RuntimeSpec by Deploy. Include
+	// its stable identity here so an unchanged upstream URL cannot hide a new
+	// companion executable, including same-version rebuilds.
+	return (engine.AgentRuntime{Cluster: rc.Cluster.Name, Member: Member(rc.Cluster.Name), Engine: companionspec.Engine, AgentURL: rc.AgentURL, InternalCAPEM: c.InternalCAPEM, Ports: []infra.Port{{Port: 9443, Protocol: "tcp"}}, Prepare: prepare, Env: map[string]string{"KARAKORAM_AGENT_BUILD": engine.ArtifactIdentity(rc.Artifact)}}).Spec(rc.Backend.Layout()), nil
 }
 func ready(ctx context.Context, rc *engine.Context) error {
 	cfg, err := MemberConfig(ctx, rc, Member(rc.Cluster.Name))

@@ -27,7 +27,7 @@ func deploymentHash(spec infra.RuntimeSpec) string {
 // the durable cluster epoch. A different desired runtime has its own budget.
 func DeploymentBlocked(rc *Context, name string, spec infra.RuntimeSpec) bool {
 	f, ok := rc.Cluster.Status.DeploymentFailures[name]
-	return ok && rc.Cluster.Spec.RetryEpoch <= f.RetryEpoch && f.DesiredHash == deploymentHash(spec) && (rc.Artifact == nil || f.ArtifactIdentity == artifactIdentity(rc.Artifact))
+	return ok && rc.Cluster.Spec.RetryEpoch <= f.RetryEpoch && f.DesiredHash == deploymentHash(spec) && (rc.Artifact == nil || f.ArtifactIdentity == ArtifactIdentity(rc.Artifact))
 }
 
 func deploymentNow(rc *Context) time.Time {
@@ -46,7 +46,7 @@ func RecordDeploymentExhausted(ctx context.Context, rc *Context, name string, sp
 	if DeploymentBlocked(rc, name, spec) {
 		return err
 	}
-	f := domain.DeploymentFailure{RetryEpoch: rc.Cluster.Spec.RetryEpoch, DesiredHash: deploymentHash(spec), ArtifactIdentity: artifactIdentity(rc.Artifact)}
+	f := domain.DeploymentFailure{RetryEpoch: rc.Cluster.Spec.RetryEpoch, DesiredHash: deploymentHash(spec), ArtifactIdentity: ArtifactIdentity(rc.Artifact)}
 	var exhausted *infra.DeploymentExhaustedError
 	if errors.As(err, &exhausted) {
 		f.Version, f.Attempts, f.LastError = exhausted.Version, exhausted.Attempts, exhausted.LastError
