@@ -55,9 +55,15 @@ For frontend development, run `npm run dev` in `ui/`: [Vite](https://vite.dev) l
 
 Maintainers release from `main` for major changes, security fixes or accumulated fixes—not every commit. Pushes do not automatically create tags/releases.
 
-Use `vMAJOR.MINOR.PATCH`: before 1.0, MINOR for features/breaking changes and PATCH for fixes/security; from 1.0, MAJOR for breaking changes, MINOR for compatible features, PATCH for fixes. Document breaking changes/upgrade steps. Prereleases such as `-rc.1` are allowed; deploy them only deliberately.
+Versions use `vX.Y.Z`:
 
-Default Zerops deploy/run configuration must remain compatible with the binary pinned in `deploy/zerops/RELEASE`, even on newer `main`. Ship binary-dependent configuration with its release or use `karakoram-source`. **Never edit `RELEASE` by hand:** the release tool writes its single SemVer tag.
+- **X — milestone.** Changes only for a fundamental milestone, such as moving from the current development series to stable production, after which upgrades between versions must not break existing installations.
+- **Y — major change.** A new engine, a new provider, or a change of similar scope, including breaking changes in the development series.
+- **Z — patch.** Fixes, security fixes, dependency and engine version bumps, and new or improved functionality within existing engines and providers. Hotfix releases always take the next Z.
+
+Choose the version by the largest change in the release. Document breaking changes and upgrade steps in the release notes and `docs/upgrade.md`. Prereleases such as `-rc.1` are allowed; deploy them only deliberately.
+
+Default Zerops deploy/run configuration must remain compatible with the binary pinned in `deploy/zerops/RELEASE`, even on newer `main`. Ship binary-dependent configuration with its release or use `karakoram-source`. **Never edit `RELEASE` by hand:** the release tool writes its single `vX.Y.Z` release tag.
 
 ### Prerequisites and release notes
 
