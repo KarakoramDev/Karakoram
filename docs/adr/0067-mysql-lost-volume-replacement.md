@@ -2,6 +2,23 @@
 
 Status: Accepted; native/provider fault verification remains required.
 
+## v0.4.7 update — 2026-11-08
+
+Automatic confirmed-loss replacement is **disabled by default** for both MySQL
+Group Replication and PXC. Testing observed Group Replication quorum loss after
+an automatic confirmed-loss member replacement; the cause is not yet known.
+Opt in only deliberately with
+`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES=true` in the control-plane environment
+and restart the control plane. This automatic path is **experimental**.
+Invalid non-empty values fail startup.
+
+With the switch off, persist loss evidence, fence the lost identity and leave
+the cluster Degraded with `AutomaticReplacementDisabled` and operator guidance.
+Verify surviving members, then request
+`karactl clusters replace-member CLUSTER MEMBER --wait`.
+Explicit replacement remains unchanged and still requires native safety proof.
+The automatic queueing decision below applies only when opted in.
+
 ## Context
 
 A missing runtime is not lost data. A confirmed lost initialized volume cannot

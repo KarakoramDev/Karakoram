@@ -173,6 +173,16 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if !changed {
 			return false, nil
 		}
+		if !p.options.AutoReplaceLostVolumes {
+			for _, m := range s.data() {
+				if m.ConfirmedVolumeLost {
+					// Await explicit replacement without acquiring a rolling
+					// owner or failing Sync, either of which prevents its claim.
+					// Existing rolling and replacement owners retain progression.
+					return true, nil
+				}
+			}
+		}
 		if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
 		}

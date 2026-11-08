@@ -27,6 +27,7 @@ type Config struct {
 	OAuthClientHosts                                                                                                                    []string
 	MCP                                                                                                                                 string
 	MCPOutputSchemas                                                                                                                    bool
+	MySQLAutoReplaceLostVolumes                                                                                                         bool
 }
 
 // ConfigFromEnv loads deployment settings and validates every endpoint before opening the DB.
@@ -58,6 +59,13 @@ func ConfigFromEnv() (Config, error) {
 		c.MCPOutputSchemas, err = strconv.ParseBool(value)
 		if err != nil {
 			return Config{}, errors.New("KARAKORAM_MCP_OUTPUT_SCHEMAS must be true or false")
+		}
+	}
+	if value := os.Getenv("KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES"); value != "" {
+		var err error
+		c.MySQLAutoReplaceLostVolumes, err = strconv.ParseBool(value)
+		if err != nil {
+			return Config{}, errors.New("KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES must be true or false")
 		}
 	}
 	registry, err := backendRegistry(c)

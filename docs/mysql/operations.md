@@ -623,8 +623,26 @@ Full-outage recovery below compares stopped members' recovered positions and is 
 
 ## Confirmed volume loss
 
-MySQL Group Replication and PXC automatically queue managed add-before-remove
-replacement only after **confirmed** loss of a member's initialized volume.
+By default, MySQL Group Replication and PXC do **not** automatically replace
+a member after confirmed loss of its initialized volume. The cluster stays
+Degraded with `VolumeReplacementSafe=False`, reason `AutomaticReplacementDisabled`,
+and a message directing the operator to verify healthy surviving members, then run:
+
+```sh
+karactl clusters replace-member CLUSTER MEMBER --wait
+```
+
+Explicit replacement is unchanged and retains the native safety checks below.
+While a confirmed-lost member awaits explicit replacement, new rolling
+version/resource/parameter/proxy changes are deferred without taking maintenance
+ownership, so the replacement operation remains claimable. Existing rolling
+owners, orphaned rollout-drain settlement and active replacement still progress.
+Automatic add-before-remove replacement is experimental and requires
+`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES=true` in the control-plane environment
+and a control-plane restart (default `false`; invalid non-empty values fail startup).
+Testing observed GR quorum loss after an automatic confirmed-loss replacement;
+the cause is not yet known. This opt-in covers both GR and PXC, not other engines.
+
 An unreachable agent, storage API failure or unknown mount is not confirmed
 loss and never authorizes an empty data directory. `VolumeLost` / `VOLUME_LOST`
 keeps the cluster Degraded while evidence or replacement is pending.
@@ -656,10 +674,11 @@ survivors, the new joiner and deployed proxies must still negotiate certificatio
   storage or restore a backup into a new cluster; ordinary retained-volume
   runtime restarts still cause singleton downtime.
 
-Inspect the precise status reason and queued operation. Reconciliation reuses
-one deterministic operation ID and does not requeue terminal operations. After
-resolving a terminal failure, inspect retained data before requesting managed
-replacement again. No automatic `pc.bootstrap` or `recover-quorum` is introduced.
+When opted in, inspect the precise status reason and queued operation.
+Reconciliation reuses one deterministic operation ID and does not requeue
+terminal operations. After resolving a terminal failure, inspect retained data
+before requesting managed replacement again. No automatic `pc.bootstrap` or
+`recover-quorum` is introduced.
 Read-only runtime/storage discovery shares the bounded MySQL observation pass
 with native health and agent status; it does not add a timeout per member.
 Replacement admission still obtains fresh surviving-data proof before queueing.
@@ -668,7 +687,9 @@ Runtime recovery discovers loss before orphaned rollout-drain settlement. If the
 withdrawn member itself is confirmed lost and its rollout owner is terminal or
 missing, settlement releases only the drain ownership, without waiting for native
 health or readmitting that identity. Confirmed loss keeps it out of proxy routing;
-the next reconciliation can queue replacement. A live rollout owner retains its
+the next reconciliation can queue replacement only when automatic replacement
+is enabled. Otherwise request explicit replacement after verifying survivors.
+A live rollout owner retains its
 drain until the serialized operation completes or terminates.
 This is distinct from retained-data full-outage re-formation below.
 See [ADR 0067](../adr/0067-mysql-lost-volume-replacement.md).

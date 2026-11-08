@@ -15,6 +15,13 @@ of an intermediate resource-change rollout; then re-enable PITR if needed,
 take a successful full and verify the advancing window as described in the
 hotfix recovery steps. The two v0.4.5 MySQL fixes are inherited, not new in v0.4.7.
 
+MySQL/PXC automatic confirmed-loss replacement is disabled by default.
+Verify healthy survivors and run `karactl clusters replace-member CLUSTER MEMBER --wait`
+when storage is confirmed lost. The experimental automatic path requires
+`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES=true` and a control-plane restart;
+testing observed GR quorum loss after automatic replacement, with cause still
+unknown. Explicit replacement is unchanged; see [handling lost volumes](mysql/operations.md#confirmed-volume-loss).
+
 PSMDB adds security patches `7.0.45-24` and `8.0.34-15` (the new default).
 Existing clusters are not automatically patched. Upgrade every older offered
 7.0/8.0 patch to the latest in its line using the [MongoDB rolling upgrade
@@ -233,8 +240,9 @@ a process restart alone does not replace an installed bundle.
   to install the JRE; control-plane-only updates retain the installed Java home.
 - PostgreSQL, Citus and Supabase support restart-free `postgres` rotation after
   agent upgrades. Peer-auth activation may need one configuration restart first.
-- MySQL GR and PXC automatically replace confirmed lost volumes only after
-  native survivor/donor proof; MySQL single still requires storage recovery or restore.
+- MySQL GR and PXC automatic confirmed-loss replacement is experimental and
+  disabled by default; explicit replacement retains native survivor/donor proof.
+  MySQL single still requires storage recovery or restore.
 - Percona Server/PXC 8.0 entries are deprecated after community EOL on
   2026-04-01. Fresh empty creates/import targets must use 8.4; rejection identifies
   `spec.version` with reason `unsupported`. Existing 8.0 updates, backups/restores
@@ -389,12 +397,18 @@ PostgreSQL identities remain unsupported on this route. See
 
 ### Automatic MySQL/PXC lost-volume replacement
 
-Confirmed loss of initialized storage can now queue managed add-before-remove
-replacement for MySQL Group Replication and PXC. `VOLUME_LOST` keeps the cluster
-Degraded while recovery or evidence is pending; `VolumeReplacementSafe=False`
-explains native admission refusal. An unreachable agent, identity conflict,
-unknown mount, stale observation or storage API error is not proof of loss and
-never authorizes initialization of empty old storage.
+Confirmed loss of initialized storage leaves MySQL Group Replication and PXC
+Degraded by default, with `VolumeReplacementSafe=False` and reason
+`AutomaticReplacementDisabled`. Verify healthy survivors, then run
+`karactl clusters replace-member CLUSTER MEMBER --wait`.
+To enable experimental automatic add-before-remove replacement, set
+`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES=true` and restart the control plane.
+Testing observed GR quorum loss after an automatic confirmed-loss replacement;
+the cause is not yet known. Explicit replacement is unchanged.
+When opted in, `VolumeReplacementSafe=False` explains native admission refusal.
+An unreachable agent, identity conflict, unknown mount, stale observation or
+storage API error is not proof of loss and never authorizes initialization of
+empty old storage.
 
 GR requires fresh ONLINE survivors in the configured group, a writable primary,
 a configured-member majority and a donor containing the lost member's last
@@ -2112,6 +2126,7 @@ After the upgrade the control plane serves the [MCP server](mcp.md) at `/mcp` be
 | --- | --- | --- |
 | `KARAKORAM_MCP` | `readonly` | `off`, `readonly` or `readwrite`; invalid values fail startup |
 | `KARAKORAM_MCP_OUTPUT_SCHEMAS` | `false` | Set `true` in the server environment and restart to advertise output schemas; off keeps discovery/context smaller without changing successful structured results or text content |
+| `KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES` | `false` | Experimental automatic confirmed-loss replacement for MySQL GR and PXC; off leaves Degraded with explicit `replace-member` guidance. `true`/`false`; invalid non-empty values fail startup. Control-plane restart required; explicit replacement and other engines unchanged |
 | `KARAKORAM_OAUTH` | `off` | Embedded OAuth authorization server for MCP connectors |
 | `KARAKORAM_OAUTH_DCR` | `off` | Dynamic client registration, only with OAuth on |
 | `KARAKORAM_OAUTH_CLIENT_HOSTS` | unset | Optional allowlist of client-metadata hosts |

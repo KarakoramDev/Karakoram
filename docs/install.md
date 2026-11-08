@@ -50,6 +50,7 @@ For source builds select `zeropsSetup: karakoram-source` in imports, `--source` 
 | `KARAKORAM_OAUTH_CLIENT_HOSTS` | Optional comma-separated host allowlist for HTTPS client ID metadata documents; never permits private destinations. |
 | `KARAKORAM_MCP` | Embedded [MCP server](mcp.md): `off`, `readonly` (default), or `readwrite`; invalid values fail startup. |
 | `KARAKORAM_MCP_OUTPUT_SCHEMAS` | `true` or `false` (default `false`): opt in to MCP `outputSchema` discovery metadata; off keeps client context smaller. Successful structured results and text content are unchanged. Environment-only server setting; restart required. |
+| `KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES` | `true` or `false` (default `false`): experimental automatic confirmed-loss member replacement for MySQL Group Replication and PXC. Off leaves the cluster Degraded with explicit `replace-member` guidance; explicit replacement and other engines are unchanged. Invalid non-empty values fail startup. Control-plane setting; restart required. |
 
 Zerops reserves `ZEROPS_`: user secrets named `ZEROPS_TOKEN` or `ZEROPS_PROJECT_ID` fail with `userDataZeropsPrefixForbidden`. Use `KARAKORAM_ZEROPS_*`.
 

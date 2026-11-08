@@ -94,6 +94,16 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 			m.ConfirmedVolumeLost = true
 		}
 		if m.ConfirmedVolumeLost {
+			replicated := clustered(s.Topology) && m.Role == "data"
+			if replicated && !p.options.AutoReplaceLostVolumes {
+				m.RuntimeRecoveryReason = fmt.Sprintf("member %s lost durable volume %s; automatic replacement is disabled for MySQL and PXC; verify that the surviving members are healthy, then run 'karactl clusters replace-member %s %s --wait' (set KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES=true to enable the experimental automatic replacement)", m.Name, m.Volume, rc.Cluster.Name, m.Name)
+				if err := save(rc.Cluster, s); err != nil {
+					return true, err
+				}
+				// Do not hold ordinary Sync or explicit replacement admission.
+				// The persisted loss fence keeps this member unrouted and Degraded.
+				continue
+			}
 			// Discover loss before orphan settlement (which cannot wait for a
 			// lost member's health), but settle all rollout withdrawals before
 			// selecting donors or queueing replacement.
@@ -102,7 +112,6 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 					return false, nil
 				}
 			}
-			replicated := clustered(s.Topology) && m.Role == "data"
 			if replicated {
 				if err = p.volumeRecoverySafe(ctx, rc, s, m); err != nil {
 					m.RuntimeRecoveryReason = err.Error()
@@ -227,12 +236,16 @@ func (p *Core) volumeRecoverySafe(ctx context.Context, rc *engine.Context, s *st
 	return nil
 }
 
-func applyMySQLRuntimeRecoveryStatus(status *domain.ClusterStatus, s *state, at time.Time) {
+func (p *Core) applyMySQLRuntimeRecoveryStatus(status *domain.ClusterStatus, s *state, at time.Time) {
 	for _, m := range s.Members {
 		engine.ApplyRuntimeRecoveryStatus(status, m.Name, m.Volume, m.RuntimeRecovery, at)
 		if m.RuntimeRecovery.VolumeLost && m.RuntimeRecoveryReason != "" {
 			status.Message = m.RuntimeRecoveryReason
-			status.Conditions = append(status.Conditions, domain.Condition{Type: "VolumeReplacementSafe", Status: "False", Reason: "NativeDataProofMissing", Message: m.RuntimeRecoveryReason, LastTransitionTime: at})
+			reason := "NativeDataProofMissing"
+			if m.ConfirmedVolumeLost && clustered(s.Topology) && m.Role == "data" && !p.options.AutoReplaceLostVolumes {
+				reason = "AutomaticReplacementDisabled"
+			}
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "VolumeReplacementSafe", Status: "False", Reason: reason, Message: m.RuntimeRecoveryReason, LastTransitionTime: at})
 		}
 	}
 }

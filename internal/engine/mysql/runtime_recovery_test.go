@@ -22,6 +22,7 @@ const recoverySID = "11111111-2222-3333-4444-555555555555"
 func recoveryFixture(t *testing.T) (*Core, *engine.Context, *fakeBackend, *state, *member) {
 	t.Helper()
 	p, rc, b := setup(t, "group")
+	p.options.AutoReplaceLostVolumes = true
 	converge(t, p, rc, b)
 	s, _ := load(rc.Cluster)
 	lost := s.data()[2]
@@ -75,7 +76,7 @@ func TestGRLostVolumeAdmission(t *testing.T) {
 				t.Fatalf("operations=%d recreated=%v", len(ops), b.services[lost.Volume])
 			}
 			status := domain.ClusterStatus{Phase: domain.PhaseReady}
-			applyMySQLRuntimeRecoveryStatus(&status, s, time.Now())
+			p.applyMySQLRuntimeRecoveryStatus(&status, s, time.Now())
 			if status.Phase != domain.PhaseDegraded || mode != "healthy" && !strings.Contains(status.Message, "refused") {
 				t.Fatalf("status=%+v", status)
 			}
@@ -269,6 +270,19 @@ func (b physicallyLostBackend) Start(_ context.Context, name string) (infra.Op, 
 }
 
 func TestConfirmedPhysicalLossReplacementEndToEnd(t *testing.T) {
+	testConfirmedPhysicalLossReplacement(t, true, false)
+}
+
+func TestExplicitLostVolumeReplacementWithAutomationDisabled(t *testing.T) {
+	testConfirmedPhysicalLossReplacement(t, false, false)
+}
+
+func TestExplicitLostVolumeReplacementBeforePendingRollingChange(t *testing.T) {
+	testConfirmedPhysicalLossReplacement(t, false, true)
+}
+
+func testConfirmedPhysicalLossReplacement(t *testing.T, automatic, pendingChange bool) {
+	t.Helper()
 	for _, provider := range []string{"mysql", "pxc"} {
 		t.Run(provider, func(t *testing.T) {
 			var p *Core
@@ -279,6 +293,7 @@ func TestConfirmedPhysicalLossReplacementEndToEnd(t *testing.T) {
 			} else {
 				p, rc, b = setup(t, "group")
 			}
+			p.options.AutoReplaceLostVolumes = automatic
 			converge(t, p, rc, b)
 			s, _ := load(rc.Cluster)
 			old := s.find(s.Formation.Seed)
@@ -314,12 +329,64 @@ func TestConfirmedPhysicalLossReplacementEndToEnd(t *testing.T) {
 			// fakeBackend advertises DiskGrowth=false. The surviving logical
 			// volume returns positive physical-loss evidence, not nil inventory.
 			rc.Backend = physicallyLostBackend{fakeBackend: b, volume: oldVolume, volumeID: oldVolumeID}
+			if pendingChange {
+				rc.Cluster.Spec.Components.Engine.Resources.MinRAM++
+				rc.Cluster.Spec.Components.Engine.Resources.MaxRAM++
+			}
 			if _, err := p.Sync(t.Context(), rc); err != nil {
 				t.Fatal(err)
 			}
 			ops, err := rc.Store.(*store.Store).ListOperations(t.Context(), rc.Cluster.Ref())
-			if err != nil || len(ops) != 1 {
+			if err != nil || automatic && len(ops) != 1 {
 				t.Fatalf("replacement admission: ops=%v err=%v", ops, err)
+			}
+			if !automatic {
+				if len(ops) != 0 {
+					t.Fatalf("automatic replacement queued while disabled: %+v", ops)
+				}
+				current, err := load(rc.Cluster)
+				if err != nil {
+					t.Fatal(err)
+				}
+				busy, err := p.recoverRuntimes(t.Context(), rc, current)
+				if busy || err != nil {
+					t.Fatalf("disabled automation blocks explicit maintenance: busy=%v err=%v", busy, err)
+				}
+				status := domain.ClusterStatus{Phase: domain.PhaseReady}
+				p.applyMySQLRuntimeRecoveryStatus(&status, current, time.Now())
+				if status.Phase != domain.PhaseDegraded || !strings.Contains(status.Message, "karactl clusters replace-member "+rc.Cluster.Name+" "+oldName+" --wait") {
+					t.Fatalf("missing operator guidance: %+v", status)
+				}
+				disabled := false
+				for _, condition := range status.Conditions {
+					disabled = disabled || condition.Type == "VolumeReplacementSafe" && condition.Status == "False" && condition.Reason == "AutomaticReplacementDisabled"
+				}
+				if !disabled {
+					t.Fatalf("missing disabled condition: %+v", status.Conditions)
+				}
+				payload, _ := json.Marshal(map[string]string{"member": oldName})
+				op := domain.Operation{ID: "explicit-lost-volume-replacement", Cluster: rc.Cluster.Name, Namespace: rc.Cluster.Namespace, Kind: domain.OperationReplaceMember, Phase: domain.PhasePending, Payload: payload}
+				if err := rc.Store.(*store.Store).EnqueueOperation(t.Context(), &op); err != nil {
+					t.Fatal(err)
+				}
+				// Follow the reconciler's Sync -> provider claim policy ->
+				// store claim ordering, not a direct RunOperation shortcut.
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatalf("pre-claim Sync: %v", err)
+				}
+				current, err = load(rc.Cluster)
+				if err != nil || current.Rolling != nil {
+					t.Fatalf("rolling acquired ownership before replacement: state=%+v err=%v", current, err)
+				}
+				allowed, err := p.CanClaimOperation(rc.Cluster)
+				if err != nil || !allowed {
+					t.Fatalf("replacement claim policy: allowed=%v err=%v", allowed, err)
+				}
+				claimed, err := rc.Store.(*store.Store).ClaimOperation(store.WithClusterSnapshot(t.Context(), rc.Cluster), rc.Cluster.Ref())
+				if err != nil || claimed.ID != op.ID || claimed.Phase != domain.PhaseRunning {
+					t.Fatalf("explicit replacement claim: operation=%+v err=%v", claimed, err)
+				}
+				ops = []domain.Operation{*claimed}
 			}
 			rc.Operation = &ops[0]
 			finished := false
@@ -355,6 +422,50 @@ func TestConfirmedPhysicalLossReplacementEndToEnd(t *testing.T) {
 			if provider == "pxc" && (s.Formation.Seed == oldName || pxcFormationMappingPending(s)) {
 				t.Fatal("PXC donor or final-membership certification did not converge")
 			}
+		})
+	}
+}
+
+func TestLostVolumeAutomaticReplacementDisabled(t *testing.T) {
+	for _, provider := range []string{"mysql", "pxc"} {
+		t.Run(provider, func(t *testing.T) {
+			p, rc, b, s, lost := recoveryFixture(t)
+			p.options.AutoReplaceLostVolumes = false
+			rc.Cluster.Spec.Provider = provider
+			if provider == "pxc" {
+				s.Topology = "cluster"
+			}
+			// With no native donor proof the opt-in gate must still return
+			// quietly, rather than running volumeRecoverySafe and logging errors.
+			clear(b.native)
+			for range 2 {
+				busy, err := p.recoverRuntimes(t.Context(), rc, s)
+				if busy || err != nil {
+					t.Fatalf("disabled automation: busy=%v err=%v", busy, err)
+				}
+			}
+			ops, err := rc.Store.(*store.Store).ListOperations(t.Context(), rc.Cluster.Ref())
+			if err != nil || len(ops) != 0 || b.services[lost.Volume] != nil {
+				t.Fatalf("disabled automation mutated storage: ops=%v err=%v", ops, err)
+			}
+			persisted, err := load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !persisted.find(lost.Name).ConfirmedVolumeLost {
+				t.Fatal("loss evidence was not persisted")
+			}
+			status := domain.ClusterStatus{Phase: domain.PhaseReady}
+			p.applyMySQLRuntimeRecoveryStatus(&status, persisted, time.Now())
+			if status.Phase != domain.PhaseDegraded || !strings.Contains(status.Message, "karactl clusters replace-member "+rc.Cluster.Name+" "+lost.Name+" --wait") {
+				t.Fatalf("missing operator guidance: %+v", status)
+			}
+			for _, condition := range status.Conditions {
+				if condition.Type == "VolumeReplacementSafe" && condition.Status == "False" && condition.Reason == "AutomaticReplacementDisabled" {
+					return
+				}
+			}
+			t.Fatalf("missing disabled condition: %+v", status.Conditions)
 		})
 	}
 }

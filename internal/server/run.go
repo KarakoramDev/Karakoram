@@ -113,7 +113,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 			bindingServer.Trigger.Trigger(ref)
 		}
 	}})
-	providers := engineProviders(engineOptions{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger, Bindings: bindings, Targets: func(ctx context.Context, ref domain.ClusterRef) (openbao.Target, error) {
+	providers := engineProviders(engineOptions{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger, Bindings: bindings, MySQLAutoReplaceLostVolumes: c.MySQLAutoReplaceLostVolumes, Targets: func(ctx context.Context, ref domain.ClusterRef) (openbao.Target, error) {
 		if bindingServer == nil {
 			return openbao.Target{}, engine.ErrUnavailable
 		}

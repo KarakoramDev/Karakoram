@@ -22,6 +22,7 @@ type Options struct {
 	Store                          engine.ClusterStore
 	Logger                         *slog.Logger
 	Provider                       string
+	AutoReplaceLostVolumes         bool
 }
 type Core struct {
 	options   Options

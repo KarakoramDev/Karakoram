@@ -31,6 +31,7 @@ type engineOptions struct {
 	Logger                         *slog.Logger
 	Targets                        func(context.Context, domain.ClusterRef) (openbao.Target, error)
 	Bindings                       pgbinding.Service
+	MySQLAutoReplaceLostVolumes    bool
 }
 
 func engineProviders(o engineOptions) []engine.Provider {
@@ -44,8 +45,8 @@ func engineProviders(o engineOptions) []engine.Provider {
 		openbao.New(openbao.ProviderOptions{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger, Targets: o.Targets, Bindings: o.Bindings}),
 		elastic.New(elastic.ProviderOptions{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		postgres.New(postgres.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
-		mysql.New(mysql.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
-		pxc.New(mysql.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
+		mysql.New(mysql.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger, AutoReplaceLostVolumes: o.MySQLAutoReplaceLostVolumes}),
+		pxc.New(mysql.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger, AutoReplaceLostVolumes: o.MySQLAutoReplaceLostVolumes}),
 		supabase.New(postgres.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		temporal.New(temporal.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger, Bindings: o.Bindings}),
 		neo4j.New(neo4j.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),

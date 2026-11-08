@@ -72,6 +72,18 @@ These cross-engine constraints define the operating model; engine-specific limit
 - Result/rate/concurrency bounds are not query-cost guarantees. Stored data can inject prompts; confirmations do not provide rollback. RabbitMQ peeking consumes/requeues and therefore needs write access. Elasticsearch hidden/system/dot indices and streams backed by them are refused.
 - PostgreSQL's companion connects to the first scoped database (default `postgres`); existing PUBLIC grants are not revoked and can weaken scope isolation. See [scope and identity caveats](data-mcp.md#managed-identities-and-rotation).
 
+## Known issues in v0.4.7
+
+- **MySQL/PXC automatic lost-volume replacement is experimental and off by
+  default.** Testing observed Group Replication quorum loss after an automatic
+  confirmed-loss replacement; its cause is not yet known. Leave
+  `KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES=false` unless deliberately opting in.
+  With it off, confirmed loss leaves the cluster Degraded with guidance to
+  verify healthy survivors and run `karactl clusters replace-member CLUSTER MEMBER --wait`.
+  Explicit replacement is unchanged. Setting the switch to `true` requires a
+  control-plane restart and applies to both GR and PXC; other engines are
+  unchanged. See [lost-volume handling](mysql/operations.md#confirmed-volume-loss).
+
 ## Continuing limitations
 
 - **MySQL/PXC mutation isolation:** slow offline recovery serializes mutations

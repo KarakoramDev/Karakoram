@@ -63,7 +63,7 @@ Missing logical storage or an authenticated agent `VolumeLost` observation enter
 - RabbitMQ requires healthy surviving brokers and the existing lost-majority/queue safety gates.
 - Elasticsearch requires surviving owned membership and all primary shards available (`green`/`yellow`); missing primary copies require retained-data recovery or snapshot restore.
 - PostgreSQL HA requires a surviving writable primary with healthy [etcd](https://etcd.io) quorum. [Supabase](https://supabase.com)'s database core uses the same policy.
-- MySQL GR and PXC require fresh healthy survivor-majority and GTID-containing donor evidence; PXC also refuses latched history divergence and retains join certification. See [0067](0067-mysql-lost-volume-replacement.md).
+- MySQL GR and PXC require fresh healthy survivor-majority and GTID-containing donor evidence; PXC also refuses latched history divergence and retains join certification. Since v0.4.7, automatic replacement is experimental and disabled by default; opt in with `KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES=true` and restart the control plane. Otherwise confirmed loss leaves Degraded with explicit replacement guidance. See [0067](0067-mysql-lost-volume-replacement.md).
 
 Replacement retains the existing join, catch-up, quorum, drain and retirement checks. No forced election, unsafe bootstrap, force-boot, empty primary allocation or destructive same-identity reseed is introduced. Singletons and unverified/no-survivor cases expose `VolumeLost`, refuse fresh initialization and direct the operator to recover original storage or restore into a new cluster.
 

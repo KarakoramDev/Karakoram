@@ -28,9 +28,10 @@ latest such operation finished. In-progress maintenance and unavailable writer
 identity restart stability observation. Unknown operation or baseline evidence
 fails closed without queuing a full.
 
-Agent upgrades and member replacements, including automatic lost-volume
-replacement, use the same operation deferral and post-completion stability
-period. Confirmed or observed member volume loss and unsettled proxy drain
+Agent upgrades and member replacements, including experimental opt-in automatic
+lost-volume replacement (disabled by default since v0.4.7; see
+[0067](0067-mysql-lost-volume-replacement.md)), use the same operation deferral and
+post-completion stability period. Confirmed or observed member volume loss and unsettled proxy drain
 flags also defer re-anchoring independently of operation inventory. Runtime
 recovery and orphaned-drain settlement run first; a busy or failed pass resets
 writer stability observation before returning.

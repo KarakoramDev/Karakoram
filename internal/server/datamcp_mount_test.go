@@ -278,3 +278,28 @@ func TestMcpModeFromEnvironment(t *testing.T) {
 		}
 	}
 }
+
+func TestMySQLAutoReplaceLostVolumesFromEnvironment(t *testing.T) {
+	t.Setenv("hostname", "karakoram")
+	t.Setenv("KARAKORAM_PUBLIC_URL", "https://example.test")
+	t.Setenv("KARAKORAM_ADVERTISE_URL", "https://karakoram:9443")
+	t.Setenv("KARAKORAM_MASTER_KEY", strings.Repeat("m", 32))
+	t.Setenv("KARAKORAM_BACKEND", "zerops")
+	t.Setenv("KARAKORAM_ZEROPS_TOKEN", "test-token")
+	t.Setenv("KARAKORAM_ZEROPS_PROJECT_ID", "test-project")
+	for _, value := range []string{"", "false", "true", "invalid"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES", value)
+			c, err := ConfigFromEnv()
+			if value == "invalid" {
+				if err == nil || !strings.Contains(err.Error(), "KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES") {
+					t.Fatalf("invalid automatic replacement setting: %v", err)
+				}
+				return
+			}
+			if err != nil || c.MySQLAutoReplaceLostVolumes != (value == "true") {
+				t.Fatalf("%q: automatic replacement %t, error %v", value, c.MySQLAutoReplaceLostVolumes, err)
+			}
+		})
+	}
+}
