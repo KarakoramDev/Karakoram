@@ -739,3 +739,320 @@ func TestAgentRolloutRefreshesBarrierAfterFailover(t *testing.T) {
 		})
 	}
 }
+
+type pausedProxyRolloutBackend struct {
+	*rolloutBackend
+	state *infra.OpState
+	err   error
+}
+
+func (b *pausedProxyRolloutBackend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	if b.state != nil || b.err != nil {
+		if b.state != nil {
+			return *b.state, b.err
+		}
+		return infra.OpState{}, b.err
+	}
+	if op.ID == "paused-proxy" {
+		return infra.OpState{Failed: true, Status: "failed", Message: "ProxySQL start-first rollout paused; incumbents were retained. Inspect replacement health before retrying"}, nil
+	}
+	return b.rolloutBackend.OpStatus(ctx, op)
+}
+
+func TestAgentRolloutPausedProxyFailsPermanentlyAndCanRetry(t *testing.T) {
+	p, rc, b := setup(t, "ha")
+	s := converge(t, p, rc)
+	b.genericOverrides = map[string]agentapi.Status{}
+	for _, m := range s.Members {
+		b.genericOverrides[m.Name] = agentapi.Status{ConfigVersion: m.ConfigVersion, Agent: agentapi.AgentBuild{Build: engine.CurrentAgentBuild().Build}}
+	}
+	wrapped := &pausedProxyRolloutBackend{rolloutBackend: &rolloutBackend{fakeBackend: b, rc: rc}}
+	rc.Backend = wrapped
+	op := rolloutOperation(true)
+	cp := agentUpgradeCheckpoint{Target: engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build, IncludeCurrent: true}, Order: []string{"demopx"}, Waiting: true, Deploy: &infra.Op{ID: "paused-proxy"}}
+	op.Checkpoint, _ = json.Marshal(cp)
+	for _, cancel := range []bool{false, true} {
+		var err error
+		if cancel {
+			_, err = p.CancelOperation(t.Context(), rc, op)
+		} else {
+			_, err = p.RunOperation(t.Context(), rc, op)
+		}
+		if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "incumbents were retained") || !strings.Contains(err.Error(), "manual recovery") {
+			t.Fatalf("paused proxy must fail without generic retries: %v", err)
+		}
+	}
+	if len(wrapped.names) != 0 {
+		t.Fatal("failed receipt submitted a deployment", wrapped.names)
+	}
+	retry := rolloutOperation(true)
+	for range 80 {
+		result, err := p.RunOperation(t.Context(), rc, retry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Done {
+			if len(wrapped.names) == 0 {
+				t.Fatal("include-current retry skipped deployment")
+			}
+			return
+		}
+		retry.Checkpoint = result.Checkpoint
+	}
+	t.Fatal("include-current retry did not finish")
+}
+
+func TestProxyServingUpdateFailurePreservesDiagnostic(t *testing.T) {
+	for _, action := range []string{"scale", "resize"} {
+		t.Run(action, func(t *testing.T) {
+			p, rc, b := setup(t, "ha")
+			s := converge(t, p, rc)
+			m := s.find("demopx")
+			rc.Backend = &pausedProxyRolloutBackend{rolloutBackend: &rolloutBackend{fakeBackend: b, rc: rc}}
+			s.Pending = &pending{Action: action, Member: m.Name, Replicas: desiredComponent(rc, m).Replicas, Resources: desiredComponent(rc, m).Resources, Op: infra.Op{ID: "paused-proxy"}}
+			busy, err := p.observePending(t.Context(), rc, s)
+			if !busy || err == nil || errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "incumbents were retained") {
+				t.Fatalf("lost terminal serving update diagnostic: busy=%t err=%v", busy, err)
+			}
+			if s.Pending != nil {
+				t.Fatal("terminal receipt blocks a corrective request")
+			}
+		})
+	}
+}
+
+func TestProxyAmbiguousFailureRemainsRetryable(t *testing.T) {
+	for _, mode := range []string{"stalled", "expired", "transport"} {
+		t.Run(mode, func(t *testing.T) {
+			p, rc, b := setup(t, "ha")
+			s := converge(t, p, rc)
+			state := infra.OpState{Failed: true, Status: "stalled", Message: "outcome unknown"}
+			var transport error
+			if mode == "expired" {
+				state.Status, state.Expired = "expired", true
+			}
+			if mode == "transport" {
+				transport = errors.New("transport unavailable")
+			}
+			rc.Backend = &pausedProxyRolloutBackend{rolloutBackend: &rolloutBackend{fakeBackend: b, rc: rc}, state: &state, err: transport}
+			cp := agentUpgradeCheckpoint{Order: []string{"demopx"}, Waiting: true, Deploy: &infra.Op{ID: "paused-proxy"}}
+			raw, _ := json.Marshal(cp)
+			_, err := p.RunOperation(t.Context(), rc, &domain.Operation{Kind: domain.OperationUpgradeAgents, Checkpoint: raw})
+			if err == nil || errors.Is(err, engine.ErrInvalid) {
+				t.Fatalf("ambiguous deployment became permanent: %v", err)
+			}
+			for _, action := range []string{"scale", "resize"} {
+				m := s.find("demopx")
+				s.Pending = &pending{Action: action, Member: m.Name, Replicas: desiredComponent(rc, m).Replicas, Resources: desiredComponent(rc, m).Resources, Op: infra.Op{ID: "paused-proxy"}}
+				_, err = p.observePending(t.Context(), rc, s)
+				if err == nil || errors.Is(err, engine.ErrInvalid) || (mode == "transport" && s.Pending == nil) {
+					t.Fatalf("ambiguous %s became permanent or lost transport retry: %v", action, err)
+				}
+			}
+		})
+	}
+}
+
+type ambiguousProxyRolloutBackend struct {
+	*rolloutBackend
+	op        *domain.Operation
+	receipt   *infra.Op
+	requestID string
+	lookups   int
+	polls     int
+	state     infra.OpState
+	lookupErr error
+	t         *testing.T
+}
+
+func (b *ambiguousProxyRolloutBackend) Capabilities() infra.Capabilities {
+	c := b.rolloutBackend.Capabilities()
+	c.ProxyDeploymentPreservesServing = true
+	return c
+}
+
+func (b *ambiguousProxyRolloutBackend) ProxyUpdatesPreserveServing(context.Context, string) (bool, error) {
+	return true, nil
+}
+
+func (b *ambiguousProxyRolloutBackend) Deploy(_ context.Context, name string, d infra.Deployment) (infra.Op, error) {
+	// Submission is accepted by the platform, but its reply never reaches the
+	// engine. Recovery must work from the checkpoint saved before this call.
+	var intent map[string]any
+	if err := json.Unmarshal(b.op.Checkpoint, &intent); err != nil || intent["proxyServing"] != true {
+		b.t.Errorf("serving rollout policy not persisted before submission: %s (%v)", b.op.Checkpoint, err)
+	}
+	if d.RequestID != b.op.ID || d.ProxyPreserveServing == nil || !*d.ProxyPreserveServing {
+		b.t.Errorf("missing immutable serving request identity: request=%q policy=%v", d.RequestID, d.ProxyPreserveServing)
+	}
+	b.names = append(b.names, name)
+	b.requestID = d.RequestID
+	b.receipt = &infra.Op{ID: "accepted-proxy"}
+	return infra.Op{}, errors.New("upload reply lost after acceptance")
+}
+
+func (b *ambiguousProxyRolloutBackend) LookupProxyDeployment(_ context.Context, name, requestID string) (*infra.Op, error) {
+	b.lookups++
+	if b.receipt == nil {
+		return nil, b.lookupErr
+	}
+	if name != "demopx" || requestID != b.requestID {
+		return nil, errors.New("request identity does not match")
+	}
+	return b.receipt, b.lookupErr
+}
+
+func (b *ambiguousProxyRolloutBackend) OpStatus(_ context.Context, op infra.Op) (infra.OpState, error) {
+	b.polls++
+	if b.receipt == nil || op.ID != b.receipt.ID {
+		return infra.OpState{}, errors.New("polling a different deployment")
+	}
+	return b.state, nil
+}
+
+func TestAgentRolloutAmbiguousProxyCancellation(t *testing.T) {
+	for _, flavour := range []string{pgspec.FlavourPostgres, pgspec.FlavourSupabase} {
+		for _, terminal := range []string{"completed", "paused", "rolled-back", "lookup-error"} {
+			t.Run(flavour+"/"+terminal, func(t *testing.T) {
+				p, rc, b := setup(t, "ha")
+				s := converge(t, p, rc)
+				if flavour == pgspec.FlavourSupabase {
+					p.options.Flavour = extensionSelectionFlavour{}
+					rc.Cluster.Spec.Provider = flavour
+				}
+				b.genericOverrides = map[string]agentapi.Status{}
+				for _, m := range s.Members {
+					b.genericOverrides[m.Name] = agentapi.Status{ConfigVersion: m.ConfigVersion, Agent: agentapi.AgentBuild{Build: engine.CurrentAgentBuild().Build}}
+				}
+				op := rolloutOperation(true)
+				cp := agentUpgradeCheckpoint{Target: engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build, IncludeCurrent: true}, Order: []string{"demopx", "demop1"}}
+				op.Checkpoint, _ = json.Marshal(cp)
+				backend := &ambiguousProxyRolloutBackend{rolloutBackend: &rolloutBackend{fakeBackend: b, rc: rc}, op: op, t: t}
+				rc.Backend = backend
+				// Allow the engine to persist its intent, then lose the reply.
+				var submitErr error
+				for range 3 {
+					result, err := p.RunOperation(t.Context(), rc, op)
+					if result.Checkpoint != nil {
+						op.Checkpoint = result.Checkpoint
+					}
+					if err != nil {
+						submitErr = err
+						break
+					}
+				}
+				if submitErr == nil || !strings.Contains(submitErr.Error(), "reply lost") || len(backend.names) != 1 {
+					t.Fatalf("did not exercise accepted ambiguous submission: %v %v", backend.names, submitErr)
+				}
+				backend.lookups = 0
+				if terminal == "lookup-error" {
+					backend.lookupErr = errors.New("receipt unavailable")
+				}
+				// Recreate the core to simulate restart; no artifact submission is
+				// permitted while cancellation recovers the persisted receipt.
+				p = New(p.options)
+				result, err := p.CancelOperation(t.Context(), rc, op)
+				if terminal == "lookup-error" {
+					if err == nil || result.Done || backend.lookups != 1 || backend.polls != 0 {
+						t.Fatalf("lookup failure settled cancellation: %+v %v", result, err)
+					}
+					return
+				}
+				if err != nil || result.Done || backend.lookups != 1 || backend.polls != 1 {
+					t.Fatalf("cancel abandoned ambiguous platform work: %+v %v (lookups=%d polls=%d)", result, err, backend.lookups, backend.polls)
+				}
+				op.Checkpoint = result.Checkpoint
+				backend.state = infra.OpState{Done: terminal == "completed", Failed: terminal != "completed", Status: terminal, Message: "platform " + terminal}
+				result, err = p.CancelOperation(t.Context(), rc, op)
+				if terminal != "completed" {
+					if err == nil || !result.Done || !strings.Contains(err.Error(), "manual recovery") || !strings.Contains(err.Error(), terminal) {
+						t.Fatalf("failed platform work did not terminate cancellation as failure: %+v %v", result, err)
+					}
+				} else {
+					if err != nil || result.Done {
+						t.Fatalf("completed platform work did not settle member readiness: %+v %v", result, err)
+					}
+					op.Checkpoint = result.Checkpoint
+					result, err = p.CancelOperation(t.Context(), rc, op)
+					if err != nil || !result.Done {
+						t.Fatalf("settled member did not cancel between members: %+v %v", result, err)
+					}
+				}
+				if len(backend.names) != 1 || backend.lookups != 1 || backend.polls != 2 {
+					t.Fatalf("cancel resubmitted or lost adopted receipt: deploys=%v lookups=%d polls=%d", backend.names, backend.lookups, backend.polls)
+				}
+			})
+		}
+	}
+}
+
+type recoveringProxyRolloutBackend struct {
+	*ambiguousProxyRolloutBackend
+	recovering bool
+}
+
+func (b *recoveringProxyRolloutBackend) Deploy(ctx context.Context, name string, d infra.Deployment) (infra.Op, error) {
+	if !b.recovering {
+		return b.ambiguousProxyRolloutBackend.Deploy(ctx, name, d)
+	}
+	// Like Dokploy's Deploy path, a fresh explicit operation can re-arm a
+	// definitively failed receipt. Read-only lookup must not prevent that.
+	if _, err := b.rolloutBackend.Deploy(ctx, name, d); err != nil {
+		return infra.Op{}, err
+	}
+	b.requestID = d.RequestID
+	b.receipt = &infra.Op{ID: "recovered-proxy"}
+	b.state = infra.OpState{Done: true}
+	return *b.receipt, nil
+}
+
+func TestAgentRolloutExplicitRetryRearmsFailedProxyReceipt(t *testing.T) {
+	p, rc, b := setup(t, "ha")
+	s := converge(t, p, rc)
+	b.genericOverrides = map[string]agentapi.Status{}
+	for _, m := range s.Members {
+		b.genericOverrides[m.Name] = agentapi.Status{ConfigVersion: m.ConfigVersion, Agent: agentapi.AgentBuild{Build: engine.CurrentAgentBuild().Build}}
+	}
+	newOperation := func(id string) *domain.Operation {
+		op := rolloutOperation(true)
+		op.ID = id
+		cp := agentUpgradeCheckpoint{Target: engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build, IncludeCurrent: true}, Order: []string{"demopx"}}
+		op.Checkpoint, _ = json.Marshal(cp)
+		return op
+	}
+	first := newOperation("first-upgrade")
+	backend := &recoveringProxyRolloutBackend{ambiguousProxyRolloutBackend: &ambiguousProxyRolloutBackend{
+		rolloutBackend: &rolloutBackend{fakeBackend: b, rc: rc}, op: first, t: t,
+	}}
+	rc.Backend = backend
+	result, err := p.RunOperation(t.Context(), rc, first)
+	if err != nil || len(backend.names) != 0 {
+		t.Fatalf("first operation did not checkpoint before submission: %+v %v", result, err)
+	}
+	first.Checkpoint = result.Checkpoint
+	if _, err := p.RunOperation(t.Context(), rc, first); err == nil || !strings.Contains(err.Error(), "reply lost") {
+		t.Fatalf("first operation did not exercise ambiguous submission: %v", err)
+	}
+	backend.state = infra.OpState{Failed: true, Status: "paused", Message: "rollout paused"}
+	result, err = p.CancelOperation(t.Context(), rc, first)
+	if err == nil || !result.Done || !strings.Contains(err.Error(), "manual recovery") {
+		t.Fatalf("first operation did not fail after adopting paused receipt: %+v %v", result, err)
+	}
+	lookups := backend.lookups
+	backend.recovering = true
+	retry := newOperation("explicit-retry")
+	for range 8 {
+		result, err = p.RunOperation(t.Context(), rc, retry)
+		if err != nil {
+			t.Fatalf("explicit retry blocked by retained failed receipt: %v", err)
+		}
+		if result.Done {
+			if len(backend.names) != 2 || backend.requestID != retry.ID || backend.lookups != lookups {
+				t.Fatalf("retry did not re-arm through Deploy: deploys=%v request=%q lookups=%d", backend.names, backend.requestID, backend.lookups)
+			}
+			return
+		}
+		retry.Checkpoint = result.Checkpoint
+	}
+	t.Fatal("explicit include-current retry did not complete")
+}

@@ -139,7 +139,7 @@ func (b *Backend) SetResources(ctx context.Context, hostname string, r infra.Res
 	if err != nil {
 		return infra.Op{}, err
 	}
-	if m.Pending != nil && m.Pending.HealthGated && m.Pending.Action == "restart" && reflect.DeepEqual(mergeResources(m.Resources, r), m.Resources) {
+	if m.Pending != nil && m.Pending.HealthGated && (!m.Pending.Failed || m.Pending.Uncertain) && m.Pending.Action == "restart" && reflect.DeepEqual(mergeResources(m.Resources, r), m.Resources) {
 		return encodeOp(*m.Pending), nil
 	}
 	if err = b.mutationReady(ctx, a, &m); err != nil {
@@ -166,7 +166,7 @@ func (b *Backend) SetContainerCount(ctx context.Context, hostname string, min, m
 	if err != nil {
 		return infra.Op{}, err
 	}
-	if m.Pending != nil && m.Pending.HealthGated && m.Pending.Action == "scale" && m.Min == min && m.Max == max {
+	if m.Pending != nil && m.Pending.HealthGated && (!m.Pending.Failed || m.Pending.Uncertain) && m.Pending.Action == "scale" && m.Min == min && m.Max == max {
 		return encodeOp(*m.Pending), nil
 	}
 	if err = b.mutationReady(ctx, a, &m); err != nil {

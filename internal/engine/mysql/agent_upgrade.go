@@ -404,6 +404,9 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 					result.Done = true
 					return result, errors.Join(err, fmt.Errorf("agent deployment failed for %s: %s; manual recovery required; cancellation cannot settle a failed serving rollout", m.Name, status.Message))
 				}
+				if servingProxy && !status.Expired && status.Status != "stalled" {
+					return result, engine.Invalid("agent deployment failed for %s: %s; manual recovery required; inspect the proxy rollout before re-running upgrade-agents --include-current", m.Name, status.Message)
+				}
 				return result, fmt.Errorf("agent deployment failed for %s: %s", m.Name, status.Message)
 			}
 			if !status.Done && !status.Failed {

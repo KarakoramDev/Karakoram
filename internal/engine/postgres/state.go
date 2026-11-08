@@ -91,6 +91,7 @@ type member struct {
 	UnplacedRetirement   *engine.UnplacedRetirement     `json:"unplacedRetirement,omitempty"`
 	ConfigRestartPending bool                           `json:"configRestartPending,omitempty"`
 }
+
 type pending struct {
 	Op        infra.Op         `json:"op"`
 	Action    string           `json:"action"`

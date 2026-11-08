@@ -1287,8 +1287,8 @@ func TestAgentUpgradeProxyServingLostReceiptRetainsFailure(t *testing.T) {
 	// The build already changed, but native readiness cannot override a paused
 	// provider receipt. Replay must adopt it before progressing to data.
 	agentRolloutTick(t, rc, b, op, false)
-	if _, err := p.RunOperation(t.Context(), rc, op); err == nil || !strings.Contains(err.Error(), "proxy rollout paused") {
-		t.Fatalf("lost receipt bypassed provider failure: %v", err)
+	if _, err := p.RunOperation(t.Context(), rc, op); !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "proxy rollout paused") || !strings.Contains(err.Error(), "manual recovery") {
+		t.Fatalf("lost receipt bypassed permanent provider failure: %v", err)
 	}
 	if !reflect.DeepEqual(b.names, []string{"demomx"}) {
 		t.Fatalf("failed proxy rollout touched data: %v", b.names)
@@ -1359,5 +1359,42 @@ func TestAgentUpgradeCancelLostServingReceipt(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+type ambiguousServingRolloutBackend struct {
+	*servingAgentRolloutBackend
+	state infra.OpState
+	err   error
+}
+
+func (b *ambiguousServingRolloutBackend) OpStatus(context.Context, infra.Op) (infra.OpState, error) {
+	return b.state, b.err
+}
+
+func TestAgentUpgradeServingAmbiguousFailureRemainsRetryable(t *testing.T) {
+	for _, mode := range []string{"stalled", "expired", "transport"} {
+		t.Run(mode, func(t *testing.T) {
+			p, rc, b := setupAgentRollout(t, "group")
+			serving := true
+			cp := agentUpgradeCheckpoint{
+				Target: engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build},
+				Order:  []string{"demomx"}, Member: "demomx", Stage: "waiting",
+				ProxyServing: &serving, Deploy: &infra.Op{ID: "ambiguous"},
+			}
+			raw, _ := json.Marshal(cp)
+			backend := &ambiguousServingRolloutBackend{servingAgentRolloutBackend: &servingAgentRolloutBackend{agentRolloutBackend: b}, state: infra.OpState{Failed: true, Status: "stalled"}}
+			if mode == "expired" {
+				backend.state.Status, backend.state.Expired = "expired", true
+			}
+			if mode == "transport" {
+				backend.err = errors.New("transport unavailable")
+			}
+			rc.Backend = backend
+			_, err := p.RunOperation(t.Context(), rc, &domain.Operation{Kind: domain.OperationUpgradeAgents, Checkpoint: raw})
+			if err == nil || errors.Is(err, engine.ErrInvalid) {
+				t.Fatalf("ambiguous serving deployment became permanent: %v", err)
+			}
+		})
 	}
 }

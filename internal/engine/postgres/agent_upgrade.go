@@ -15,15 +15,18 @@ import (
 )
 
 type agentUpgradeCheckpoint struct {
-	Target   engine.AgentUpgradePayload `json:"target"`
-	Order    []string                   `json:"order"`
-	Index    int                        `json:"index"`
-	Waiting  bool                       `json:"waiting"`
-	Deploy   *infra.Op                  `json:"deploy,omitempty"`
-	Barrier  string                     `json:"barrier,omitempty"`
-	Timeline int                        `json:"timeline,omitempty"`
-	SystemID string                     `json:"systemId,omitempty"`
-	Primary  string                     `json:"barrierPrimary,omitempty"`
+	Target  engine.AgentUpgradePayload `json:"target"`
+	Order   []string                   `json:"order"`
+	Index   int                        `json:"index"`
+	Waiting bool                       `json:"waiting"`
+	Deploy  *infra.Op                  `json:"deploy,omitempty"`
+	// Non-nil records the proxy rollout intent before submission. Waiting with
+	// no Deploy then means submission may have reached the backend.
+	ProxyServing *bool  `json:"proxyServing,omitempty"`
+	Barrier      string `json:"barrier,omitempty"`
+	Timeline     int    `json:"timeline,omitempty"`
+	SystemID     string `json:"systemId,omitempty"`
+	Primary      string `json:"barrierPrimary,omitempty"`
 }
 
 func agentUpgradeResult(cp *agentUpgradeCheckpoint) (engine.OpResult, error) {
@@ -116,6 +119,42 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		return result, engine.ErrNotFound
 	}
 	if cp.Waiting {
+		if cp.Deploy == nil && cp.ProxyServing != nil {
+			if cancel && *cp.ProxyServing {
+				lookup, ok := rc.Backend.(infra.ProxyDeploymentLookup)
+				if !ok {
+					return result, engine.Invalid("cannot recover proxy deployment for %s; manual recovery required", m.Name)
+				}
+				deployment, e := lookup.LookupProxyDeployment(ctx, m.Name, op.ID)
+				if e != nil {
+					return result, e
+				}
+				cp.Deploy = deployment
+			}
+			if cp.Deploy == nil {
+				if cancel {
+					// Only an intent without a receipt can stop here.
+					// Cancellation never renders or submits another build.
+					return engine.OpResult{Done: true}, nil
+				}
+				// Ordinary execution uses Deploy's idempotent submission/adoption
+				// path, which can also re-arm a failed receipt from an earlier
+				// operation. Cancellation lookup intentionally cannot do that.
+				if cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {
+					return result, engine.Invalid("agent upgrade target build %q differs from running control-plane build %q; re-run upgrade-agents", cp.Target.TargetBuild, engine.CurrentAgentBuild().Build)
+				}
+				spec, e := p.agentUpgradeRuntimeSpec(rc, m)
+				if e != nil {
+					return result, e
+				}
+				deployment, e := engine.DeployProxy(ctx, rc, m.Name, spec, *cp.ProxyServing, op.ID)
+				if e != nil {
+					return result, e
+				}
+				cp.Deploy = &deployment
+				return agentUpgradeResult(&cp)
+			}
+		}
 		if cp.Deploy != nil {
 			status, e := rc.Backend.OpStatus(ctx, *cp.Deploy)
 			if status.Status == "DeploymentRetriesExhausted" && e == nil {
@@ -132,12 +171,22 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 				return result, e
 			}
 			if status.Failed {
+				if m.Role == "proxy" && !status.Expired && status.Status != "stalled" {
+					if cancel {
+						result, err = agentUpgradeResult(&cp)
+						result.Done = true
+						return result, errors.Join(err, engine.Invalid("agent deployment failed for %s: %s; manual recovery required; cancellation cannot settle a failed serving rollout", m.Name, status.Message))
+					}
+					return result, engine.Invalid("agent deployment failed for %s: %s; manual recovery required; inspect the proxy rollout before re-running upgrade-agents --include-current", m.Name, status.Message)
+				}
 				return result, fmt.Errorf("agent deployment failed for %s: %s", m.Name, status.Message)
 			}
 			if !status.Done {
 				return agentUpgradeResult(&cp)
 			}
-			cp.Deploy = nil
+			if cp.ProxyServing == nil {
+				cp.Deploy = nil
+			}
 		}
 		ok, e := ready(ctx, rc, m)
 		if e != nil {
@@ -213,6 +262,8 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		cp.Index++
 		m.NativeReadiness = nil
 		cp.Waiting = false
+		cp.ProxyServing = nil
+		cp.Deploy = nil
 		return agentUpgradeResult(&cp)
 	}
 	a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
@@ -268,6 +319,19 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			if observed.Role == "primary" && observed.WALPosition != "" {
 				cp.Barrier, cp.Timeline, cp.SystemID = observed.WALPosition, observed.Timeline, observed.SystemID
 			}
+		}
+	}
+	if m.Role == "proxy" && rc.Backend.Capabilities().ProxyDeploymentPreservesServing {
+		if approval, ok := rc.Backend.(infra.ServingProxyUpdates); ok {
+			serving, e := approval.ProxyUpdatesPreserveServing(ctx, m.Name)
+			if e != nil {
+				return result, e
+			}
+			// Freeze the policy and operation request identity before upload, so
+			// cancellation/restart can adopt even a lost submission reply.
+			cp.ProxyServing = &serving
+			cp.Waiting = true
+			return agentUpgradeResult(&cp)
 		}
 	}
 	spec, e := p.agentUpgradeRuntimeSpec(rc, m)

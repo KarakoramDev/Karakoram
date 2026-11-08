@@ -64,7 +64,9 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			next, err = p.Core.RunOperation(ctx, rc, &coreOp)
 		}
 		if err != nil {
-			return result, err
+			// Preserve terminal cancellation failures from the shared database
+			// rollout; dropping Done would leave failed platform work in flight.
+			return engine.OpResult{Done: next.Done}, err
 		}
 		cp.Core = next.Checkpoint
 		cp.CoreDone = next.Done

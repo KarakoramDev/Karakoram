@@ -564,3 +564,96 @@ func TestUnidentifiedServingDeploymentLookupFailsClosed(t *testing.T) {
 		t.Fatal("unidentified health-gated rollout was mistaken for legacy deployment")
 	}
 }
+
+func TestProxyFailedUpdateExplicitSameTargetRetry(t *testing.T) {
+	for _, action := range []string{"scale", "resources"} {
+		t.Run(action, func(t *testing.T) {
+			f, b, a := markedProxyFake(t, 1)
+			f.mu.Lock()
+			a.neverHealthyProxy = true
+			a.taskCapacity = 3
+			f.mu.Unlock()
+			submit := func() infra.Op {
+				t.Helper()
+				var op infra.Op
+				var err error
+				if action == "scale" {
+					op, err = b.SetContainerCount(t.Context(), "proxy", 2, 2)
+				} else {
+					op, err = b.SetResources(t.Context(), "proxy", infra.Resources{MinCPU: 2, MaxCPU: 2})
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				return op
+			}
+			first := submit()
+			var state infra.OpState
+			for range 8 {
+				var err error
+				state, err = b.OpStatus(t.Context(), first)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if state.Failed {
+					break
+				}
+			}
+			if !state.Failed || !fakeMeta(t, f, "proxy").Pending.Failed {
+				t.Fatal("paused receipt was not persisted", state)
+			}
+			b = fakeBackend(t, f, nil)
+			f.mu.Lock()
+			a.neverHealthyProxy = false
+			before := f.calls["application.reload"]
+			f.mu.Unlock()
+			second := submit()
+			if second.ID == first.ID {
+				t.Fatal("explicit retry re-adopted failed receipt")
+			}
+			f.mu.Lock()
+			reloads := f.calls["application.reload"] - before
+			f.mu.Unlock()
+			if reloads != 1 {
+				t.Fatalf("retry reloads=%d, want 1", reloads)
+			}
+			awaitFake(t, b, second)
+			assertProxyNeverAllDown(t, f, a)
+		})
+	}
+}
+
+func TestProxyUnresolvedUpdateSameTargetAdoptsReceipt(t *testing.T) {
+	for _, action := range []string{"scale", "resources"} {
+		for _, uncertain := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/uncertain=%t", action, uncertain), func(t *testing.T) {
+				f, b, a := markedProxyFake(t, 1)
+				submit := func() (infra.Op, error) {
+					if action == "scale" {
+						return b.SetContainerCount(t.Context(), "proxy", 2, 2)
+					}
+					return b.SetResources(t.Context(), "proxy", infra.Resources{MinCPU: 2, MaxCPU: 2})
+				}
+				first, err := submit()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if uncertain {
+					m := fakeMeta(t, f, "proxy")
+					m.Pending.Failed, m.Pending.Uncertain = true, true
+					f.mu.Lock()
+					a.row["description"] = m.description()
+					f.mu.Unlock()
+				}
+				b = fakeBackend(t, f, nil)
+				before := fakeCalls(f, "application.reload")
+				second, err := submit()
+				original, originalErr := decodeOp(first)
+				adopted, adoptedErr := decodeOp(second)
+				if err != nil || originalErr != nil || adoptedErr != nil || !sameOperation(&original, adopted) || fakeCalls(f, "application.reload") != before {
+					t.Fatalf("unresolved receipt replaced: err=%v original=%v adopted=%v", err, originalErr, adoptedErr)
+				}
+			})
+		}
+	}
+}

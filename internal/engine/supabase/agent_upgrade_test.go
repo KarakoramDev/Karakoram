@@ -5,7 +5,9 @@ package supabase
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -354,6 +356,132 @@ func TestDisabledComponentMaintenanceThroughSync(t *testing.T) {
 			state, err = loadState(rc.Cluster)
 			if err != nil || state.Members[component] != nil || state.Pending != nil || backend.services[member.Name] != nil {
 				t.Fatalf("closed window blocked accepted deletion completion: %+v %v", state, err)
+			}
+		})
+	}
+}
+
+type pausedCoreRolloutBackend struct{ *testBackend }
+
+func (b *pausedCoreRolloutBackend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	if op.ID == "paused-proxy" {
+		return infra.OpState{Failed: true, Message: "ProxySQL rollout paused; incumbents were retained"}, nil
+	}
+	return b.testBackend.OpStatus(ctx, op)
+}
+
+func TestAgentRolloutCorePausedProxyFailsPermanently(t *testing.T) {
+	p, rc, b := setupProvider(t)
+	convergeProvider(t, p, rc)
+	rc.Backend = &pausedCoreRolloutBackend{testBackend: b}
+	core, _ := json.Marshal(map[string]any{
+		"target": engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build, IncludeCurrent: true},
+		"order":  []string{"demopx"}, "waiting": true, "deploy": infra.Op{ID: "paused-proxy"},
+	})
+	raw, _ := json.Marshal(agentUpgradeCheckpoint{Core: core})
+	op := &domain.Operation{Kind: domain.OperationUpgradeAgents, Checkpoint: raw}
+	for _, cancel := range []bool{false, true} {
+		var err error
+		if cancel {
+			_, err = p.CancelOperation(t.Context(), rc, op)
+		} else {
+			_, err = p.RunOperation(t.Context(), rc, op)
+		}
+		if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "incumbents were retained") || !strings.Contains(err.Error(), "manual recovery") {
+			t.Fatalf("core failure became retryable: %v", err)
+		}
+	}
+}
+
+type ambiguousCoreRolloutBackend struct {
+	*testBackend
+	deploys, lookups, polls int
+	requestID               string
+	state                   infra.OpState
+}
+
+func (b *ambiguousCoreRolloutBackend) Capabilities() infra.Capabilities {
+	c := b.testBackend.Capabilities()
+	c.ProxyDeploymentPreservesServing = true
+	return c
+}
+
+func (*ambiguousCoreRolloutBackend) ProxyUpdatesPreserveServing(context.Context, string) (bool, error) {
+	return true, nil
+}
+
+func (b *ambiguousCoreRolloutBackend) Deploy(_ context.Context, _ string, d infra.Deployment) (infra.Op, error) {
+	b.deploys++
+	b.requestID = d.RequestID
+	return infra.Op{}, errors.New("reply lost")
+}
+
+func (b *ambiguousCoreRolloutBackend) LookupProxyDeployment(_ context.Context, name, requestID string) (*infra.Op, error) {
+	b.lookups++
+	if b.deploys == 0 {
+		return nil, nil
+	}
+	if name != "demopx" || requestID == "" || requestID != b.requestID {
+		return nil, errors.New("request identity mismatch")
+	}
+	return &infra.Op{ID: "accepted-proxy"}, nil
+}
+
+func (b *ambiguousCoreRolloutBackend) OpStatus(_ context.Context, op infra.Op) (infra.OpState, error) {
+	b.polls++
+	if op.ID != "accepted-proxy" {
+		return infra.OpState{}, errors.New("wrong deployment")
+	}
+	return b.state, nil
+}
+
+func TestAgentRolloutCoreAmbiguousProxyCancellation(t *testing.T) {
+	for _, terminal := range []string{"completed", "paused", "rolled-back"} {
+		t.Run(terminal, func(t *testing.T) {
+			p, rc, b := setupProvider(t)
+			convergeProvider(t, p, rc)
+			b.agentBuilds = map[string]string{}
+			for name := range b.deployed {
+				b.agentBuilds[name] = engine.CurrentAgentBuild().Build
+			}
+			core, _ := json.Marshal(map[string]any{
+				"target": engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build, IncludeCurrent: true},
+				"order":  []string{"demopx", "demop1"},
+			})
+			raw, _ := json.Marshal(agentUpgradeCheckpoint{Core: core})
+			op := &domain.Operation{ID: "agents", Kind: domain.OperationUpgradeAgents, Checkpoint: raw}
+			backend := &ambiguousCoreRolloutBackend{testBackend: b}
+			rc.Backend = backend
+			result, err := p.RunOperation(t.Context(), rc, op)
+			if err != nil || result.Done || backend.deploys != 0 {
+				t.Fatalf("core did not checkpoint intent before upload: %+v %v", result, err)
+			}
+			op.Checkpoint = result.Checkpoint
+			if _, err := p.RunOperation(t.Context(), rc, op); err == nil || !strings.Contains(err.Error(), "reply lost") || backend.deploys != 1 || backend.requestID != op.ID {
+				t.Fatalf("did not lose accepted core reply: deploys=%d request=%q err=%v", backend.deploys, backend.requestID, err)
+			}
+			p = New(p.options)
+			result, err = p.CancelOperation(t.Context(), rc, op)
+			if err != nil || result.Done || backend.polls != 1 {
+				t.Fatalf("wrapper abandoned accepted platform work: %+v %v", result, err)
+			}
+			op.Checkpoint = result.Checkpoint
+			backend.state = infra.OpState{Done: terminal == "completed", Failed: terminal != "completed", Status: terminal, Message: terminal}
+			result, err = p.CancelOperation(t.Context(), rc, op)
+			if terminal == "completed" {
+				if err != nil || result.Done {
+					t.Fatalf("wrapper lost core member settlement: %+v %v", result, err)
+				}
+				op.Checkpoint = result.Checkpoint
+				result, err = p.CancelOperation(t.Context(), rc, op)
+				if err != nil || !result.Done {
+					t.Fatalf("wrapper did not finish cancellation after settlement: %+v %v", result, err)
+				}
+			} else if err == nil || !result.Done || !strings.Contains(err.Error(), "manual recovery") {
+				t.Fatalf("wrapper discarded terminal core cancellation failure: %+v %v", result, err)
+			}
+			if backend.deploys != 1 || backend.polls != 2 {
+				t.Fatalf("wrapper replayed or lost the core receipt: deploys=%d polls=%d", backend.deploys, backend.polls)
 			}
 		})
 	}

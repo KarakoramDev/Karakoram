@@ -194,6 +194,9 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 			return true, nil
 		}
 		s.Pending = nil
+		if m != nil && m.Role == "proxy" && (q.Action == "scale" || q.Action == "resize") {
+			return true, fmt.Errorf("infrastructure %s failed for %s: %s", q.Action, q.Member, st.Message)
+		}
 		return true, fmt.Errorf("infrastructure %s failed for %s", q.Action, q.Member)
 	}
 	m := s.find(q.Member)
