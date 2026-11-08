@@ -195,11 +195,11 @@ These cross-engine constraints define the operating model; engine-specific limit
   Existing GR clusters still need the
   [proxy TLS redeployment](upgrade.md#proxysql-monitor-tls).
 - **Nomad live coverage remains incomplete:** PXC, Neo4j, Weaviate, Citus,
-  Temporal, OpenBao, Keycloak/bindings, Supabase and fleet operations have not
-  been live-verified in the current release campaign. Earlier scoped evidence
-  is not a complete lifecycle/recovery acceptance pass. EXPERIMENTAL status is
-  unchanged.
-- **Temporal on Zerops requires IPv6-capable agents and private IPv6 connectivity** to peers and the bound PostgreSQL writer. Implemented admission/rendering is covered offline; live workflow and recovery acceptance remains unverified.
+  Temporal, OpenBao, Keycloak/bindings, Supabase and fleet operations have only
+  partial live coverage for v0.4.7: bounded checks of selected paths, not a
+  complete lifecycle/recovery acceptance pass. Dokploy was not live-tested for
+  v0.4.7. EXPERIMENTAL status is unchanged.
+- **Temporal on Zerops requires IPv6-capable agents and private IPv6 connectivity** to peers and the bound PostgreSQL writer. Bounded live checks covered combined-layout workflows over private IPv6, an agent refresh and PostgreSQL writer failover; the split layout, optional UI OIDC and complete lifecycle acceptance remain unverified.
 
 The v0.4.2 PITR memory, singleton backup-memory, PXC retirement and clone,
 PXC post-restore history, ProxySQL TLS and Zerops Weaviate issues are resolved

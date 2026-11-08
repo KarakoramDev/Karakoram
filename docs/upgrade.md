@@ -6,7 +6,7 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 
 ## Upgrading to v0.4.7
 
-v0.4.7 (unreleased) includes the [v0.4.6 security hotfix](#upgrading-to-v046)
+v0.4.7 includes the [v0.4.6 security hotfix](#upgrading-to-v046)
 (`github.com/klauspost/compress` v1.20.2), the
 [v0.4.5 MySQL hotfix](#upgrading-to-v045) and the
 [v0.4.4 PITR hotfix](#upgrading-to-v044). When upgrading directly
@@ -269,6 +269,10 @@ a process restart alone does not replace an installed bundle.
 - Data MCP reconnects after a companion connection closes or its session is
   missing. Tool listing retries once; tool execution is never replayed. See
   [tool-list troubleshooting](data-mcp.md#tool-list-troubleshooting-v047).
+- **MCP error results:** failed MCP tool calls return `isError` with the REST
+  error body as text content and no longer include `structuredContent`, whether
+  or not output schemas are enabled. Clients that read structured error details
+  must read the text content instead. Successful calls keep `structuredContent`.
 - **Data MCP companion refresh:** Data MCP companions (MongoDB and PostgreSQL) are redeployed once after the upgrade, honoring each cluster's maintenance window; Data MCP is briefly unavailable for that cluster. A failed companion preparation stops after four attempts, keeps the previous companion serving where possible, and reports `DeploymentRetriesExhausted` with the retry command. Automatic replacements emit `DataMcpCompanionRollout`. Only the private stateless companion is replaced, not database members or volumes. Replacement preparation downloads and checksum-verifies the locked bytes before the start-first backend promotes the replacement and retires the old companion. See [companion operations](data-mcp.md#companion-operations-and-status).
 
 ### Agent rollout now covers every member-agent engine
@@ -545,8 +549,10 @@ Older agents receive HTTP 409 `AgentUpgradeRequired` with `temporal-ipv6` guidan
 not a partially compatible configuration. Every replica must reach its peers and
 the bound PostgreSQL writer over private IPv6; application workers must reach
 the private frontend. Public IPv4 is not a substitute. No database, artifact or
-backup migration is required. Live workflow, failover/recovery and optional UI
-OIDC acceptance remain pending. See [Temporal](temporal/README.md#limits) and
+backup migration is required. Bounded live checks on Zerops covered
+combined-layout workflows over private IPv6, an agent refresh and PostgreSQL
+writer failover; the split layout, optional UI OIDC and complete lifecycle
+acceptance remain unverified. See [Temporal](temporal/README.md#limits) and
 [ADR 0068](adr/0068-temporal-zerops.md).
 
 ### MySQL/PXC per-cluster mutation isolation
@@ -687,7 +693,7 @@ keep their individually documented status.
 ## Upgrading to v0.4.5
 
 v0.4.5 is a hotfix of v0.4.4 with only two MySQL fixes. It does not include
-the features now planned for v0.4.7.
+the features released in v0.4.7.
 
 ### Fixed in v0.4.5
 
@@ -799,7 +805,7 @@ those releases.
 ## Upgrading to v0.4.4
 
 v0.4.4 is a hotfix of v0.4.3 with only two MySQL/PXC point-in-time recovery
-corrections. It does not include the features now planned for v0.4.7.
+corrections. It does not include the features released in v0.4.7.
 
 ### Fixed in v0.4.4
 
@@ -2402,7 +2408,7 @@ Retain the archive, master key and previous revision until the upgrade and agent
 
 ## Version notes
 
-### Unreleased: fleet operations and recovery
+### v0.4.0: fleet operations and recovery
 
 - Member build identity and explicit rolling agent upgrades keep executable rollout separate from database-version upgrades. Automatic rollout is opt-in; existing and legacy agents are not redeployed merely because the control plane restarts.
 - Optional cluster maintenance windows defer new disruptive work. Emergency healing and near-expiry certificate recovery remain exempt; explicit overrides never bypass engine safety gates.
