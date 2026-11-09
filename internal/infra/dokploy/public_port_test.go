@@ -5,6 +5,7 @@ package dokploy
 
 import (
 	"errors"
+	"maps"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -56,11 +57,41 @@ func privatePortFixture(t *testing.T) (*Backend, *fakeAPI, map[string]any, []map
 	var tasks []map[string]any
 	for _, app := range f.apps {
 		if app.row["name"] == "runtime" {
-			tasks = fakeRowsCopy(app.tasks)
+			// Task fields are scalar values. Preserve their Go types: the JSON
+			// round-trip in fakeRowsCopy turns specForceUpdate's int into float64.
+			for _, task := range app.tasks {
+				tasks = append(tasks, maps.Clone(task))
+			}
 		}
 	}
 	f.mu.Unlock()
 	return b, f, before, tasks
+}
+
+func TestPrivatePortFixturePreservesTaskSpecSnapshot(t *testing.T) {
+	for _, field := range []string{"specEnv", "specForceUpdate"} {
+		t.Run(field, func(t *testing.T) {
+			_, f, _, tasks := privatePortFixture(t)
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			for _, app := range f.apps {
+				if app.row["name"] != "runtime" {
+					continue
+				}
+				if !reflect.DeepEqual(app.tasks, tasks) {
+					t.Fatal("snapshot changed task field values or types")
+				}
+				if field == "specEnv" {
+					app.tasks[0][field] = "CHANGED=true"
+				} else {
+					app.tasks[0][field] = fakeInt(app.tasks[0], field) + 1
+				}
+				if reflect.DeepEqual(app.tasks, tasks) {
+					t.Fatalf("snapshot hid a change to %s", field)
+				}
+			}
+		})
+	}
 }
 
 func TestPublicPortConflictPreflightDoesNotMutate(t *testing.T) {
