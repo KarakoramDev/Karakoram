@@ -51,8 +51,11 @@ type member struct {
 	Index           int    `json:"index"`
 	Group           int    `json:"group,omitempty"`
 	Volume          string `json:"volume,omitempty"`
-	ServiceID       string `json:"serviceId,omitempty"`
-	VolumeID        string `json:"volumeId,omitempty"`
+	// ReplacesVolume is captured before import planning, independent of member names.
+	ReplacesVolume string   `json:"replacesVolume,omitempty"`
+	PlacementAvoid []string `json:"placementAvoid,omitempty"`
+	ServiceID      string   `json:"serviceId,omitempty"`
+	VolumeID       string   `json:"volumeId,omitempty"`
 	// ImportBatch preserves the exact original subset across ambiguous imports.
 	// Resources/Replicas are frozen with it; sensitive Env is rebuilt from the
 	// sealed member token, never stored in Cluster.Internal.

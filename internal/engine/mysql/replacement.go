@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"time"
 )
 
@@ -77,10 +78,20 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 				return result, err
 			}
 		}
+		var survivors []string
+		for _, m := range s.data() {
+			if m.Name != old.Name && !m.Removing {
+				survivors = append(survivors, m.Name)
+			}
+		}
+		avoid, err := engine.ReplacementPlacementAvoid(ctx, rc, survivors, nil)
+		if err != nil {
+			return result, err
+		}
 		index := s.NextIndex
 		s.NextIndex++
 		name := fmt.Sprintf("%sm%d", rc.Cluster.Name, index)
-		s.Members = append(s.Members, &member{Name: name, Index: index, Role: "data", Volume: name + "v", Stage: "planned", ConfigVersion: s.ConfigVersion})
+		s.Members = append(s.Members, &member{Name: name, Index: index, Role: "data", Volume: name + "v", ReplacesVolume: old.Volume, PlacementAvoid: avoid, Stage: "planned", ConfigVersion: s.ConfigVersion})
 		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: name, Stage: "join"}
 		if rc.Cluster.Spec.Provider == "pxc" {
 			preparePXCFormationCertification(s)
@@ -218,4 +229,36 @@ func cancelReplacement(rc *engine.Context, op *domain.Operation) (engine.OpResul
 	result := replacementResult(cp)
 	result.Done = true
 	return result, nil
+}
+
+// Resume pre-freeze allocations written by an older control plane. Only the
+// persisted predecessor volume is evidence; a member name is not a volume ID.
+func prepareReplacementPlacement(ctx context.Context, rc *engine.Context, s *state, m *member) (bool, error) {
+	cp := s.Replacement
+	if cp == nil || cp.New != m.Name || m.ImportBatch != nil {
+		return false, nil
+	}
+	_, authoritative := rc.Backend.(infra.PlacementNodes)
+	if m.ReplacesVolume != "" && (!authoritative || m.PlacementAvoid != nil) {
+		return false, nil
+	}
+	if m.ReplacesVolume == "" {
+		old := s.find(cp.Old)
+		if old == nil || old.Volume == "" {
+			return false, engine.Invalid("replacement predecessor volume identity is unavailable; recover the persisted predecessor record before importing %s", m.Name)
+		}
+		m.ReplacesVolume = old.Volume
+	}
+	var survivors []string
+	for _, member := range s.data() {
+		if member.Name != cp.Old && member.Name != cp.New && !member.Removing {
+			survivors = append(survivors, member.Name)
+		}
+	}
+	avoid, err := engine.ReplacementPlacementAvoid(ctx, rc, survivors, nil)
+	if err != nil {
+		return false, err
+	}
+	m.PlacementAvoid = avoid
+	return true, nil
 }

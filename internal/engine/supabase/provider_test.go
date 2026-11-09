@@ -679,24 +679,36 @@ func TestOptionalDeploymentDoesNotBlockReplacementProvisioning(t *testing.T) {
 				if err := rc.Secrets.SetAgentToken(t.Context(), token); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := backend.ImportServices(t.Context(), []infra.ServiceSpec{engine.RuntimeServiceSpec(backend.Layout(), engine.MemberService{Cluster: rc.Cluster.Name, Member: name, Token: value, Resources: rc.Cluster.Spec.Components.Engine.Resources, Containers: 1})}); err != nil {
+				volume := ""
+				var specs []infra.ServiceSpec
+				if i == 1 {
+					volume = name + "v"
+					specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, name, volume, value, rc.Cluster.Spec.Components.Engine.Resources))
+				}
+				specs = append(specs, engine.RuntimeServiceSpec(backend.Layout(), engine.MemberService{Cluster: rc.Cluster.Name, Member: name, Token: value, Volume: volume, Resources: rc.Cluster.Spec.Components.Engine.Resources, Containers: 1}))
+				if _, err := backend.ImportServices(t.Context(), specs); err != nil {
 					t.Fatal(err)
 				}
 				backend.deployed[name] = true
 			}
 			// Resume a durable replacement at join after its etcd learner was
 			// admitted, but before Core.Sync has provisioned its runtime/volume.
-			rc.Cluster.Internal = json.RawMessage(`{"postgres":{
+			resources := rc.Cluster.Spec.Components.Engine.Resources
+			disk, err := json.Marshal(domain.Resources{MinDisk: resources.MinDisk, MaxDisk: resources.MaxDisk})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rc.Cluster.Internal = json.RawMessage(fmt.Sprintf(`{"postgres":{
 				"uid":"replacement-fixture","topology":"ha","formed":true,
 				"nextIndex":4,"configVersion":1,"bootstrapGeneration":1,
 				"members":[
 					{"name":"demop0","role":"data","index":0,"stage":"joined","etcdState":"existing"},
-					{"name":"demop1","role":"data","index":1,"stage":"joined","etcdState":"existing"},
+					{"name":"demop1","role":"data","index":1,"stage":"joined","volume":"demop1v","disk":%s,"etcdState":"existing"},
 					{"name":"demop2","role":"data","index":2,"stage":"joined","etcdState":"existing"},
 					{"name":"demop3","role":"data","index":3,"stage":"planned","volume":"demop3v","etcdState":"existing","etcdLearner":true}
 				],
 				"replacement":{"operation":"replace-one","old":"demop1","new":"demop3","stage":"join","relocate":true,"avoidGroup":"node-a"}
-			}}`)
+			}}`, disk))
 			op := &domain.Operation{Kind: domain.OperationReplaceMember, Checkpoint: json.RawMessage(`{"stage":"join"}`)}
 			if !p.Core.SyncDuringOperation(op) {
 				t.Fatal("replacement join must allow core sync")
@@ -717,8 +729,8 @@ func TestOptionalDeploymentDoesNotBlockReplacementProvisioning(t *testing.T) {
 			}
 			rc.Backend = blockedDeployBackend{testBackend: backend, pollError: pollError}
 			var result engine.Result
-			for range 2 {
-				// The first pass durably freezes import intent before submission.
+			for range 3 {
+				// Recover legacy placement intent durably, freeze, then submit.
 				result, err = p.Sync(t.Context(), rc)
 				if !errors.Is(err, pollError) {
 					t.Fatalf("component observation error lost: got %v, want %v", err, pollError)
@@ -733,6 +745,9 @@ func TestOptionalDeploymentDoesNotBlockReplacementProvisioning(t *testing.T) {
 					foundMove = true
 					if len(spec.SpreadAvoid) != 1 || spec.SpreadAvoid[0] != "node-a" {
 						t.Fatalf("Supabase lost inherited move placement: %v", spec.SpreadAvoid)
+					}
+					if spec.SpreadReplaces != "demop1v" {
+						t.Fatalf("Supabase lost inherited predecessor volume: %q", spec.SpreadReplaces)
 					}
 				}
 			}

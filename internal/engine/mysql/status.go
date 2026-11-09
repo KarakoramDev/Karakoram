@@ -247,6 +247,21 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			status.Phase = domain.PhaseScaling
 		}
 	}
+	if clustered(s.Topology) {
+		var voters []string
+		for _, m := range s.data() {
+			if m.Stage == "joined" && !m.Removing && m.Retirement == "" {
+				voters = append(voters, m.Name)
+			}
+		}
+		// Placement is part of the same read-only pass as member inventory.
+		// Reuse its platform snapshot and absolute observation deadline.
+		probe, cancel := mysqlReadContext(ctx, rc)
+		defer cancel()
+		if err = engine.ObserveFailureDomains(probe, rc, &status, voters); err != nil {
+			return status, err
+		}
+	}
 	if err = p.backupStatus(ctx, rc, &status); err != nil {
 		return status, err
 	}

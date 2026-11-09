@@ -98,10 +98,13 @@ type mysqloffline struct {
 	UUID string `json:"uuid"`
 }
 type member struct {
-	Name                  string                 `json:"name"`
-	Role                  string                 `json:"role"`
-	Index                 int                    `json:"index"`
-	Volume                string                 `json:"volume,omitempty"`
+	Name   string `json:"name"`
+	Role   string `json:"role"`
+	Index  int    `json:"index"`
+	Volume string `json:"volume,omitempty"`
+	// ReplacesVolume is captured before import planning, independent of member names.
+	ReplacesVolume        string                 `json:"replacesVolume,omitempty"`
+	PlacementAvoid        []string               `json:"placementAvoid,omitempty"`
 	VolumeID              string                 `json:"volumeId,omitempty"`
 	ServiceID             string                 `json:"serviceId,omitempty"`
 	Stage                 string                 `json:"stage"`

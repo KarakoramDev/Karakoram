@@ -63,6 +63,22 @@ func eligibleNodes(ns []node) []node {
 	}
 	return out
 }
+
+var _ infra.PlacementNodes = (*Backend)(nil)
+
+func (b *Backend) PlacementSnapshot(ctx context.Context) (infra.PlacementSnapshot, error) {
+	ns, err := b.nodes(ctx)
+	if err != nil {
+		return infra.PlacementSnapshot{}, err
+	}
+	eligible := eligibleNodes(ns)
+	groups := make([]string, 0, len(eligible))
+	for _, n := range eligible {
+		groups = append(groups, n.Description.Hostname)
+	}
+	slices.Sort(groups)
+	return infra.PlacementSnapshot{Eligible: slices.Compact(groups)}, nil
+}
 func chooseNode(ns []node, ms []metadata, group, replaces string, avoid ...string) (string, error) {
 	ns = eligibleNodes(ns)
 	ns = slices.DeleteFunc(ns, func(n node) bool { return slices.Contains(avoid, n.Description.Hostname) })

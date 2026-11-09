@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 // replacementState reserves both identities until the replacement is streaming
@@ -77,7 +78,26 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		if !s.Formed || s.Pending != nil || len(s.group(old.Group).data()) != rc.Cluster.Spec.Components.Engine.Replicas {
 			return result, engine.ErrUnavailable
 		}
+		var survivors, explicit []string
+		for _, m := range s.data() {
+			if s.Topology == "ha" && m.Name != old.Name && !m.Removing {
+				survivors = append(survivors, m.Name)
+			}
+		}
+		if payload.Relocate && payload.AvoidGroup != "" {
+			explicit = []string{payload.AvoidGroup}
+		}
+		avoid := explicit
+		if s.Topology == "ha" {
+			var placementErr error
+			avoid, placementErr = engine.ReplacementPlacementAvoid(ctx, rc, survivors, explicit)
+			if placementErr != nil {
+				return result, placementErr
+			}
+		}
 		m := s.newGroupMember(rc.Cluster, old.Group)
+		m.ReplacesVolume = old.Volume
+		m.PlacementAvoid = avoid
 		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: m.Name, Stage: "join", Relocate: payload.Relocate, AvoidGroup: payload.AvoidGroup}
 	}
 	cp := s.Replacement
@@ -430,4 +450,44 @@ func (*Core) ValidateMemberReplacement(c *domain.Cluster, name string) error {
 		return engine.Invalid("member replacement requires a replicated group")
 	}
 	return nil
+}
+
+// Upgrade a legacy allocation before freezing it, using only persisted volume
+// identity and current authoritative survivor placement, never name inference.
+func prepareReplacementPlacement(ctx context.Context, rc *engine.Context, s *state, m *member) (bool, error) {
+	cp := s.Replacement
+	if cp == nil || cp.New != m.Name || m.ImportBatch != nil {
+		return false, nil
+	}
+	_, authoritative := rc.Backend.(infra.PlacementNodes)
+	authoritative = authoritative && s.Topology == "ha"
+	if m.ReplacesVolume != "" && (!authoritative || m.PlacementAvoid != nil) {
+		return false, nil
+	}
+	if m.ReplacesVolume == "" {
+		old := s.find(cp.Old)
+		if old == nil || old.Volume == "" {
+			return false, engine.Invalid("replacement predecessor volume identity is unavailable; recover the persisted predecessor record before importing %s", m.Name)
+		}
+		m.ReplacesVolume = old.Volume
+	}
+	var survivors, explicit []string
+	for _, member := range s.data() {
+		if s.Topology == "ha" && member.Name != cp.Old && member.Name != cp.New && !member.Removing {
+			survivors = append(survivors, member.Name)
+		}
+	}
+	if cp.Relocate && cp.AvoidGroup != "" {
+		explicit = []string{cp.AvoidGroup}
+	}
+	avoid := explicit
+	if s.Topology == "ha" {
+		var placementErr error
+		avoid, placementErr = engine.ReplacementPlacementAvoid(ctx, rc, survivors, explicit)
+		if placementErr != nil {
+			return false, placementErr
+		}
+	}
+	m.PlacementAvoid = avoid
+	return true, nil
 }

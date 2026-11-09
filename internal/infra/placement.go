@@ -5,6 +5,29 @@ package infra
 
 import "context"
 
+// PlacementSnapshot binds admission eligibility and observed placement aliases
+// to one authoritative physical-node inventory. Eligible contains canonical
+// identities; Aliases includes ineligible incumbents too. A nil alias map means
+// public groups are already canonical. Missing/ambiguous aliases resolve unknown.
+type PlacementSnapshot struct {
+	Eligible []string
+	Aliases  map[string]string
+}
+
+func (s PlacementSnapshot) CanonicalGroup(group string) string {
+	if s.Aliases == nil {
+		return group
+	}
+	return s.Aliases[group]
+}
+
+// PlacementNodes optionally exposes authoritative node identity and eligibility.
+// It reserves no capacity; ImportServices must enforce SpreadAvoid and refuse an
+// unsatisfiable exclusion without allocating. Public placement labels stay intact.
+type PlacementNodes interface {
+	PlacementSnapshot(context.Context) (PlacementSnapshot, error)
+}
+
 // PlacementFailure is a current scheduler rejection, not a runtime failure.
 // Message must contain only safe scheduling diagnostics, never job environments.
 type PlacementFailure struct {

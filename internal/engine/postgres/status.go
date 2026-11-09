@@ -834,6 +834,17 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	for _, m := range s.Members {
 		engine.ApplyRuntimeRecoveryStatus(&out, m.Name, m.Volume, m.RuntimeRecovery, now(rc))
 	}
+	if s.Topology == "ha" {
+		var voters []string
+		for _, m := range s.data() {
+			if m.Stage == "joined" && !m.EtcdLearner && !m.Removing && m.Retirement == "" {
+				voters = append(voters, m.Name)
+			}
+		}
+		if err := engine.ObserveFailureDomains(ctx, rc, &out, voters); err != nil {
+			return out, err
+		}
+	}
 	return out, nil
 }
 

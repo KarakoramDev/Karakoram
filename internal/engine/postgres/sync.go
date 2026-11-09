@@ -620,6 +620,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 		if m.Stage == "planned" {
 			rc.SyncWait = fmt.Sprintf("planning or importing runtime %s", m.Name)
+			if changed, e := prepareReplacementPlacement(ctx, rc, s, m); e != nil || changed {
+				return result, e
+			}
 			tok, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 			if e != nil {
 				return result, e
@@ -640,7 +643,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 					}
 					if v == nil {
 						spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, desired.Resources)
-						if cp := s.Replacement; cp != nil && cp.New == m.Name && cp.Relocate && cp.AvoidGroup != "" {
+						spec.SpreadReplaces = m.ReplacesVolume
+						spec.SpreadAvoid = m.PlacementAvoid
+						if cp := s.Replacement; len(spec.SpreadAvoid) == 0 && cp != nil && cp.New == m.Name && cp.Relocate && cp.AvoidGroup != "" {
 							spec.SpreadAvoid = []string{cp.AvoidGroup}
 						}
 						specs = append(specs, spec)

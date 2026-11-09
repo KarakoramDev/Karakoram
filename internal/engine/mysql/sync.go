@@ -378,6 +378,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if m.Stage != "planned" {
 			continue
 		}
+		if changed, e := prepareReplacementPlacement(ctx, rc, s, m); e != nil || changed {
+			return result, e
+		}
 		tok, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 		if e != nil {
 			return result, e
@@ -397,7 +400,10 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 					if m.Initialized {
 						return result, engine.Invalid("initialized MySQL volume %s is missing", m.Volume)
 					}
-					specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, desired.Resources))
+					spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, desired.Resources)
+					spec.SpreadReplaces = m.ReplacesVolume
+					spec.SpreadAvoid = m.PlacementAvoid
+					specs = append(specs, spec)
 				} else {
 					if mapping := s.Formation.GTIDCertification; mapping != nil {
 						// Existing storage is not proof of empty data.

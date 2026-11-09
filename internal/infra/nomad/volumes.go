@@ -25,36 +25,82 @@ type node struct {
 	Attributes                                                    map[string]string
 }
 
-func (b *Backend) nodes(ctx context.Context) ([]node, error) {
+func (b *Backend) allNodes(ctx context.Context) ([]node, error) {
 	var ns []node
-	if _, err := b.c.get(ctx, "/v1/nodes", nil, &ns); err != nil {
+	_, err := b.c.get(ctx, "/v1/nodes", nil, &ns)
+	return ns, err
+}
+
+func (b *Backend) nodeInTarget(n node) bool {
+	if n.NodePool != b.target.Config["nodePool"] {
+		return false
+	}
+	for _, dc := range datacenters(b.target.Config) {
+		if ok, _ := path.Match(dc, n.Datacenter); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *Backend) nodes(ctx context.Context) ([]node, error) {
+	ns, err := b.allNodes(ctx)
+	if err != nil {
 		return nil, err
 	}
 	out := ns[:0]
 	for _, n := range ns {
-		if n.NodePool != b.target.Config["nodePool"] {
-			continue
-		}
-		match := false
-		for _, dc := range datacenters(b.target.Config) {
-			if ok, _ := path.Match(dc, n.Datacenter); ok {
-				match = true
-				break
-			}
-		}
-		if match {
+		if b.nodeInTarget(n) {
 			out = append(out, n)
 		}
 	}
 	return out, nil
 }
+
+var _ infra.PlacementNodes = (*Backend)(nil)
+
+func nodeEligible(n node) bool {
+	return n.Status == "ready" && n.SchedulingEligibility == "eligible" && !n.Drain
+}
+
+func (b *Backend) PlacementSnapshot(ctx context.Context) (infra.PlacementSnapshot, error) {
+	ns, err := b.allNodes(ctx)
+	if err != nil {
+		return infra.PlacementSnapshot{}, err
+	}
+	out := infra.PlacementSnapshot{Eligible: make([]string, 0, len(ns)), Aliases: make(map[string]string, 2*len(ns))}
+	addAlias := func(alias, id string) {
+		if alias == "" {
+			return
+		}
+		if previous, exists := out.Aliases[alias]; exists && previous != id {
+			out.Aliases[alias] = ""
+		} else {
+			out.Aliases[alias] = id
+		}
+	}
+	for _, n := range ns {
+		if n.ID == "" {
+			continue
+		}
+		// Include all known nodes: ineligible incumbents still occupy domains.
+		addAlias(n.ID, n.ID)
+		addAlias(n.Name, n.ID)
+		if nodeEligible(n) && b.nodeInTarget(n) {
+			out.Eligible = append(out.Eligible, n.ID)
+		}
+	}
+	slices.Sort(out.Eligible)
+	out.Eligible = slices.Compact(out.Eligible)
+	return out, nil
+}
 func chooseNode(ns []node, rs []*record, group, replaces string, avoid ...string) (string, error) {
 	eligible := make([]node, 0, len(ns))
 	for _, n := range ns {
-		// Allocations report NodeName, falling back to NodeID when omitted.
-		// Accept either authoritative identity even if the node list has a name.
+		// Public placement remains NodeName with NodeID fallback. Keep both
+		// aliases valid for explicit moves and previously frozen exclusions.
 		excluded := slices.Contains(avoid, n.ID) || n.Name != "" && slices.Contains(avoid, n.Name)
-		if n.Status == "ready" && n.SchedulingEligibility == "eligible" && !n.Drain && !excluded {
+		if nodeEligible(n) && !excluded {
 			eligible = append(eligible, n)
 		}
 	}

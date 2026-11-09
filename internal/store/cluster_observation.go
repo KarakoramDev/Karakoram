@@ -65,6 +65,13 @@ AND updated=? AND internal=? AND status=?`,
 	if err != nil || n != 1 {
 		return false, err
 	}
+	var previous domain.ClusterStatus
+	if err := json.Unmarshal(previousStatus, &previous); err != nil {
+		return false, err
+	}
+	if err := recordFailureDomainTransition(ctx, tx, before.Ref(), previous, status); err != nil {
+		return false, err
+	}
 	if err := tx.Commit(); err != nil {
 		return false, err
 	}

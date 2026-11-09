@@ -25,6 +25,9 @@ func recordPlacementTransition(ctx context.Context, tx *sql.Tx, c *domain.Cluste
 	if err := json.Unmarshal(data, &previous); err != nil {
 		return err
 	}
+	if err := recordFailureDomainTransition(ctx, tx, c.Ref(), previous, c.Status); err != nil {
+		return err
+	}
 	before := domain.CoLocatedPlacementGroups(previous.Placement)
 	after := domain.CoLocatedPlacementGroups(c.Status.Placement)
 	if slices.Equal(before, after) {
@@ -42,4 +45,30 @@ func recordPlacementTransition(ctx context.Context, tx *sql.Tx, c *domain.Cluste
 		event.Message = "Member co-location is no longer observed; unknown placement does not establish host separation"
 	}
 	return appendEvent(ctx, tx, &event)
+}
+
+// The persisted condition is the journal, not the observer's input snapshot.
+// Both lifecycle and availability publishers call this inside their status
+// transaction, so a discarded sample cannot emit or consume a warning.
+func recordFailureDomainTransition(ctx context.Context, tx *sql.Tx, ref domain.ClusterRef, previous, status domain.ClusterStatus) error {
+	var current *domain.Condition
+	for i := range status.Conditions {
+		c := &status.Conditions[i]
+		if c.Type == "FailureDomainsSeparated" {
+			current = c
+			break
+		}
+	}
+	if current == nil || current.Status != "False" || current.Reason != "SharedNode" {
+		return nil
+	}
+	for _, old := range previous.Conditions {
+		if old.Type == current.Type && old.Status == current.Status && old.Reason == current.Reason && old.Message == current.Message {
+			return nil
+		}
+	}
+	return appendEvent(ctx, tx, &domain.Event{
+		Namespace: ref.Namespace, Cluster: ref.Name, Type: "Warning",
+		Reason: current.Reason, Message: current.Message,
+	})
 }
