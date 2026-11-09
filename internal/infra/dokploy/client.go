@@ -33,6 +33,7 @@ type client struct {
 	http         *http.Client
 	token        atomic.Value // string
 	observations *infra.ReadBudget
+	snapshot     *infra.TargetSnapshot
 }
 
 func newClient(origin, token string) *client {
@@ -105,6 +106,20 @@ func (c *client) upload(ctx context.Context, appID, zipPath string) error {
 }
 
 func (c *client) request(ctx context.Context, method, target string, body io.Reader, size int64, contentType string, out any, limit int64, values []string, requestJSON []byte, upload bool) error {
+	var readEpoch uint64
+	if c.snapshot != nil {
+		if method == http.MethodGet {
+			if data, ok := c.snapshot.Lookup(ctx, target); ok {
+				if out != nil && json.Unmarshal(data, out) != nil {
+					return silentFailure("invalid JSON response")
+				}
+				return nil
+			}
+		} else {
+			done := c.snapshot.BeginMutation(ctx)
+			defer done()
+		}
+	}
 	// Enforce redirect and timeout policy even when tests/operators replace the
 	// transport. Never mutate a shared http.Client during requests.
 	h := *c.http
@@ -135,6 +150,11 @@ func (c *client) request(ctx context.Context, method, target string, body io.Rea
 				return err
 			}
 		}
+		var fetchedAt time.Time
+		if method == http.MethodGet && c.snapshot != nil {
+			readEpoch = c.snapshot.ReadStart(ctx)
+			fetchedAt = infra.SnapshotNow()
+		}
 		resp, requestErr := h.Do(req)
 		retry := false
 		if requestErr != nil {
@@ -162,8 +182,11 @@ func (c *client) request(ctx context.Context, method, target string, body io.Rea
 				retry = false
 			case resp.StatusCode < 200 || resp.StatusCode >= 300:
 				err = responseError(resp.StatusCode, data, token, append([]string(nil), values...), requestJSON)
-			case out != nil:
-				if json.Unmarshal(data, out) != nil {
+			default:
+				if method == http.MethodGet && c.snapshot != nil {
+					c.snapshot.Populate(target, readEpoch, fetchedAt, data)
+				}
+				if out != nil && json.Unmarshal(data, out) != nil {
 					err = silentFailure("invalid JSON response")
 				}
 			}

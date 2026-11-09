@@ -13,10 +13,11 @@ import (
 type observationKey struct {
 	backend    *Backend
 	kind, name string
+	steady     bool
 }
 
 func (b *Backend) readKey(kind, name string) observationKey {
-	return observationKey{b, kind, name}
+	return observationKey{backend: b, kind: kind, name: name}
 }
 
 type observationCall[T any] struct {
@@ -32,6 +33,15 @@ func observationValue[T any](ctx context.Context, key observationKey, read func(
 	cache := infra.ObservationCache(ctx)
 	if cache == nil {
 		return read()
+	}
+	if infra.SteadyObservation(ctx) {
+		// Fresh discovery may serve either class, but snapshot-eligible facts
+		// must never satisfy pinned dial authorization. Preserve ordinary
+		// fresh-pass sharing without letting the first memo writer decide
+		// whether an authorization reaches the platform.
+		if _, fresh := cache.Load(key); !fresh {
+			key.steady = true
+		}
 	}
 	for {
 		if err := ctx.Err(); err != nil {

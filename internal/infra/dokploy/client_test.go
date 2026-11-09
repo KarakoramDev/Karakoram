@@ -81,11 +81,26 @@ func TestClientGETRetryAndPOSTNoRetry(t *testing.T) {
 			}))
 			defer server.Close()
 			c := newClient(server.URL, "retry-test-key")
+			c.snapshot = infra.PlatformSnapshot("dokploy|" + server.URL)
+			ctx := infra.WithRequestCaller(t.Context(), infra.CallerAPI)
+			traffic := func() (uint64, uint64) {
+				for _, provider := range infra.PlatformCounters() {
+					if provider.Provider == "dokploy" {
+						for _, request := range provider.Requests {
+							if request.Caller == infra.CallerAPI {
+								return request.Reads, request.Mutations
+							}
+						}
+					}
+				}
+				return 0, 0
+			}
+			beforeReads, beforeMutations := traffic()
 			var err error
 			if method == http.MethodGet {
-				err = c.get(context.Background(), "application.one", nil, nil)
+				err = c.get(ctx, "application.one", nil, nil)
 			} else {
-				err = c.post(context.Background(), "application.create", map[string]string{"name": "test"}, nil)
+				err = c.post(ctx, "application.create", map[string]string{"name": "test"}, nil)
 			}
 			if method == http.MethodGet && (err != nil || calls.Load() != 2) {
 				t.Fatalf("GET retry: calls=%d err=%v", calls.Load(), err)
@@ -93,6 +108,14 @@ func TestClientGETRetryAndPOSTNoRetry(t *testing.T) {
 			if method == http.MethodPost && (!errors.Is(err, infra.ErrUnavailable) || calls.Load() != 1) {
 				t.Fatalf("POST retried: calls=%d err=%v", calls.Load(), err)
 			}
+			reads, mutations := traffic()
+			if method == http.MethodGet && (reads-beforeReads != 2 || mutations-beforeMutations != 0) {
+				t.Fatalf("GET retry counters: reads=%d mutations=%d", reads-beforeReads, mutations-beforeMutations)
+			}
+			if method == http.MethodPost && (reads-beforeReads != 0 || mutations-beforeMutations != 1) {
+				t.Fatalf("POST counters: reads=%d mutations=%d", reads-beforeReads, mutations-beforeMutations)
+			}
+			t.Logf("method=%s network reads=%d mutations=%d", method, reads-beforeReads, mutations-beforeMutations)
 		})
 	}
 }

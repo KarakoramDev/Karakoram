@@ -259,6 +259,7 @@ func (f factory) New(t infra.Target) (infra.Backend, error) {
 	}
 	t.Config = config
 	c := newClient(origin, t.Token)
+	c.setSnapshot(t.ID)
 	state := stateForTarget(origin, t.ID)
 	return &Backend{c: c, target: t, mu: &state.mu, state: state}, nil
 }
