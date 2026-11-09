@@ -156,7 +156,11 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			}
 		}
 		if cp.Deploy != nil {
-			status, e := rc.Backend.OpStatus(ctx, *cp.Deploy)
+			revision := m.ConfigVersion
+			if m.TLSReloadPending {
+				revision = m.TLSReloadVersion
+			}
+			status, e := engine.ObserveProxyRollout(ctx, rc, *cp.Deploy, m.Name, revision, m.Role == "proxy")
 			if status.Status == "DeploymentRetriesExhausted" && e == nil {
 				e = &infra.DeploymentExhaustedError{Service: m.Name, LastError: status.Message}
 			}

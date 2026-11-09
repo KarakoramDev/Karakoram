@@ -337,6 +337,9 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			u.Stage = "prepare"
 			return true, nil
 		}
+		if err := engine.RequireProxyAdmissionProtocol(ctx, rc, m.Name); err != nil {
+			return true, err
+		}
 		op, err := rc.Backend.SetContainerCount(ctx, m.Name, target.Replicas, target.Replicas)
 		if err != nil {
 			return true, err
@@ -347,7 +350,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if u.Op == nil {
 			return true, engine.Invalid("missing MySQL scale receipt")
 		}
-		status, err := rc.Backend.OpStatus(ctx, *u.Op)
+		status, err := observeProxyRollout(ctx, rc, *u.Op, m)
 		if status.Failed {
 			// A terminal receipt will never become Done. Persist a distinct
 			// checkpoint before attempting any backend-proven recovery.
@@ -393,6 +396,9 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if !serving || !proxyResourceOnly(m, u.To, target, runtimeHash, rc.Backend) {
 			return true, engine.Invalid("ProxySQL resource update no longer preserves serving; restore the backend serving guarantee before retrying")
 		}
+		if err := engine.RequireProxyAdmissionProtocol(ctx, rc, m.Name); err != nil {
+			return true, err
+		}
 		op, err := rc.Backend.SetResources(ctx, m.Name, target.Resources)
 		if err != nil {
 			return true, err
@@ -403,7 +409,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if u.Op == nil {
 			return true, engine.Invalid("missing MySQL proxy resource update receipt")
 		}
-		status, err := rc.Backend.OpStatus(ctx, *u.Op)
+		status, err := observeProxyRollout(ctx, rc, *u.Op, m)
 		if status.Failed {
 			u.Stage = "resource-failed"
 			rc.SyncWait = "ProxySQL resource update failed; restore backend health and supersede the failed resource target"

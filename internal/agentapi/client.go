@@ -233,6 +233,18 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	return v, err
 }
 
+// ProxyServing observes native serving readiness without admitting the task.
+func (c *Client) ProxyServing(ctx context.Context) (ProxyServingProof, error) {
+	var proof ProxyServingProof
+	err := c.request(ctx, "GET", "/v1/proxy-serving", nil, &proof)
+	return proof, err
+}
+
+// AdmitProxyServing authorizes initial health admission for the exact observation.
+func (c *Client) AdmitProxyServing(ctx context.Context, admission ProxyServingAdmission) error {
+	return c.request(ctx, "POST", "/v1/proxy-serving", admission, nil)
+}
+
 // Reload requests an immediate configuration pull. Applying it can include
 // database startup and credential recovery, so it uses the engine-action budget.
 func (c *Client) Reload(ctx context.Context) error {

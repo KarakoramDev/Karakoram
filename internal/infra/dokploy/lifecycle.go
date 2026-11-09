@@ -140,6 +140,9 @@ func (b *Backend) SetResources(ctx context.Context, hostname string, r infra.Res
 	if err != nil {
 		return infra.Op{}, err
 	}
+	if _, err := proxyAdmissionEnv(a.Env, false); err != nil {
+		return infra.Op{}, err
+	}
 	if m.Pending != nil && m.Pending.HealthGated && (!m.Pending.Failed || m.Pending.Uncertain) && m.Pending.Action == "restart" && reflect.DeepEqual(mergeResources(m.Resources, r), m.Resources) {
 		return encodeOp(*m.Pending), nil
 	}
@@ -166,6 +169,9 @@ func (b *Backend) SetContainerCount(ctx context.Context, hostname string, min, m
 	defer b.mu.Unlock()
 	a, m, err := b.require(ctx, hostname)
 	if err != nil {
+		return infra.Op{}, err
+	}
+	if _, err := proxyAdmissionEnv(a.Env, false); err != nil {
 		return infra.Op{}, err
 	}
 	if m.Pending != nil && m.Pending.HealthGated && (!m.Pending.Failed || m.Pending.Uncertain) && m.Pending.Action == "scale" && m.Min == min && m.Max == max {

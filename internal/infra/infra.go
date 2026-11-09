@@ -68,6 +68,9 @@ const (
 const (
 	ContainerActive  = "ACTIVE"
 	ContainerRunning = "RUNNING"
+	// ContainerStarting is an owned task executing its startup healthcheck.
+	// It is dialable for admission, but never counts as a live serving instance.
+	ContainerStarting = "STARTING"
 )
 
 // ServiceSpec declares a runtime or persistent volume service.
@@ -152,6 +155,9 @@ type Container struct {
 	Status   string `json:"status"`
 	IPv4     string `json:"ipv4"`
 	IPv6     string `json:"ipv6"`
+	// ProxyServingAdmission identifies an owned, explicitly opted-in task whose
+	// provider permits admission (not a fenced failed-roll task/generation).
+	ProxyServingAdmission bool `json:"proxyServingAdmission,omitempty"`
 	// PlacementGroup is an authoritative host/node identity when the backend
 	// has one (Capabilities.Placement); empty otherwise.
 	PlacementGroup string `json:"placementGroup,omitempty"`

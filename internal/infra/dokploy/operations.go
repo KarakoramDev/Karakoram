@@ -177,6 +177,10 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	if m.Kind != infra.KindRuntime {
 		return infra.Op{}, reject("cannot deploy to a volume holder")
 	}
+	coldEnv, err := proxyAdmissionEnv(a.Env, false)
+	if err != nil {
+		return infra.Op{}, err
+	}
 	if d.Runtime.Volume != m.Volume {
 		return infra.Op{}, reject("deployment volume differs from imported service volume")
 	}
@@ -233,6 +237,7 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	// A serving-only healthcheck installed by a prior running update must not
 	// turn a later cold deployment into a bootstrap dependency barrier.
 	settings["healthCheckSwarm"] = nil
+	settings["env"] = coldEnv
 	order := "stop-first"
 	if m.Volume == "" && (len(d.Runtime.Args) == 0 || d.Runtime.Args[0] != "relay") {
 		order = "start-first"
@@ -408,11 +413,17 @@ func (b *Backend) pollOperation(ctx context.Context, op infra.Op) (infra.OpState
 	}
 	if state.Failed {
 		m.Pending.Failed = true
+		if o.HealthGated {
+			m.ProxyAdmissionFailure = &proxyAdmissionFailure{Issued: o.Issued, ForceUpdate: o.ForceUpdate}
+		}
 		m.Pending.Uncertain = state.Status == "stalled"
 		if o.Action == "deploy" && !m.Pending.Uncertain && m.DeploymentBudget != nil && m.DeploymentBudget.Digest == o.Digest {
 			m.DeploymentBudget.LastError = state.Message
 		}
 	} else {
+		if o.HealthGated && m.ProxyAdmissionFailure != nil && !m.ProxyAdmissionFailure.matches(&o) {
+			m.ProxyAdmissionFailure = nil
+		}
 		m.Pending = nil
 		if o.Action != "stop" && o.Specification != "" {
 			m.AppliedSpecification = o.Specification

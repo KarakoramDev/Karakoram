@@ -102,7 +102,7 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 			return true, nil
 		}
 	}
-	status, err := rc.Backend.OpStatus(ctx, q.Op)
+	status, err := observeProxyRollout(ctx, rc, q.Op, m)
 	if err != nil {
 		return true, err
 	}
@@ -136,6 +136,18 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	s.Pending = nil
 	return true, nil
 }
+
+func observeProxyRollout(ctx context.Context, rc *engine.Context, op infra.Op, m *member) (infra.OpState, error) {
+	revision := m.ConfigVersion
+	if m.Role == "proxy" {
+		access, err := accessRevision(ctx, rc)
+		if err != nil {
+			return infra.OpState{}, err
+		}
+		revision = max(revision, access)
+	}
+	return engine.ObserveProxyRollout(ctx, rc, op, m.Name, revision, m.Role == "proxy")
+}
 func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
 	if engine.ObservationPassCache(ctx) == nil {
 		ctx = engine.WithObservationPass(ctx)
@@ -164,6 +176,25 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			err = e
 		}
 	}()
+	// Swarm's automatic crash/node-loss replacements have no engine receipt.
+	// Admit only opted-in Starting proxies; never re-probe running incumbents.
+	if !rc.Cluster.Deleting && rc.Backend.Capabilities().ProxyDeploymentPreservesServing {
+		access, err := accessRevision(ctx, rc)
+		if err != nil {
+			return result, err
+		}
+		for _, m := range s.Members {
+			if m.Role != "proxy" || m.DeployOp != nil || s.Pending != nil && s.Pending.Member == m.Name {
+				continue
+			}
+			if rolling := s.Rolling; rolling != nil && rolling.Op != nil && rolling.Index < len(rolling.Order) && rolling.Order[rolling.Index] == m.Name {
+				continue // Its receipt watcher handles both active and completed/native-wait receipts.
+			}
+			if err := engine.ReconcileProxyAdmission(ctx, rc, m.Name, max(m.ConfigVersion, access)); err != nil {
+				return result, err
+			}
+		}
+	}
 	if busy, e := p.recoverRuntimes(ctx, rc, s); busy || e != nil {
 		s.PITRReanchor.FirstSeen = time.Time{}
 		return result, e
@@ -483,7 +514,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if m.DeployOp == nil {
 			return result, engine.Invalid("deploying member has no receipt")
 		}
-		st, e := rc.Backend.OpStatus(ctx, *m.DeployOp)
+		st, e := observeProxyRollout(ctx, rc, *m.DeployOp, m)
 		if st.Status == "DeploymentRetriesExhausted" && e == nil {
 			e = &infra.DeploymentExhaustedError{Service: m.Name, LastError: st.Message}
 		}

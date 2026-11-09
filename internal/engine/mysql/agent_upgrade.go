@@ -393,7 +393,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		return agentUpgradeResult(&cp, "Waiting for "+m.Name+" ONLINE with build "+cp.Target.TargetBuild)
 	case "waiting", "settling":
 		if cp.Deploy != nil {
-			status, e := rc.Backend.OpStatus(ctx, *cp.Deploy)
+			status, e := observeProxyRollout(ctx, rc, *cp.Deploy, m)
 			if e != nil {
 				return result, e
 			}

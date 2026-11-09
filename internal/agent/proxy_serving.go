@@ -5,6 +5,7 @@ package agent
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -12,7 +13,11 @@ import (
 	"net"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 )
 
 // proxyServingAddress is container-local; neither service DNS nor a persisted
@@ -53,6 +58,34 @@ func proxyServingReadiness(ctx context.Context, dir string) error {
 	return nil
 }
 
+// Docker's Swarm executor can treat a zero-exit container as successfully
+// started even when it stopped that container for failing its initial healthcheck.
+// Never let a task that has not earned native admission exit successfully.
+func proxyServingShutdownError(o Options) error {
+	admission, err := proxyAdmissionForContainer(o.DataDir)
+	if o.ProxyServingAdmission {
+		admitted, err := proxyControlAdmitted(o)
+		if err == nil && admitted {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("proxy stopped without verified control-plane admission: %w", err)
+		}
+		return errors.New("proxy stopped before control-plane serving admission")
+	}
+	if err == nil {
+		var admitted bool
+		admitted, err = admission.admitted()
+		if err == nil && admitted {
+			return nil
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("proxy stopped without verified serving admission: %w", err)
+	}
+	return errors.New("proxy stopped before serving admission")
+}
+
 func (a *nodeAgent) startProxyServing() net.Listener {
 	// The runtime marker is available before the first config pull; ordinary
 	// data agents must not depend on or create proxy admission state.
@@ -68,6 +101,10 @@ func (a *nodeAgent) startProxyServing() net.Listener {
 
 func (a *nodeAgent) serveProxyServing() (net.Listener, error) {
 	admission, err := proxyAdmissionForContainer(a.o.DataDir)
+	if a.o.ProxyServingAdmission {
+		admitted, err := proxyControlAdmitted(a.o)
+		return a.serveProxyServingState(admission, admitted, err)
+	}
 	if err != nil {
 		return a.serveProxyServingState(admission, false, fmt.Errorf("initialize proxy admission: %w", err))
 	}
@@ -88,6 +125,7 @@ func (a *nodeAgent) serveProxyServingState(admission proxyContainerAdmission, ad
 	if admissionErr != nil && a.o.Logger != nil {
 		a.o.Logger.Error("proxy serving readiness unavailable", "error", admissionErr)
 	}
+	a.proxyAdmitted.Store(admitted)
 	listener, err := net.Listen("unix", proxyServingAddress(a.o.DataDir))
 	if err != nil {
 		return nil, err
@@ -101,7 +139,7 @@ func (a *nodeAgent) serveProxyServingState(admission proxyContainerAdmission, ad
 			if err != nil {
 				return
 			}
-			if !admitted && admissionErr == nil {
+			if !a.o.ProxyServingAdmission && !admitted && admissionErr == nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 				if a.proxyServingHealth(ctx) == nil {
 					admitted = admission.record() == nil
@@ -113,7 +151,7 @@ func (a *nodeAgent) serveProxyServingState(admission proxyContainerAdmission, ad
 			// not evidence that this already admitted agent has died.
 			alive := !a.sup.closing.Load()
 			response := byte(0)
-			if admitted && alive {
+			if (admitted || a.proxyAdmitted.Load()) && alive {
 				response = 1
 			}
 			_ = conn.SetWriteDeadline(time.Now().Add(time.Second))
@@ -134,6 +172,10 @@ func (a *nodeAgent) proxyServingHealth(ctx context.Context) error {
 		return err
 	}
 	defer a.applyMu.Unlock()
+	return a.proxyServingHealthLocked(ctx)
+}
+
+func (a *nodeAgent) proxyServingHealthLocked(ctx context.Context) error {
 	c := a.config()
 	if a.engine == nil || c.Role != "proxy" || c.ConfigVersion <= 0 || c.Maintenance || a.controlsErr != nil || a.controls.Maintenance || a.controls.Stopped["proxysql"] || c.DesiredProcesses != nil && !slices.Contains(c.DesiredProcesses, "proxysql") {
 		return errors.New("proxy serving intent is unavailable or held")
@@ -163,4 +205,97 @@ func (a *nodeAgent) proxyServingHealth(ctx context.Context) error {
 		return a.engine.Readiness(ctx, a.o, nil)
 	}
 	return errors.New("engine does not support native proxy serving readiness")
+}
+
+// The authenticated record extends container provenance, rather than trusting a
+// locally writable boolean. Its key is the sealed per-member agent credential;
+// copied records and unsigned legacy markers cannot admit a different task.
+func proxyControlRecord(o Options, revision int64) (proxyContainerAdmission, error) {
+	if o.TaskID == "" || o.Token == "" || revision <= 0 {
+		return proxyContainerAdmission{}, errors.New("control-plane admission requires task identity, credential and applied revision")
+	}
+	admission, err := proxyAdmissionForContainer(o.DataDir)
+	if err != nil {
+		return admission, err
+	}
+	mac := hmac.New(sha256.New, []byte(o.Token))
+	_, _ = fmt.Fprintf(mac, "proxy-control-admission-v1\x00%s\x00%s\x00%d", o.TaskID, admission.identity, revision)
+	admission.identity = fmt.Sprintf("v2:%d:%x\n", revision, mac.Sum(nil))
+	return admission, nil
+}
+
+func proxyControlAdmitted(o Options) (bool, error) {
+	record, err := proxyControlRecord(o, 1)
+	if err != nil {
+		return false, err
+	}
+	data, err := record.readRecord(256)
+	if err != nil || len(data) == 0 {
+		return false, err
+	}
+	fields := strings.Split(string(data), ":")
+	if len(fields) != 3 || fields[0] != "v2" {
+		return false, nil
+	}
+	revision, err := strconv.ParseInt(fields[1], 10, 64)
+	if err != nil || revision <= 0 {
+		return false, nil
+	}
+	record, err = proxyControlRecord(o, revision)
+	if err != nil {
+		return false, err
+	}
+	return hmac.Equal(data, []byte(record.identity)), nil
+}
+
+func (a *nodeAgent) proxyServingProof(ctx context.Context) (agentapi.ProxyServingProof, error) {
+	proof := agentapi.ProxyServingProof{TaskID: a.o.TaskID, Member: a.o.Member}
+	// A marked fixed agent running under an older CP still exposes protocol
+	// capability, so a later fixed CP can safely preflight count/resize before
+	// replacing it with an opt-in task. Reading proof never grants admission.
+	if !a.o.ProxyServingProbe || a.o.ProxyServingAdmission && a.o.TaskID == "" {
+		return proof, errors.New("proxy serving admission identity is unavailable")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	if err := a.applyMu.LockContext(ctx); err != nil {
+		return proof, err
+	}
+	defer a.applyMu.Unlock()
+	c := a.config()
+	proof.ConfigVersion = c.ConfigVersion
+	proof.Admitted = a.proxyAdmitted.Load()
+	proof.Ready = c.Member == a.o.Member && a.proxyServingHealthLocked(ctx) == nil
+	return proof, nil
+}
+
+func (a *nodeAgent) admitProxyServing(ctx context.Context, request agentapi.ProxyServingAdmission) error {
+	if !a.o.ProxyServingProbe || !a.o.ProxyServingAdmission || a.o.TaskID == "" || request.TaskID != a.o.TaskID || request.ConfigVersion <= 0 {
+		return errors.New("proxy admission task identity does not match this task")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	if err := a.applyMu.LockContext(ctx); err != nil {
+		return err
+	}
+	defer a.applyMu.Unlock()
+	c := a.config()
+	if c.Member != a.o.Member || c.ConfigVersion != request.ConfigVersion || a.acceptedVersion != request.ConfigVersion {
+		return errors.New("proxy admission does not match the current applied member configuration")
+	}
+	if a.proxyAdmitted.Load() {
+		return nil
+	}
+	if err := a.proxyServingHealthLocked(ctx); err != nil {
+		return err
+	}
+	record, err := proxyControlRecord(a.o, request.ConfigVersion)
+	if err != nil {
+		return err
+	}
+	if err := record.record(); err != nil {
+		return err
+	}
+	a.proxyAdmitted.Store(true)
+	return nil
 }

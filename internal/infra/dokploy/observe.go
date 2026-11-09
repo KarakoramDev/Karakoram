@@ -14,6 +14,9 @@ import (
 )
 
 func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Container, error) {
+	if infra.FreshTaskInventory(ctx) {
+		ctx = infra.WithoutObservation(ctx)
+	}
 	ctx = infra.ObservationContext(ctx)
 	a, err := b.application(ctx, hostname)
 	if err != nil {
@@ -22,9 +25,18 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 	if a == nil {
 		return []infra.Container{}, nil
 	}
-	m, _ := parseMetadata(a.Description)
-	if m.Kind != infra.KindRuntime {
+	m, ok := parseMetadata(a.Description)
+	if !ok || m.Kind != infra.KindRuntime {
 		return []infra.Container{}, nil
+	}
+	if infra.FreshTaskInventory(ctx) {
+		service, err := b.inspectService(ctx, a.AppName)
+		if err != nil {
+			return nil, err
+		}
+		if service == nil || !b.ownsService(*a, m, service) {
+			return nil, restoreConflict("cannot authorize tasks without the owned Swarm service")
+		}
 	}
 	ts, err := b.tasks(ctx, a.AppName)
 	if err != nil {
@@ -39,6 +51,8 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 		status := infra.StatusCreating
 		if running {
 			status = infra.ContainerRunning
+		} else if strings.EqualFold(t.State, "running") && strings.HasPrefix(strings.ToLower(t.CurrentState), "starting") {
+			status = infra.ContainerStarting
 		}
 		// The API returns docker service ps --no-trunc: containerId is the
 		// Swarm task ID and name is service.slot. Their combination is the
@@ -48,7 +62,13 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 			name := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(t.Name), `\_`))
 			taskHostname = name + "." + t.ID
 		}
-		out = append(out, infra.Container{ID: t.ID, Hostname: taskHostname, Status: status, PlacementGroup: t.Node})
+		container := infra.Container{ID: t.ID, Hostname: taskHostname, Status: status, PlacementGroup: t.Node}
+		if status == infra.ContainerStarting && m.ProxyServingProbe {
+			if err := b.startingProxyTask(ctx, a, m, t, &container); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, container)
 	}
 	return out, nil
 }

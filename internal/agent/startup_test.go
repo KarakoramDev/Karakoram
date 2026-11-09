@@ -107,6 +107,118 @@ func TestRunPublishesStartupBeforeFirstConfiguration(t *testing.T) {
 	}
 }
 
+func TestRunProxyShutdownRequiresServingAdmission(t *testing.T) {
+	for _, state := range []string{"unmarked", "unadmitted", "admitted", "stale", "unsafe"} {
+		t.Run(state, func(t *testing.T) {
+			requested := make(chan struct{}, 1)
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				select {
+				case requested <- struct{}{}:
+				default:
+				}
+				http.Error(w, "configuration pending", http.StatusServiceUnavailable)
+			}))
+			defer server.Close()
+			dir := t.TempDir()
+			admission, err := proxyAdmissionForContainer(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(admission.path)) })
+			if state == "admitted" || state == "stale" || state == "unsafe" {
+				record := admission
+				if state == "stale" {
+					record.identity = "previous-container\n"
+				}
+				if err := record.record(); err != nil {
+					t.Fatal(err)
+				}
+				if state == "unsafe" {
+					if err := os.Chmod(admission.path, 0666); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			opts := Options{ControlPlaneURL: server.URL, InternalCAPEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})), Token: "test-token", Cluster: "test", Member: "member", DataDir: dir, ProxyServingProbe: state != "unmarked", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+			done := make(chan error, 1)
+			go func() { done <- Run(ctx, opts) }()
+			select {
+			case <-requested:
+			case err := <-done:
+				t.Fatal("agent exited before configuration", err)
+			case <-time.After(5 * time.Second):
+				t.Fatal("agent did not request configuration")
+			}
+			cancel()
+			select {
+			case err := <-done:
+				wantFailure := state != "unmarked" && state != "admitted"
+				if (err != nil) != wantFailure {
+					t.Fatalf("shutdown error = %v, want failure %v", err, wantFailure)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("agent did not stop")
+			}
+		})
+	}
+}
+
+func TestRunProxyHealthcheckTerminationHelper(t *testing.T) {
+	if os.Getenv("KARAKORAM_PROXY_EXIT_TEST") != "1" {
+		return
+	}
+	opts := Options{ControlPlaneURL: os.Getenv("KARAKORAM_PROXY_EXIT_URL"), InternalCAPEM: os.Getenv("KARAKORAM_PROXY_EXIT_CA"), Token: "test-token", Cluster: "test", Member: "member", DataDir: os.Getenv("KARAKORAM_PROXY_EXIT_DIR"), ProxyServingProbe: true, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if err := Run(context.Background(), opts); err != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
+func TestRunProxyHealthcheckTerminationExitsNonzero(t *testing.T) {
+	requested := make(chan struct{}, 1)
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case requested <- struct{}{}:
+		default:
+		}
+		http.Error(w, "configuration pending", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	dir := t.TempDir()
+	admission, err := proxyAdmissionForContainer(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(admission.path)) })
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRunProxyHealthcheckTerminationHelper$")
+	command.Env = append(os.Environ(), "KARAKORAM_PROXY_EXIT_TEST=1", "KARAKORAM_PROXY_EXIT_URL="+server.URL, "KARAKORAM_PROXY_EXIT_CA="+string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})), "KARAKORAM_PROXY_EXIT_DIR="+dir)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer command.Process.Kill()
+	select {
+	case <-requested:
+	case <-ctx.Done():
+		_ = command.Wait()
+		t.Fatal("agent did not request configuration")
+	}
+	// Reproduce Docker's initial-unhealthy shutdown: SIGTERM while the fresh
+	// marked task has never passed serving admission, rather than killing it.
+	if err := command.Process.Signal(syscall.SIGTERM); err != nil {
+		_ = command.Wait()
+		t.Fatal(err)
+	}
+	err = command.Wait()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+		t.Fatalf("never-admitted healthcheck termination exit = %v; Swarm must not see a clean exit", err)
+	}
+}
+
 func TestStartupRejectsKnownLocalInitializationFailures(t *testing.T) {
 	for _, failure := range []string{"identity", "agent-tls", "controls", "storage"} {
 		t.Run(failure, func(t *testing.T) {

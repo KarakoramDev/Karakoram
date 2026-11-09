@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -35,6 +37,8 @@ type Options struct {
 	Listen                                                          string
 	Engine                                                          string
 	ProxyServingProbe                                               bool
+	ProxyServingAdmission                                           bool
+	TaskID                                                          string
 	Logger                                                          *slog.Logger
 }
 
@@ -43,6 +47,8 @@ func OptionsFromEnv() (Options, error) {
 	o := Options{ControlPlaneURL: os.Getenv("KARAKORAM_URL"), InternalCAPEM: os.Getenv("KARAKORAM_INTERNAL_CA"), Token: os.Getenv("KARAKORAM_AGENT_TOKEN"), Cluster: os.Getenv("KARAKORAM_CLUSTER"), Member: os.Getenv("KARAKORAM_MEMBER"), DataDir: os.Getenv("KARAKORAM_DATA_DIR"), Listen: ":9443"}
 	o.Engine = os.Getenv("KARAKORAM_ENGINE")
 	o.ProxyServingProbe = os.Getenv("KARAKORAM_PROXY_SERVING_PROBE") == "1"
+	o.ProxyServingAdmission = os.Getenv("KARAKORAM_PROXY_SERVING_ADMISSION") == "1"
+	o.TaskID = os.Getenv("KARAKORAM_TASK_ID")
 	if o.ControlPlaneURL == "" || o.InternalCAPEM == "" || o.Token == "" || o.Cluster == "" || o.Member == "" || o.DataDir == "" {
 		return o, errors.New("all KARAKORAM_URL, INTERNAL_CA, AGENT_TOKEN, CLUSTER, MEMBER and DATA_DIR environment variables are required")
 	}
@@ -97,6 +103,7 @@ type nodeAgent struct {
 	version         string
 	engine          Engine
 	controlsMu      sync.RWMutex
+	proxyAdmitted   atomic.Bool
 	controlsErr     error
 	lastError       string
 	startupErr      error
@@ -288,7 +295,12 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) (changes
 }
 
 // Run pulls configuration, supervises member processes and serves the private HTTPS API.
-func Run(ctx context.Context, o Options, engines ...Engine) error {
+func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
+	defer func() {
+		if runErr == nil && o.ProxyServingProbe {
+			runErr = proxyServingShutdownError(o)
+		}
+	}()
 	engine, err := selectEngine(o.Engine, engines)
 	if err != nil {
 		return err
@@ -474,6 +486,24 @@ func (a *nodeAgent) handler() http.Handler {
 		r.Body = http.MaxBytesReader(w, r.Body, 4<<20)
 		return json.NewDecoder(r.Body).Decode(v)
 	}
+	mux.HandleFunc("GET /v1/proxy-serving", func(w http.ResponseWriter, r *http.Request) {
+		proof, err := a.proxyServingProof(r.Context())
+		respond(w, proof, err)
+	})
+	mux.HandleFunc("POST /v1/proxy-serving", func(w http.ResponseWriter, r *http.Request) {
+		var request agentapi.ProxyServingAdmission
+		r.Body = http.MaxBytesReader(w, r.Body, 4096)
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		err := decoder.Decode(&request)
+		if err == nil && decoder.Decode(&struct{}{}) != io.EOF {
+			err = errors.New("proxy admission requires exactly one JSON request")
+		}
+		if err == nil {
+			err = a.admitProxyServing(r.Context(), request)
+		}
+		respond(w, struct{}{}, err)
+	})
 	mux.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) {
 		states, maintenance := a.sup.snapshot()
 		var mongoReady *bool

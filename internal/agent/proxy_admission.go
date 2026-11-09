@@ -86,37 +86,38 @@ func openProxyAdmissionDirectory(path string) (*os.File, error) {
 }
 
 func (p proxyContainerAdmission) admitted() (bool, error) {
+	data, err := p.readRecord(len(p.identity))
+	return string(data) == p.identity, err
+}
+
+func (p proxyContainerAdmission) readRecord(maxBytes int) ([]byte, error) {
 	directory, err := openProxyAdmissionDirectory(filepath.Dir(p.path))
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	defer directory.Close()
 	// Open relative to the validated directory fd. Never follow a record symlink
 	// or block opening a FIFO, and validate the opened inode rather than a path.
 	fd, err := unix.Openat(int(directory.Fd()), filepath.Base(p.path), unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+		return nil, nil
 	}
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	file := os.NewFile(uintptr(fd), "proxy admission record")
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	if !info.Mode().IsRegular() || !proxyAdmissionOwned(info) || info.Mode().Perm()&0022 != 0 {
-		return false, errors.New("proxy admission record must be regular, agent-owned and not writable by other users")
+		return nil, errors.New("proxy admission record must be regular, agent-owned and not writable by other users")
 	}
-	if info.Size() != int64(len(p.identity)) {
-		return false, nil
+	if info.Size() > int64(maxBytes) {
+		return nil, nil
 	}
-	data, err := io.ReadAll(io.LimitReader(file, int64(len(p.identity)+1)))
-	if err != nil {
-		return false, err
-	}
-	return string(data) == p.identity, nil
+	return io.ReadAll(io.LimitReader(file, int64(maxBytes+1)))
 }
 
 func (p proxyContainerAdmission) record() error {

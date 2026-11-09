@@ -114,6 +114,23 @@ type Status struct {
 	Resources *ContainerResources `json:"resources,omitempty"`
 }
 
+// ProxyServingProof is a native serving observation from one exact Swarm task.
+// Reading it does not authorize health admission or predecessor retirement.
+type ProxyServingProof struct {
+	TaskID        string `json:"taskId"`
+	Member        string `json:"member"`
+	ConfigVersion int64  `json:"configVersion"`
+	Ready         bool   `json:"ready"`
+	Admitted      bool   `json:"admitted"`
+}
+
+// ProxyServingAdmission binds control-plane authorization to the observed task
+// and applied configuration revision. A different task or revision rejects it.
+type ProxyServingAdmission struct {
+	TaskID        string `json:"taskId"`
+	ConfigVersion int64  `json:"configVersion"`
+}
+
 // AgentBuild is the running Karakoram executable, not the database version.
 type AgentBuild struct {
 	Version string `json:"version"`

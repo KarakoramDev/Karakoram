@@ -120,7 +120,15 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 			return true, nil
 		}
 	}
-	st, err := rc.Backend.OpStatus(ctx, q.Op)
+	pendingMember := s.find(q.Member)
+	revision := int64(0)
+	if pendingMember != nil {
+		revision = pendingMember.ConfigVersion
+		if pendingMember.TLSReloadPending {
+			revision = pendingMember.TLSReloadVersion
+		}
+	}
+	st, err := engine.ObserveProxyRollout(ctx, rc, q.Op, q.Member, revision, pendingMember != nil && pendingMember.Role == "proxy")
 	var resourceRejected *infra.ResourceUpdateRejectedError
 	if errors.As(err, &resourceRejected) {
 		// The backend refused replacement before stopping the serving
@@ -150,6 +158,9 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 				if rc.WaitForWindow().RequeueAfter > 0 {
 					return true, nil
 				}
+			}
+			if err := engine.RequireProxyAdmissionProtocol(ctx, rc, m.Name); err != nil {
+				return true, err
 			}
 			op, err := rc.Backend.SetContainerCount(ctx, m.Name, replicas, replicas)
 			if err != nil {
@@ -413,6 +424,22 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			err = e
 		}
 	}()
+	// The service keeps admission enabled after a successful roll. Swarm can
+	// replace a crashed/lost task without creating another engine receipt.
+	if !rc.Cluster.Deleting {
+		for _, m := range s.Members {
+			if m.Role != "proxy" || m.Removing || m.DeployOp != nil || s.Pending != nil && s.Pending.Member == m.Name {
+				continue
+			}
+			revision := m.ConfigVersion
+			if m.TLSReloadPending {
+				revision = m.TLSReloadVersion
+			}
+			if err := engine.ReconcileProxyAdmission(ctx, rc, m.Name, revision); err != nil {
+				return result, err
+			}
+		}
+	}
 	if rc.Cluster.Spec.DataSource != nil && s.RestoreRecovery != nil {
 		rc.SyncWait = "draining initial restore recovery"
 		// A retired initial restore still owns its exact receipt namespace.
@@ -716,7 +743,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				}
 			}
 			if e == nil {
-				st, e = rc.Backend.OpStatus(ctx, *m.DeployOp)
+				revision := m.ConfigVersion
+				if m.TLSReloadPending {
+					revision = m.TLSReloadVersion
+				}
+				st, e = engine.ObserveProxyRollout(ctx, rc, *m.DeployOp, m.Name, revision, m.Role == "proxy")
 			}
 			if st.Status == "DeploymentRetriesExhausted" && e == nil {
 				e = &infra.DeploymentExhaustedError{Service: m.Name, LastError: st.Message}
@@ -979,6 +1010,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 					return wait, nil
 				}
 			}
+			if err := engine.RequireProxyAdmissionProtocol(ctx, rc, m.Name); err != nil {
+				return result, err
+			}
 			op, e := rc.Backend.SetContainerCount(ctx, m.Name, desired.Replicas, desired.Replicas)
 			if e != nil {
 				return result, e
@@ -1015,6 +1049,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 		if !reflect.DeepEqual(m.Resources, desired.Resources) {
 			rc.SyncWait = fmt.Sprintf("resizing member %s", m.Name)
+			if m.Role == "proxy" {
+				if err := engine.RequireProxyAdmissionProtocol(ctx, rc, m.Name); err != nil {
+					return result, err
+				}
+			}
 			op, e := rc.Backend.SetResources(ctx, m.Name, desired.Resources)
 			if e != nil {
 				return result, e

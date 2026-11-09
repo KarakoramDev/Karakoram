@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
@@ -238,7 +239,7 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 				}
 			}
 		}
-		return []string{"proxysql.cnf"}, ApplyProxyConfig(ctx, s)
+		return []string{"proxysql.cnf"}, proxyApplyError(ApplyProxyConfig(ctx, s))
 	}
 	if err = stopConfigured(ctx, n, "proxysql"); err != nil {
 		return nil, err
@@ -359,6 +360,16 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		e.mu.Unlock()
 	}
 	return []string{"my.cnf"}, nil
+}
+
+// proxyApplyError distinguishes a not-yet-listening local admin endpoint from
+// invalid configuration/authentication. Only the startup connection race merits
+// retained retries inside the marked-task health budget.
+func proxyApplyError(err error) error {
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return &agent.RetryableApplyError{Err: err, MaxDelay: 5 * time.Second}
+	}
+	return err
 }
 
 // setApplyState records TLS activation work before any subsequent file write,

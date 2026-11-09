@@ -34,39 +34,40 @@ type metadata struct {
 	Volume       string            `json:"volume,omitempty"`
 	// Holder identity and its own hostname-bound marker are not the runtime's
 	// ownership marker. Bind both at import alongside the exact named mount.
-	VolumeID               string             `json:"volumeId,omitempty"`
-	VolumeOwner            string             `json:"volumeOwner,omitempty"`
-	Node                   string             `json:"node,omitempty"`
-	SpreadGroup            string             `json:"spreadGroup,omitempty"`
-	VarKeys                []string           `json:"varKeys,omitempty"`
-	SecretKeys             []string           `json:"secretKeys,omitempty"`
-	Vars                   map[string]string  `json:"vars,omitempty"`
-	HTTPPorts              []int              `json:"httpPorts,omitempty"`
-	SubdomainEnabled       bool               `json:"subdomainEnabled,omitempty"`
-	DomainHosts            []string           `json:"domainHosts,omitempty"`
-	PublicPorts            []infra.PublicPort `json:"publicPorts,omitempty"`
-	PortsPending           bool               `json:"portsPending,omitempty"`
-	PortChange             *portChange        `json:"portChange,omitempty"`
-	EndpointRepairAttempts int                `json:"endpointRepairAttempts,omitempty"`
-	EndpointRepairAfter    time.Time          `json:"endpointRepairAfter,omitempty"`
-	Resources              infra.Resources    `json:"resources"`
-	Min                    int                `json:"min"`
-	Max                    int                `json:"max"`
-	Deployed               bool               `json:"deployed,omitempty"`
-	ProxyServingProbe      bool               `json:"proxyServingProbe,omitempty"`
-	AppliedSpecification   string             `json:"appliedSpecification,omitempty"`
-	DeploymentDigest       string             `json:"deploymentDigest,omitempty"`
-	DeploymentBudget       *deploymentBudget  `json:"deploymentBudget,omitempty"`
-	Desired                string             `json:"desired,omitempty"`
-	Pending                *operation         `json:"pending,omitempty"`
-	MutationUntil          time.Time          `json:"mutationUntil,omitempty"`
-	DeleteRemoval          *deleteRemoval     `json:"deleteRemoval,omitempty"`
-	DeleteStopConfirmed    bool               `json:"deleteStopConfirmed,omitempty"`
-	Image                  string             `json:"image,omitempty"`
-	WriterFenced           bool               `json:"writerFenced,omitempty"`
-	Wiping                 bool               `json:"wiping,omitempty"`
-	WipePreviousTasks      []string           `json:"wipePreviousTasks,omitempty"`
-	WipePreviousDeployment string             `json:"wipePreviousDeployment,omitempty"`
+	VolumeID               string                 `json:"volumeId,omitempty"`
+	VolumeOwner            string                 `json:"volumeOwner,omitempty"`
+	Node                   string                 `json:"node,omitempty"`
+	SpreadGroup            string                 `json:"spreadGroup,omitempty"`
+	VarKeys                []string               `json:"varKeys,omitempty"`
+	SecretKeys             []string               `json:"secretKeys,omitempty"`
+	Vars                   map[string]string      `json:"vars,omitempty"`
+	HTTPPorts              []int                  `json:"httpPorts,omitempty"`
+	SubdomainEnabled       bool                   `json:"subdomainEnabled,omitempty"`
+	DomainHosts            []string               `json:"domainHosts,omitempty"`
+	PublicPorts            []infra.PublicPort     `json:"publicPorts,omitempty"`
+	PortsPending           bool                   `json:"portsPending,omitempty"`
+	PortChange             *portChange            `json:"portChange,omitempty"`
+	EndpointRepairAttempts int                    `json:"endpointRepairAttempts,omitempty"`
+	EndpointRepairAfter    time.Time              `json:"endpointRepairAfter,omitempty"`
+	Resources              infra.Resources        `json:"resources"`
+	Min                    int                    `json:"min"`
+	Max                    int                    `json:"max"`
+	Deployed               bool                   `json:"deployed,omitempty"`
+	ProxyServingProbe      bool                   `json:"proxyServingProbe,omitempty"`
+	ProxyAdmissionFailure  *proxyAdmissionFailure `json:"proxyAdmissionFailure,omitempty"`
+	AppliedSpecification   string                 `json:"appliedSpecification,omitempty"`
+	DeploymentDigest       string                 `json:"deploymentDigest,omitempty"`
+	DeploymentBudget       *deploymentBudget      `json:"deploymentBudget,omitempty"`
+	Desired                string                 `json:"desired,omitempty"`
+	Pending                *operation             `json:"pending,omitempty"`
+	MutationUntil          time.Time              `json:"mutationUntil,omitempty"`
+	DeleteRemoval          *deleteRemoval         `json:"deleteRemoval,omitempty"`
+	DeleteStopConfirmed    bool                   `json:"deleteStopConfirmed,omitempty"`
+	Image                  string                 `json:"image,omitempty"`
+	WriterFenced           bool                   `json:"writerFenced,omitempty"`
+	Wiping                 bool                   `json:"wiping,omitempty"`
+	WipePreviousTasks      []string               `json:"wipePreviousTasks,omitempty"`
+	WipePreviousDeployment string                 `json:"wipePreviousDeployment,omitempty"`
 }
 
 func (m metadata) description() string { b, _ := json.Marshal(m); return metadataPrefix + string(b) }

@@ -113,6 +113,9 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 }
 func (f *fakeAPI) next(prefix string) string {
 	f.serial++
+	if prefix == "task" {
+		return fmt.Sprintf("t%024d", f.serial)
+	}
 	return fmt.Sprintf("%s-%06d", prefix, f.serial)
 }
 func fakeString(m map[string]any, key string) string { s, _ := m[key].(string); return s }
@@ -270,7 +273,7 @@ func (f *fakeAPI) applyReplicaSpec(a *fakeApplication, replicas int, preserveInc
 		a.wiping = policy["Condition"] == "none" && a.row["command"] == "find"
 	}
 	for i := range replicas {
-		a.tasks = append([]map[string]any{{"containerId": f.next("task"), "name": fmt.Sprintf("%s.%d", a.row["appName"], i+1), "state": "running", "currentState": "Preparing 1 second ago", "node": host, "error": ""}}, a.tasks...)
+		a.tasks = append([]map[string]any{{"containerId": f.next("task"), "name": fmt.Sprintf("%s.%d", a.row["appName"], i+1), "state": "running", "currentState": "Preparing 1 second ago", "node": host, "error": "", "specEnv": a.row["env"]}}, a.tasks...)
 	}
 	name := fakeString(a.row, "appName")
 	image := name + ":latest"
@@ -300,6 +303,9 @@ func (f *fakeAPI) applyReplicaSpec(a *fakeApplication, replicas int, preserveInc
 		"EndpointSpec": map[string]any{"Ports": published, "Mode": endpointMode},
 		"TaskTemplate": map[string]any{"ForceUpdate": forceUpdate, "ContainerSpec": map[string]any{"Image": image, "Labels": a.row["labelsSwarm"]}},
 	}}
+	for _, task := range a.tasks[:replicas] {
+		task["specForceUpdate"] = forceUpdate
+	}
 	f.images[image] = true
 	a.row["applicationStatus"] = "done"
 }
@@ -476,6 +482,40 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 				} else {
 					respond(service)
 				}
+				return
+			}
+		}
+		for _, app := range f.apps {
+			for _, task := range app.tasks {
+				if fakeString(task, "containerId") != id {
+					continue
+				}
+				service := f.services[fakeString(app.row, "appName")]
+				if service == nil {
+					respond(nil)
+					return
+				}
+				env, err := decodeEnvironment(fakeString(task, "specEnv"))
+				if err != nil {
+					panic("invalid fake task environment")
+				}
+				values := make([]string, 0, len(env))
+				for key, value := range env {
+					values = append(values, key+"="+value)
+				}
+				var networks []struct{ Target string }
+				raw, _ := json.Marshal(app.row["networkSwarm"])
+				json.Unmarshal(raw, &networks)
+				addresses := []string{"192.0.2.50/24"}
+				if override, ok := task["networkAddresses"].([]string); ok {
+					addresses = override
+				}
+				attachments := make([]map[string]any, 0, len(networks))
+				for _, network := range networks {
+					attachments = append(attachments, map[string]any{"Network": map[string]any{"ID": network.Target, "Spec": map[string]any{"Name": network.Target}, "DriverState": map[string]any{"Name": "overlay"}}, "Addresses": addresses})
+				}
+				state := strings.ToLower(strings.Fields(fakeString(task, "currentState"))[0])
+				respond(map[string]any{"ID": id, "ServiceID": service["ID"], "DesiredState": task["state"], "Status": map[string]any{"State": state}, "Spec": map[string]any{"ForceUpdate": fakeInt(task, "specForceUpdate"), "ContainerSpec": map[string]any{"Env": values}}, "NetworksAttachments": attachments})
 				return
 			}
 		}

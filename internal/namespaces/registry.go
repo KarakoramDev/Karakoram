@@ -645,7 +645,7 @@ func (r *Registry) authorizeInstance(ctx context.Context, namespace, member, ins
 		return err
 	}
 	for _, container := range containers {
-		if container.Status != infra.ContainerActive && container.Status != infra.ContainerRunning {
+		if container.Status != infra.ContainerActive && container.Status != infra.ContainerRunning && container.Status != infra.ContainerStarting {
 			continue
 		}
 		if instance != "" && instance != member && (instance == container.IPv4 || instance == container.IPv6 || instance == container.Hostname) {

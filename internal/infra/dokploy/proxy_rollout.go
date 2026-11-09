@@ -15,6 +15,38 @@ import (
 var _ infra.ServingProxyUpdates = (*Backend)(nil)
 var _ infra.ProxyDeploymentLookup = (*Backend)(nil)
 
+// Keep failed-roll admission authority independently of the engine receipt and
+// the current submission journal. A rejected/unsubmitted retry cannot erase it.
+type proxyAdmissionFailure struct {
+	Issued      time.Time `json:"issued"`
+	ForceUpdate uint64    `json:"forceUpdate"`
+}
+
+func (f *proxyAdmissionFailure) matches(o *operation) bool {
+	return o != nil && f.Issued.Equal(o.Issued) && f.ForceUpdate == o.ForceUpdate
+}
+
+func proxyTaskAdmissionAllowed(m metadata, service *swarmService, taskID string, forceUpdate uint64) bool {
+	switch service.UpdateStatus.State {
+	case "paused", "rollback_started", "rollback_paused", "rollback_completed":
+		return false
+	}
+	if forceUpdate != service.Spec.TaskTemplate.ForceUpdate {
+		return false
+	}
+	pending := m.Pending
+	if pending != nil && pending.HealthGated && pending.Failed {
+		return false
+	}
+	if failure := m.ProxyAdmissionFailure; failure != nil {
+		// A new request alone cannot release failure authority: require
+		// the accepted live generation and exclude retained predecessors.
+		return pending != nil && pending.HealthGated && !pending.Failed && !failure.matches(pending) &&
+			pending.ForceUpdate == forceUpdate && !contains(pending.PreviousTasks, taskID)
+	}
+	return true
+}
+
 // Legacy images retain the ordinary redeploy path, including their first agent
 // upgrade: installing policy before uploading the new image must be safe for the
 // incumbent image too. Only a successfully deployed probe marker proves that.
@@ -68,6 +100,11 @@ func (b *Backend) prepareProxyRollout(ctx context.Context, a *application, m met
 	o.ForceUpdate = service.Spec.TaskTemplate.ForceUpdate + 1
 	// Install only on a running update, never bootstrap: initial deployment must
 	// not hold DNS/deployment admission while engine dependencies are forming.
+	env, err := proxyAdmissionEnv(a.Env, true)
+	if err != nil {
+		return err
+	}
+	settings["env"] = env
 	settings["healthCheckSwarm"] = map[string]any{
 		"Test":     []string{"CMD", layout.AppDir + "/karakoram", "agent", "readiness", "--serving-proxy", "--data-dir=" + layout.DataDir("")},
 		"Interval": int64(5 * time.Second), "Timeout": int64(10 * time.Second), "StartPeriod": int64(60 * time.Second), "Retries": 3,
@@ -75,6 +112,22 @@ func (b *Backend) prepareProxyRollout(ctx context.Context, a *application, m met
 	settings["updateConfigSwarm"] = map[string]any{"Parallelism": 1, "Order": "start-first", "FailureAction": "pause", "Monitor": int64(30 * time.Second), "MaxFailureRatio": 0}
 	settings["rollbackConfigSwarm"] = map[string]any{"Parallelism": 1, "Order": "start-first", "FailureAction": "pause", "Monitor": int64(30 * time.Second), "MaxFailureRatio": 0}
 	return nil
+}
+
+// These values belong to the Swarm task template, never the image's shell env
+// file: Swarm expands the task ID separately for every replacement.
+func proxyAdmissionEnv(current string, enabled bool) (string, error) {
+	values, err := decodeEnvironment(current)
+	if err != nil {
+		return "", err
+	}
+	delete(values, "KARAKORAM_TASK_ID")
+	delete(values, "KARAKORAM_PROXY_SERVING_ADMISSION")
+	if enabled {
+		values["KARAKORAM_TASK_ID"] = "{{.Task.ID}}"
+		values["KARAKORAM_PROXY_SERVING_ADMISSION"] = "1"
+	}
+	return encodeEnvironment(values)
 }
 
 func (b *Backend) proxyRolloutStatus(ctx context.Context, o operation, a application, tasks []task, state infra.OpState) (infra.OpState, error) {
@@ -89,7 +142,7 @@ func (b *Backend) proxyRolloutStatus(ctx context.Context, o operation, a applica
 	case "paused", "rollback_started", "rollback_paused", "rollback_completed":
 		state.Failed = true
 		state.Status = "failed"
-		state.Message = "ProxySQL start-first rollout paused or rolled back; incumbents were retained. Inspect replacement health, config pull access, writer readiness and spare capacity before retrying"
+		state.Message = "ProxySQL start-first rollout paused or rolled back; inspect incumbent tasks, replacement health, config pull access, writer readiness and spare capacity before retrying"
 		return state, nil
 	}
 	if service.Spec.TaskTemplate.ForceUpdate != o.ForceUpdate {

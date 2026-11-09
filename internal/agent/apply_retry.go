@@ -14,7 +14,12 @@ import (
 // RetryableApplyError marks a transient runtime prerequisite. The agent retries
 // the accepted configuration locally, without depending on another CP fetch.
 // Engines must not mark invalid configuration or unsafe recovery as retryable.
-type RetryableApplyError struct{ Err error }
+type RetryableApplyError struct {
+	Err error
+	// MaxDelay optionally bounds local retries for a short startup health budget.
+	// Zero retains the ordinary 30-second maximum.
+	MaxDelay time.Duration
+}
 
 func (e *RetryableApplyError) Error() string { return e.Err.Error() }
 func (e *RetryableApplyError) Unwrap() error { return e.Err }
@@ -61,7 +66,12 @@ func (a *nodeAgent) retryApplies(ctx context.Context) {
 			if a.o.Logger != nil {
 				a.o.Logger.Warn("retained configuration apply failed", "error", err)
 			}
-			delay = min(delay*2, 30*time.Second)
+			limit := 30 * time.Second
+			var retry *RetryableApplyError
+			if errors.As(err, &retry) && retry.MaxDelay > 0 {
+				limit = retry.MaxDelay
+			}
+			delay = min(delay*2, limit)
 		} else {
 			delay = time.Second
 		}
