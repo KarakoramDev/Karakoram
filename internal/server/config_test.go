@@ -139,7 +139,7 @@ func TestAgentDialerCacheInvalidatesRotatedCredentials(t *testing.T) {
 	if err = s.Store.SetAgentToken(ctx, &domain.AgentToken{Cluster: "prod", Member: "prodm0", Token: "first-token"}); err != nil {
 		t.Fatal(err)
 	}
-	d := NewAgentDialer(s.Store, nil)
+	d := NewAgentDialer(s.Store, nil, nil)
 	defer d.Close()
 	first, err := d.Dial(ctx, domain.ClusterRef{Name: "prod"}, "prodm0")
 	if err != nil {

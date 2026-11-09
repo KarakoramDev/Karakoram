@@ -873,12 +873,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 			return s.failure(err)
 		}
+		s.trigger(ctx, clusterRef(ctx, c.Name))
 		if sourceRef.Namespace != c.Namespace {
 			if err = s.crossNamespaceRestoreEvents(ctx, clusterRef(ctx, c.Name), sourceRef, "restore", op.ID); err != nil {
 				return s.failure(err)
 			}
 		}
-		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return response{status: 202, body: restoreAPI(r), operationID: op.ID}
 	}
 	if failure := s.providerContext(rc); failure != nil {

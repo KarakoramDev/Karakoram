@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentpush"
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/datamcp"
@@ -42,6 +43,7 @@ import (
 // Options supplies the real control-plane dependencies; providers remain independently testable.
 type Options struct {
 	Store               *store.Store
+	AgentPush           *agentpush.Store
 	Auth                *auth.Service
 	RBAC                *rbac.Enforcer
 	Registry            *engine.Registry
@@ -561,7 +563,9 @@ func (s *Server) Handler() http.Handler {
 		if !readable {
 			return
 		}
-		validated.ServeHTTP(w, r)
+		attributed := r.WithContext(infra.WithRequestCaller(r.Context(), infra.CallerAPI))
+		validated.ServeHTTP(w, attributed)
+		r.Pattern = attributed.Pattern
 	})
 }
 

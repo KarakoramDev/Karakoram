@@ -55,6 +55,7 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 		if err = s.Store.EnqueueBackupDeletion(ctx, b, op); err != nil {
 			return s.failure(err)
 		}
+		s.trigger(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.Cluster})
 		return response{status: 204, operationID: op.ID}
 	}
 	storage, err := s.Store.GetBackupStorage(ctx, b.Namespace, b.Storage)

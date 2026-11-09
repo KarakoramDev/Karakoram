@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentpush"
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -46,6 +47,8 @@ type Options struct {
 	Context               engine.Context
 	Companion             *companion.Controller
 	ResyncInterval        time.Duration
+	AgentPush             *agentpush.Store
+	SteadyResyncInterval  time.Duration
 	BackoffMin            time.Duration
 	BackoffMax            time.Duration
 	OperationRetryLimit   int
@@ -56,6 +59,9 @@ type worker struct {
 	trigger     chan struct{}
 	started     bool
 	reconciling atomic.Bool
+	steady      atomic.Pointer[steadyState]
+	triggers    atomic.Uint64
+	forced      forcedReconcileState
 }
 
 // Manager owns one serialized, retrying reconciliation worker per cluster.
@@ -75,6 +81,9 @@ func New(opts Options) (*Manager, error) {
 	}
 	if opts.ResyncInterval <= 0 {
 		opts.ResyncInterval = 30 * time.Second
+	}
+	if opts.SteadyResyncInterval <= 0 {
+		opts.SteadyResyncInterval = engine.SteadyResyncInterval
 	}
 	if opts.BackoffMin <= 0 {
 		opts.BackoffMin = time.Second
@@ -114,23 +123,30 @@ func New(opts Options) (*Manager, error) {
 
 // Trigger coalesces reconciliation requests for a cluster without blocking.
 func (m *Manager) Trigger(ref domain.ClusterRef) {
-	cluster := ref.Key()
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.triggerLocked(ref)
+}
+
+// triggerLocked preserves trigger publication ordering while the manager is locked.
+func (m *Manager) triggerLocked(ref domain.ClusterRef) {
+	cluster := ref.Key()
 	w := m.workers[cluster]
 	if w == nil {
 		w = &worker{trigger: make(chan struct{}, 1)}
 		m.workers[cluster] = w
+	}
+	w.triggers.Add(1)
+	w.steady.Store(nil)
+	select {
+	case w.trigger <- struct{}{}:
+	default:
 	}
 	if m.ctx != nil && !w.started && m.ctx.Err() == nil {
 		w.started = true
 		m.wg.Add(1)
 		go m.work(m.ctx, ref, w)
 	}
-	select {
-	case w.trigger <- struct{}{}:
-	default:
-	}
-	m.mu.Unlock()
 }
 
 // Run runs workers until cancellation and waits for them to stop.
@@ -151,6 +167,9 @@ func (m *Manager) Run(ctx context.Context) error {
 	defer func() {
 		m.mu.Lock()
 		cancel()
+		for _, w := range m.workers {
+			m.stopForcedLocked(w)
+		}
 		m.mu.Unlock()
 		m.wg.Wait()
 	}()
@@ -182,12 +201,15 @@ func (m *Manager) discover(ctx context.Context) error {
 		m.opts.Context.Logger.Error("isolating unreadable clusters; restore verified control-plane state", "error", err)
 	}
 	for _, c := range clusters {
-		m.Trigger(c.Ref())
+		if !m.skipSteadyDiscovery(ctx, &c) {
+			m.Trigger(c.Ref())
+		}
 	}
 	return nil
 }
 func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 	name := ref.Key()
+	ctx = context.WithValue(ctx, workerContextKey{}, w)
 	defer m.wg.Done()
 	publicationGate := make(chan struct{}, 1)
 	ctx = withObservationPublication(ctx, publicationGate)
@@ -228,12 +250,27 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 		case <-triggers:
 		case <-timer.C:
 		}
+		// The trigger and resync timer can both be ready at startup. Consume
+		// their coalesced request once, rather than immediately syncing twice.
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		select {
+		case <-w.trigger:
+		default:
+		}
 		w.reconciling.Store(true)
-		delay, err := m.reconcile(ctx, ref)
+		pass := &steadyPass{}
+		triggerEpoch := w.triggers.Load()
+		delay, err := m.reconcile(context.WithValue(ctx, steadyPassKey{}, pass), ref)
 		w.reconciling.Store(false)
 		if errors.Is(err, errClusterGone) {
 			m.mu.Lock()
 			if m.workers[name] == w {
+				m.stopForcedLocked(w)
 				delete(m.workers, name)
 			}
 			m.mu.Unlock()
@@ -283,6 +320,14 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 			// Discovery/user triggers cannot bypass a backend rate-limit reset.
 			retrying = true
 		}
+		if err == nil && !retrying && pass.eligible && m.finishSteady(ctx, ref, w, triggerEpoch, pass.generation, pass.drift) {
+			delay = m.opts.SteadyResyncInterval
+			if pass.requeue > 0 {
+				delay = min(delay, pass.requeue)
+			}
+		} else {
+			w.steady.Store(nil)
+		}
 		if !timer.Stop() {
 			select {
 			case <-timer.C:
@@ -297,6 +342,7 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 // Operation and platform retry deadlines remain untouched; a fenced native
 // receipt must not suppress health sampling or cause an early mutation retry.
 func (m *Manager) observeDuringBackoff(ctx context.Context, ref domain.ClusterRef) error {
+	ctx = infra.WithRequestCaller(ctx, infra.CallerBackoffObserve)
 	if err := holdObservation(ctx); err != nil {
 		return err
 	}
@@ -434,6 +480,7 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 	if err := m.opts.Store.UpdateClusterState(ctx, c); err != nil {
 		return err
 	}
+	m.publishedAvailability(ctx, c.Ref(), c.Status)
 	if previous != c.Status.Phase {
 		if err := m.healthTransition(ctx, c, previous); err != nil {
 			return err
@@ -443,6 +490,7 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 	return nil
 }
 func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay time.Duration, err error) {
+	ctx = infra.WithRequestCaller(ctx, infra.CallerReconcile)
 	ctx = engine.WithObservationPass(ctx)
 	started := time.Now()
 	defer m.logStage(ref, "reconcile", started)
@@ -785,6 +833,14 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	if err := m.resolve(ctx, rc); err != nil {
 		return engine.Result{}, err
 	}
+	// Capture before collecting any fresh convergence evidence, using the
+	// resolved dependency rather than probing a failing namespace twice.
+	// A sibling's listing can advance drift independently of worker triggers.
+	if pass, _ := ctx.Value(steadyPassKey{}).(*steadyPass); pass != nil {
+		if target, ok := rc.Backend.(infra.PlatformSnapshotter); ok {
+			pass.drift = target.PlatformSnapshot().DriftGeneration()
+		}
+	}
 	initialFailure := m.initialDataSourceFailure(ctx, p, rc.Cluster)
 	if errors.Is(initialFailure, engine.ErrInvalid) {
 		markInitialDataSourceAborted(rc.Cluster, initialFailure)
@@ -835,6 +891,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			// gate through that write and its deferred release.
 			return engine.Result{}, saveErr
 		}
+		m.publishedAvailability(ctx, rc.Cluster.Ref(), status)
 		// Release only after this complete sample is durably published. Sync
 		// remains outside the gate so renewal can run during slow convergence.
 		releaseObservation(ctx)
@@ -879,6 +936,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	if _, supportsDataMcp := p.(engine.DataMcpProvider); syncErr == nil && !recoveringInitial && supportsDataMcp {
 		companionResult, companionErr := m.opts.Companion.Sync(ctx, rc)
 		syncErr = companionErr
+		result.Steady = result.Steady && companionResult.Steady
 		if companionResult.RequeueAfter > 0 && (result.RequeueAfter == 0 || companionResult.RequeueAfter < result.RequeueAfter) {
 			result.RequeueAfter = companionResult.RequeueAfter
 		}
@@ -978,6 +1036,12 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 		}
 	}
+	if pass, _ := ctx.Value(steadyPassKey{}).(*steadyPass); pass != nil {
+		pass.eligible = syncErr == nil && statusErr == nil && result.ConvergenceError == nil &&
+			rc.SyncWait == "" && result.Steady
+		pass.generation = rc.Cluster.Generation
+		pass.requeue = result.RequeueAfter
+	}
 	if canObserveAvailability(rc.Cluster) && (result.RequeueAfter <= 0 || result.RequeueAfter > engine.ReadinessInterval) {
 		result.RequeueAfter = engine.ReadinessInterval
 	}
@@ -1013,6 +1077,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 }
 
 func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engine.Context, op *domain.Operation) (requeue time.Duration, attemptErr error) {
+	ctx = infra.WithRequestCaller(ctx, infra.CallerOperation)
 	rc.Operation = op
 	defer func() { rc.Operation = nil }()
 	actor := op.Actor

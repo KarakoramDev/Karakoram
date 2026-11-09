@@ -3,12 +3,21 @@ package reconciler
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
-	"time"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func (m *Manager) observeStatus(ctx context.Context, p engine.Provider, rc *engine.Context) (domain.ClusterStatus, error) {
+	return m.observeStatusWithOutcome(ctx, p, rc, nil)
+}
+
+func (m *Manager) observeStatusWithOutcome(ctx context.Context, p engine.Provider, rc *engine.Context, outcome *engine.SteadyOutcome) (domain.ClusterStatus, error) {
+	if engine.SteadyEligible(ctx) && outcome == nil {
+		ctx, outcome = engine.WithSteadyOutcome(ctx)
+	}
 	if engine.ObservationPassCache(ctx) == nil {
 		ctx = engine.WithObservationPass(ctx)
 	}
@@ -34,7 +43,48 @@ func (m *Manager) observeStatus(ctx context.Context, p engine.Provider, rc *engi
 		return status, deferred.Cause
 	}
 	started = time.Now()
-	companionErr := m.opts.Companion.Observe(ctx, rc, &status)
+	providerAccepted := outcome != nil && outcome.Accepted
+	companionErr := m.observeCompanion(ctx, rc, &status, outcome)
 	m.logStage(rc.Cluster.Ref(), "companion.observe", started)
+	if providerAccepted && !outcome.SnapshotValid() {
+		// Companion work can overlap a target mutation after provider acceptance.
+		// Discard both halves rather than publish the now-invalid provider proof.
+		outcome.Accepted = false
+		fresh := engine.WithObservationPass(engine.WithoutSteadyEligible(ctx))
+		return m.observeStatusWithOutcome(fresh, p, rc, nil)
+	}
 	return status, errors.Join(err, companionErr)
+}
+
+func (m *Manager) observeCompanion(ctx context.Context, rc *engine.Context, status *domain.ClusterStatus, outcome *engine.SteadyOutcome) error {
+	if engine.SteadyEligible(ctx) && outcome != nil && outcome.Accepted {
+		probe := infra.WithSteadyObservation(infra.ObservationContext(engine.WithObservationPass(ctx)))
+		probe, evidence := infra.WithEvidence(probe)
+		candidate := *status
+		err := m.opts.Companion.Observe(probe, rc, &candidate)
+		outcome.DriftGeneration = max(outcome.DriftGeneration, evidence.DriftGeneration())
+		positive := err == nil && (candidate.DataMcp == nil || candidate.DataMcp.Phase == domain.DataMcpPhaseReady)
+		if positive && evidence.SnapshotValid() && outcome.SnapshotValid() {
+			if oldest, ok := evidence.Oldest(); ok {
+				if oldest.Before(candidate.ObservedAt) {
+					candidate.ObservedAt = oldest
+				}
+				for i := range candidate.Members {
+					if oldest.Before(candidate.Members[i].Agent.LastSeen) {
+						candidate.Members[i].Agent.LastSeen = oldest
+					}
+				}
+			}
+			*status = candidate
+			return nil
+		}
+		outcome.Accepted = false
+		if !outcome.SnapshotValid() {
+			return nil // The caller retries the entire provider/companion sample.
+		}
+	}
+	// Fresh observations also learn subscriptions. A rejected attempt must not
+	// seed the live retry's platform/pass caches or contribute sample timestamps.
+	fresh := infra.WithoutSteadyObservation(infra.ObservationContext(engine.WithObservationPass(ctx)))
+	return m.opts.Companion.Observe(fresh, rc, status)
 }

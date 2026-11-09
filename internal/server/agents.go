@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/agentpush"
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -16,6 +17,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
+	"io"
 	"net"
 	"net/http"
 	"regexp"
@@ -33,13 +35,14 @@ type cachedAgent struct {
 type AgentDialer struct {
 	store      *store.Store
 	namespaces engine.Namespaces
+	push       *agentpush.Store
 	mu         sync.Mutex
 	clients    map[string]cachedAgent
 }
 
 // NewAgentDialer constructs a cluster-scoped pinned HTTPS dialer.
-func NewAgentDialer(st *store.Store, namespaces engine.Namespaces) *AgentDialer {
-	return &AgentDialer{store: st, namespaces: namespaces, clients: map[string]cachedAgent{}}
+func NewAgentDialer(st *store.Store, namespaces engine.Namespaces, push *agentpush.Store) *AgentDialer {
+	return &AgentDialer{store: st, namespaces: namespaces, push: push, clients: map[string]cachedAgent{}}
 }
 
 var memberHostname = regexp.MustCompile(`^[a-z][a-z0-9]{0,39}$`)
@@ -65,6 +68,10 @@ func (d *AgentDialer) Dial(ctx context.Context, ref domain.ClusterRef, member st
 		return c.client, nil
 	}
 	opts := agentapi.ClientOptions{BaseURL: "https://" + member + ":9443", Token: tok.Token, CAPEM: ca}
+	if d.push != nil {
+		opts.Samples = d.push.Source(agentpush.MemberKey{Namespace: domain.NormalizedNamespace(ref.Namespace), Cluster: ref.Name, Member: member})
+		opts.SampleMember = member
+	}
 	if d.namespaces != nil {
 		if dialer := d.namespaces.Dialer(ref.Namespace); dialer != nil {
 			opts.DialContext = dialer.DialContext
@@ -96,20 +103,14 @@ func (d *AgentDialer) Close() {
 	}
 }
 
-// InternalHandler only exposes member configuration to the persisted member identity.
+// InternalHandler exposes member configuration and heartbeats only to persisted member identities.
 func (s *Server) InternalHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /internal/agent/v1/config", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		authz := strings.Fields(r.Header.Get("Authorization"))
-		if len(authz) != 2 || !strings.EqualFold(authz[0], "Bearer") {
-			_ = fail(401, "unauthorized", "Agent authentication required").write(w)
-			return
-		}
-		token, err := s.Store.FindAgentTokenByHash(r.Context(), secrets.Hash(authz[1]))
-		if err != nil {
-			_ = fail(401, "unauthorized", "Agent authentication required").write(w)
+		token, authenticated := s.authenticateAgent(w, r)
+		if !authenticated {
 			return
 		}
 		rc, p, err := s.context(r.Context(), domain.ClusterRef{Namespace: token.Namespace, Name: token.Cluster})
@@ -150,7 +151,59 @@ func (s *Server) InternalHandler() http.Handler {
 		}
 		_ = ok(cfg).write(w)
 	})
+	mux.HandleFunc("POST "+agentapi.HeartbeatPath, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		token, authenticated := s.authenticateAgent(w, r)
+		if !authenticated {
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, agentapi.HeartbeatMaxBytes)
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		var req *agentapi.HeartbeatRequest
+		err := decoder.Decode(&req)
+		if err == nil && req == nil {
+			err = errors.New("heartbeat must be an object")
+		}
+		if err == nil {
+			err = decoder.Decode(new(any))
+			if err == io.EOF {
+				err = nil
+			} else if err == nil {
+				err = errors.New("multiple JSON values")
+			}
+		}
+		if err != nil {
+			status := http.StatusBadRequest
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				status = http.StatusRequestEntityTooLarge
+			}
+			_ = fail(status, "invalid_request", "Invalid heartbeat JSON").write(w)
+			return
+		}
+		if s.AgentPush == nil {
+			_ = fail(http.StatusServiceUnavailable, "unavailable", "Heartbeats unavailable").write(w)
+			return
+		}
+		key := agentpush.MemberKey{Namespace: domain.NormalizedNamespace(token.Namespace), Cluster: token.Cluster, Member: token.Member}
+		_ = ok(s.AgentPush.Ingest(key, *req)).write(w)
+	})
 	return mux
+}
+
+// authenticateAgent keeps both internal endpoints bound to the same persisted bearer identity.
+func (s *Server) authenticateAgent(w http.ResponseWriter, r *http.Request) (*domain.AgentToken, bool) {
+	authz := strings.Fields(r.Header.Get("Authorization"))
+	if len(authz) == 2 && strings.EqualFold(authz[0], "Bearer") {
+		token, err := s.Store.FindAgentTokenByHash(r.Context(), secrets.Hash(authz[1]))
+		if err == nil && token != nil {
+			return token, true
+		}
+	}
+	_ = fail(http.StatusUnauthorized, "unauthorized", "Agent authentication required").write(w)
+	return nil, false
 }
 
 type internalIdentity struct{ CACert, CAKey, Cert, Key []byte }

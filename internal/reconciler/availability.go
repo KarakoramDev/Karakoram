@@ -11,6 +11,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 // renewAvailability does not share the lifecycle worker's mutable Context or
@@ -18,6 +19,7 @@ import (
 // only a fenced availability sample can be published. Imperative operations
 // retain their existing serialized observation/checkpoint ownership.
 func (m *Manager) renewAvailability(ctx context.Context, ref domain.ClusterRef) error {
+	ctx = infra.WithRequestCaller(ctx, infra.CallerAvailability)
 	ctx = engine.WithObservationPass(ctx)
 	if err := holdObservation(ctx); err != nil {
 		return err
@@ -64,7 +66,7 @@ func (m *Manager) renewAvailability(ctx context.Context, ref domain.ClusterRef) 
 	}
 	rc.Dialer = m.opts.Namespaces.Dialer(rc.Namespace)
 	rc.AgentURL = m.opts.Namespaces.AgentURL(rc.Namespace)
-	status, _ := m.observeStatus(ctx, p, &rc)
+	status, _ := m.observeSteadyStatus(ctx, p, &rc)
 	status.ObservedGeneration = before.Status.ObservedGeneration
 	engine.ApplyDeploymentStatus(&rc, &status)
 	preservePublishedEndpointFailure(before.Status.Conditions, &status)
@@ -76,6 +78,9 @@ func (m *Manager) renewAvailability(ctx context.Context, ref domain.ClusterRef) 
 	m.logStage(ref, "availability.publish", started)
 	if err == nil && !published {
 		m.opts.Context.Logger.Debug("discard concurrent availability sample", "cluster", ref.Key())
+	}
+	if err == nil && published {
+		m.publishedAvailability(ctx, ref, status)
 	}
 	return err
 }
@@ -121,17 +126,50 @@ func preserveAvailabilityLifecycle(before domain.ClusterStatus, status *domain.C
 func (m *Manager) availabilityLoop(ctx context.Context, ref domain.ClusterRef, w *worker) {
 	ticker := time.NewTicker(engine.ReadinessInterval)
 	defer ticker.Stop()
+	var watch <-chan struct{}
+	if m.opts.AgentPush != nil {
+		var stop func()
+		watch, stop = m.opts.AgentPush.Watch(domain.NormalizedNamespace(ref.Namespace), ref.Name)
+		defer stop()
+	}
+	var lastRenewal time.Time
+	var deferred <-chan time.Time
+	var timer *time.Timer
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if !w.reconciling.Load() {
+			if !w.reconciling.Load() && w.steady.Load() == nil {
 				continue
 			}
-			if err := m.renewAvailability(ctx, ref); err != nil && ctx.Err() == nil {
-				m.opts.Context.Logger.Error("renew cluster availability", "cluster", ref.Key(), "error", err)
+		case <-watch:
+		case <-deferred:
+			deferred = nil
+		}
+		if !lastRenewal.IsZero() && time.Since(lastRenewal) < time.Second {
+			if deferred == nil {
+				if timer == nil {
+					timer = time.NewTimer(time.Second - time.Since(lastRenewal))
+				} else {
+					timer.Reset(time.Second - time.Since(lastRenewal))
+				}
+				deferred = timer.C
 			}
+			continue
+		}
+		if deferred != nil {
+			timer.Stop()
+			deferred = nil
+		}
+		lastRenewal = time.Now()
+		if err := m.renewAvailability(ctx, ref); err != nil && ctx.Err() == nil {
+			m.opts.Context.Logger.Error("renew cluster availability", "cluster", ref.Key(), "error", err)
 		}
 	}
 }

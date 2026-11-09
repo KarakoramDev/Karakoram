@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"errors"
+	"github.com/KarakoramDev/Karakoram/internal/agentpush"
 	"github.com/KarakoramDev/Karakoram/internal/agentrollout"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/certificates"
@@ -142,14 +143,23 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		return err
 	}
 	defer namespaceRegistry.Close()
-	dialer := NewAgentDialer(st, namespaceRegistry)
+	push := agentpush.NewStore(nil)
+	dialer := NewAgentDialer(st, namespaceRegistry, push)
 	defer dialer.Close()
 	// Generate provenance once, before either the observer or API starts.
 	rc := engine.Context{Namespace: domain.DefaultNamespace, AgentURL: c.AdvertiseURL, Backend: backend, Secrets: st, Store: st, Events: recorder, Agents: dialer, Artifact: engine.ExecutableArtifact{}, Logger: logger, Clock: engine.RealClock{}, ObservationEpoch: rand.Text()}
-	manager, err := reconciler.New(reconciler.Options{Store: st, Registry: registry, Namespaces: namespaceRegistry, Context: rc, Companion: companionController})
+	manager, err := reconciler.New(reconciler.Options{Store: st, Registry: registry, Namespaces: namespaceRegistry, Context: rc, Companion: companionController, AgentPush: push})
 	if err != nil {
 		return err
 	}
+	push.OnIdentityChange(func(key agentpush.MemberKey) {
+		if backend, err := namespaceRegistry.Backend(key.Namespace); err == nil {
+			if snapshots, ok := backend.(infra.PlatformSnapshotter); ok {
+				snapshots.PlatformSnapshot().Invalidate()
+			}
+		}
+		manager.Trigger(domain.ClusterRef{Namespace: key.Namespace, Name: key.Cluster})
+	})
 	schedules, err := scheduler.New(scheduler.Options{Store: st, Registry: registry, Trigger: manager, Events: recorder, Logger: logger})
 	if err != nil {
 		return err
@@ -185,7 +195,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if c.OAuth == "on" {
 		oauthServer = oauth.New(oauth.Options{Store: st, Auth: a, PublicURL: c.PublicURL, DCR: c.OAuthDCR == "on", ClientHosts: c.OAuthClientHosts})
 	}
-	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Backends: backends, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger, MCPMode: c.MCP, MCPOutputSchemas: c.MCPOutputSchemas, MCPSealer: sealer, OAuth: oauthServer, Bindings: bindings})
+	server, err := New(Options{Store: st, AgentPush: push, Auth: a, RBAC: policy, Registry: registry, Backends: backends, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger, MCPMode: c.MCP, MCPOutputSchemas: c.MCPOutputSchemas, MCPSealer: sealer, OAuth: oauthServer, Bindings: bindings})
 	if err != nil {
 		return err
 	}
@@ -216,6 +226,10 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		func() error { return internal.Serve(tls.NewListener(internalListener, tlsConfig)) },
 		func() error { return internal.Serve(tls.NewListener(namespaceRegistry.Hub.Listener(), tlsConfig)) },
 		func() error { return namespaceRegistry.Run(child) },
+		func() error {
+			push.Run(child)
+			return nil
+		},
 		func() error { return manager.Run(child) },
 		func() error { return schedules.Run(child) },
 		func() error { return drillController.Run(child) },

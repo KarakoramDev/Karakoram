@@ -440,3 +440,27 @@ func TestRetainedFailedRemoteBackupDeletionDoesNotQueueAbsentCluster(t *testing.
 		})
 	}
 }
+
+func TestRetainedBackupDeletionTriggersWorker(t *testing.T) {
+	s, _, admin := testServer(t)
+	ctx := t.Context()
+	backup := &domain.Backup{Name: "unfinished", Cluster: "prod", Phase: domain.PhasePending}
+	if err := s.Store.CreateBackup(ctx, backup); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Store.DeleteCluster(ctx, domain.ClusterRef{Name: "prod"}); err != nil {
+		t.Fatal(err)
+	}
+	spy := &triggerSpy{}
+	s.Trigger = spy
+	response := call(s, "DELETE", "/api/v1/clusters/prod/backups/unfinished", "", admin)
+	if response.Code != 204 {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	want := (domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}).Key()
+	if len(spy.names) != 1 || spy.names[0] != want {
+		t.Fatalf("triggered=%v, want %s", spy.names, want)
+	}
+}

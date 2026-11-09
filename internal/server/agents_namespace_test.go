@@ -56,7 +56,7 @@ func TestAgentDialerNamespacesRouteAndCacheIndependently(t *testing.T) {
 		}
 	}
 	namespaces := &namespaceAgentTransport{}
-	d := NewAgentDialer(s.Store, namespaces)
+	d := NewAgentDialer(s.Store, namespaces, nil)
 	defer d.Close()
 	defaultClient, err := d.Dial(ctx, refs[0], "localhost")
 	if err != nil {
