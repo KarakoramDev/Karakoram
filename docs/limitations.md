@@ -74,6 +74,18 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Known issues in v0.4.7
 
+- **On Dokploy, a ProxySQL rollout whose new proxy instance fails to start can
+  take down the existing proxies** (v0.4.7). For proxies using the
+  serving-preserving rollout, when changing the proxy count or resources, or
+  running `karactl clusters upgrade-agents CLUSTER --include-current`, Karakoram
+  replaces proxy instances one at a time and should stop if a new instance
+  never becomes healthy. If the new instance fails its health check, Docker
+  Swarm can still treat it as finished and shut down an existing proxy instance,
+  causing a proxy outage until the change is undone. Workaround: before such a
+  change, make sure the Dokploy nodes have enough free CPU and memory for one
+  extra proxy instance and that the cluster is healthy; run the change in a
+  maintenance window; if a proxy rollout stops or fails, don't resume the Docker
+  Swarm service update by hand. A fix is planned for the next release.
 - **MySQL Group Replication clusters on Dokploy can briefly report Degraded, and
   adding proxy instances can be reported as failed** (also present in
   v0.4.3–v0.4.6). The Dokploy provider reads the state of each member and proxy
