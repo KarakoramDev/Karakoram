@@ -89,27 +89,29 @@ func Readiness(ctx context.Context, o Options, args []string, engines ...Engine)
 }
 
 type nodeAgent struct {
-	o               Options
-	client          *agentapi.Client
-	sup             *supervisor
-	mu              sync.RWMutex
-	applyMu         controlMutex
-	pbmMu           sync.Mutex
-	c               agentapi.MemberConfig
-	controls        localControls
-	files           map[string][]byte
-	cert            *tls.Certificate
-	started         time.Time
-	version         string
-	engine          Engine
-	controlsMu      sync.RWMutex
-	proxyAdmitted   atomic.Bool
-	controlsErr     error
-	lastError       string
-	startupErr      error
-	acceptedVersion int64
-	volume          *agentapi.VolumeStatus
-	applyRetry      *agentapi.MemberConfig
+	o                    Options
+	client               *agentapi.Client
+	sup                  *supervisor
+	mu                   sync.RWMutex
+	applyMu              controlMutex
+	pbmMu                sync.Mutex
+	c                    agentapi.MemberConfig
+	controls             localControls
+	files                map[string][]byte
+	cert                 *tls.Certificate
+	started              time.Time
+	version              string
+	engine               Engine
+	controlsMu           sync.RWMutex
+	proxyAdmitted        atomic.Bool
+	controlsErr          error
+	lastError            string
+	startupErr           error
+	acceptedVersion      int64
+	volume               *agentapi.VolumeStatus
+	applyRetry           *agentapi.MemberConfig
+	heartbeatSessionOnce sync.Once
+	heartbeatSession     string
 }
 
 func (a *nodeAgent) config() agentapi.MemberConfig { a.mu.RLock(); defer a.mu.RUnlock(); return a.c }
@@ -381,6 +383,18 @@ func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
 		cancelRetries()
 		<-retriesDone
 	}()
+	// Push observations independently, including while the first config is unavailable.
+	heartbeatCtx, cancelHeartbeat := context.WithCancel(ctx)
+	heartbeatDone := make(chan struct{})
+	handler := a.handler()
+	go func() {
+		defer close(heartbeatDone)
+		a.heartbeatLoop(heartbeatCtx, handler, heartbeatWait)
+	}()
+	defer func() {
+		cancelHeartbeat()
+		<-heartbeatDone
+	}()
 	data, err := os.ReadFile(filepath.Join(o.DataDir, "karakoram", "config.json"))
 	if err == nil {
 		var c agentapi.MemberConfig
@@ -426,7 +440,9 @@ func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
 		cancel()
 		for _, line := range strings.Split(string(output), "\n") {
 			if strings.HasPrefix(line, "db version v") {
+				a.mu.Lock()
 				a.version = strings.TrimPrefix(line, "db version v")
+				a.mu.Unlock()
 				break
 			}
 		}
@@ -435,7 +451,7 @@ func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Handler: a.handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	server := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 		a.mu.RLock()
 		defer a.mu.RUnlock()
 		return a.cert, nil
@@ -469,6 +485,36 @@ func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
 			}
 		}
 	}
+}
+
+func (a *nodeAgent) status(ctx context.Context) agentapi.Status {
+	states, maintenance := a.sup.snapshot()
+	var mongoReady *bool
+	var mongoError string
+	if process := states["mongos"]; process.State == "paused" {
+		ready := false
+		mongoReady, mongoError = &ready, process.Error
+	} else {
+		mongoReady, mongoError = a.mongoRouterHealth(ctx)
+	}
+	disk, err := diskUsage(a.o.DataDir)
+	a.mu.RLock()
+	version := a.version
+	stateError := a.lastError
+	a.mu.RUnlock()
+	if err != nil {
+		stateError = fmt.Sprintf("data filesystem unavailable: %v; %s", err, stateError)
+	}
+	certificateReloadOnly := false
+	if capability, ok := a.engine.(interface{ SupportsCertificateReloadOnly() bool }); ok {
+		certificateReloadOnly = capability.SupportsCertificateReloadOnly()
+	}
+	mysqlRestoreCertification := false
+	if capability, ok := a.engine.(interface{ SupportsMySQLRestoreCertification() bool }); ok {
+		mysqlRestoreCertification = capability.SupportsMySQLRestoreCertification()
+	}
+	agentBuild := agentapi.AgentBuild{Version: buildversion.Version, Commit: buildversion.Commit, Build: buildversion.BuildIdentity()}
+	return agentapi.Status{Agent: agentBuild, Processes: states, PBMRestoreFence: a.allowedProcess("pbm-agent"), PBMRestoreIdentity: true, CertificateReloadOnly: certificateReloadOnly, MySQLRestoreCertification: mysqlRestoreCertification, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, Error: stateError, MongoReady: mongoReady, MongoError: mongoError, Volume: a.volumeObservation(), HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds()), Resources: containerResources()}
 }
 
 func (a *nodeAgent) handler() http.Handler {
@@ -505,33 +551,7 @@ func (a *nodeAgent) handler() http.Handler {
 		respond(w, struct{}{}, err)
 	})
 	mux.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) {
-		states, maintenance := a.sup.snapshot()
-		var mongoReady *bool
-		var mongoError string
-		if process := states["mongos"]; process.State == "paused" {
-			ready := false
-			mongoReady, mongoError = &ready, process.Error
-		} else {
-			mongoReady, mongoError = a.mongoRouterHealth(r.Context())
-		}
-		disk, err := diskUsage(a.o.DataDir)
-		a.mu.RLock()
-		version := a.version
-		stateError := a.lastError
-		a.mu.RUnlock()
-		if err != nil {
-			stateError = fmt.Sprintf("data filesystem unavailable: %v; %s", err, stateError)
-		}
-		certificateReloadOnly := false
-		if capability, ok := a.engine.(interface{ SupportsCertificateReloadOnly() bool }); ok {
-			certificateReloadOnly = capability.SupportsCertificateReloadOnly()
-		}
-		mysqlRestoreCertification := false
-		if capability, ok := a.engine.(interface{ SupportsMySQLRestoreCertification() bool }); ok {
-			mysqlRestoreCertification = capability.SupportsMySQLRestoreCertification()
-		}
-		agentBuild := agentapi.AgentBuild{Version: buildversion.Version, Commit: buildversion.Commit, Build: buildversion.BuildIdentity()}
-		respond(w, agentapi.Status{Agent: agentBuild, Processes: states, PBMRestoreFence: a.allowedProcess("pbm-agent"), PBMRestoreIdentity: true, CertificateReloadOnly: certificateReloadOnly, MySQLRestoreCertification: mysqlRestoreCertification, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, Error: stateError, MongoReady: mongoReady, MongoError: mongoError, Volume: a.volumeObservation(), HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds()), Resources: containerResources()}, nil)
+		respond(w, a.status(r.Context()), nil)
 	})
 	mux.HandleFunc("POST /v1/reload", func(w http.ResponseWriter, r *http.Request) {
 		changed, err := a.reload(r.Context())
@@ -596,6 +616,7 @@ func (a *nodeAgent) handler() http.Handler {
 		mux.Handle("/v1/"+a.engine.Name()+"/", engineMux)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(agentapi.HeartbeatSessionHeader, a.sessionID())
 		if !agentapi.AuthenticateBearer(r, a.o.Token) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return

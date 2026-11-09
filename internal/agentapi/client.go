@@ -17,11 +17,15 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 // Client performs bearer-authenticated requests over pinned-CA HTTPS.
@@ -30,8 +34,12 @@ type Client struct {
 	token               string
 	http                *http.Client
 	engine              *http.Client
+	logicalProbe        *http.Client
+	logicalEngineProbe  *http.Client
 	dialInstance        func(context.Context, string, string, string) (net.Conn, error)
 	observationInstance string
+	samples             SampleSource
+	sampleMember        string
 }
 
 // HTTPError exposes the response status for protocol capability negotiation.
@@ -48,6 +56,23 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("agent request %s %s: HTTP %d", e.Method, e.Action, e.StatusCode)
 }
 
+// SampleSource supplies successful pushed observations for one authenticated member.
+type SampleSource interface {
+	PushedSample(instance, engine, action string, request []byte) ([]byte, time.Time, bool)
+	Subscribe(instance, engine, action string, request []byte)
+	// Pushing identifies a bound logical pusher or a retained matching instance
+	// after a sample miss, so the fresh fallback owns potentially slow probes.
+	Pushing(instance string) bool
+	BindLogical(session string, started time.Time)
+}
+
+// HeartbeatSessionHeader binds live logical routing to the pushing agent process.
+const HeartbeatSessionHeader = "X-Karakoram-Heartbeat-Session"
+
+// ErrPushedSampleUnavailable rejects a steady attempt without spending its
+// deadline pulling a known pusher; the ordinary fresh fallback owns those probes.
+var ErrPushedSampleUnavailable = errors.New("pushed agent sample unavailable")
+
 // ClientOptions supplies the HTTPS endpoint, token, trust roots, and request deadlines.
 // EngineTimeout bounds engine-owned actions such as broker drains, which may
 // legitimately outlast ordinary requests; it defaults to three minutes.
@@ -61,6 +86,8 @@ type ClientOptions struct {
 	// DialInstanceContext authorizes and pins a runtime within the logical
 	// member's namespace. Arguments are network, logical host:port and instance host.
 	DialInstanceContext func(context.Context, string, string, string) (net.Conn, error)
+	Samples             SampleSource
+	SampleMember        string
 }
 
 // NewClient trusts only the supplied private CA and verifies the hostname.
@@ -96,7 +123,21 @@ func NewClient(opts ClientOptions) (*Client, error) {
 	engineTransport := transport.Clone()
 	engineTransport.ResponseHeaderTimeout = engineTimeout
 	engineClient := &http.Client{Transport: engineTransport, Timeout: engineTimeout, CheckRedirect: redirect}
-	return &Client{base: base, token: opts.Token, http: client, engine: engineClient, dialInstance: opts.DialInstanceContext}, nil
+	c := &Client{base: base, token: opts.Token, http: client, engine: engineClient, dialInstance: opts.DialInstanceContext, samples: opts.Samples, sampleMember: opts.SampleMember}
+	if opts.Samples != nil {
+		// Routing proof must not borrow an old logical connection, including one
+		// returned to the normal pool by an overlapping request.
+		probe := func(original *http.Client) *http.Client {
+			client := *original
+			transport := original.Transport.(*http.Transport).Clone()
+			transport.DisableKeepAlives = true
+			client.Transport = transport
+			return &client
+		}
+		c.logicalProbe = probe(client)
+		c.logicalEngineProbe = probe(engineClient)
+	}
+	return c, nil
 }
 
 // ForInstance pins connections to one runtime address while retaining the logical
@@ -126,7 +167,7 @@ func (c *Client) ForInstance(host string) (*Client, error) {
 		client.Transport = transport
 		return &client
 	}
-	return &Client{base: c.base, token: c.token, http: pin(c.http), engine: pin(c.engine), observationInstance: host}, nil
+	return &Client{base: c.base, token: c.token, http: pin(c.http), engine: pin(c.engine), dialInstance: c.dialInstance, observationInstance: host, samples: c.samples, sampleMember: c.sampleMember}, nil
 }
 
 // ObservationInstance distinguishes pinned replicas when read-only results are
@@ -153,12 +194,20 @@ func (c *Client) request(ctx context.Context, method, path string, input, output
 }
 
 func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path string, input, output any) error {
-	var body io.Reader
+	var data []byte
 	if input != nil {
-		data, err := json.Marshal(input)
+		var err error
+		data, err = json.Marshal(input)
 		if err != nil {
 			return err
 		}
+	}
+	return c.requestBytes(ctx, hc, method, path, input, output, data)
+}
+
+func (c *Client) requestBytes(ctx context.Context, hc *http.Client, method, path string, input, output any, data []byte) error {
+	var body io.Reader
+	if input != nil {
 		body = bytes.NewReader(data)
 	}
 	u := *c.base
@@ -166,6 +215,13 @@ func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path 
 	u.Path = strings.TrimRight(u.Path, "/") + parts[0]
 	if len(parts) == 2 {
 		u.RawQuery = parts[1]
+	}
+	var newlyDialed atomic.Bool
+	started := time.Now()
+	if c.observationInstance == "" && c.samples != nil {
+		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+			GotConn: func(info httptrace.GotConnInfo) { newlyDialed.Store(!info.Reused) },
+		})
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
@@ -205,6 +261,14 @@ func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path 
 		}
 		return &HTTPError{StatusCode: res.StatusCode, Method: method, Action: parts[0]}
 	}
+	if c.observationInstance == "" && c.samples != nil {
+		// A reused connection proves only the old route, never current routing.
+		// A legacy response still invalidates proof on any live connection.
+		session := res.Header.Get(HeartbeatSessionHeader)
+		if session == "" || newlyDialed.Load() {
+			c.samples.BindLogical(session, started)
+		}
+	}
 	if output == nil {
 		_, err = io.Copy(io.Discard, io.LimitReader(res.Body, 1<<20))
 		return err
@@ -229,7 +293,7 @@ func (c *Client) Config(ctx context.Context) (MemberConfig, error) {
 // Status reads observed node-agent state.
 func (c *Client) Status(ctx context.Context) (Status, error) {
 	var v Status
-	err := c.request(ctx, "GET", "/v1/status", nil, &v)
+	err := c.observedRequest(ctx, c.http, "", GenericStatusAction, "GET", "/v1/status", nil, &v)
 	return v, err
 }
 
@@ -296,7 +360,45 @@ func (c *Client) Engine(ctx context.Context, engine, action string, req, resp an
 	if !processName.MatchString(engine) || !processName.MatchString(action) {
 		return errors.New("invalid engine action")
 	}
-	return c.requestWith(ctx, c.engine, "POST", "/v1/"+engine+"/"+action, req, resp)
+	return c.observedRequest(ctx, c.engine, engine, action, "POST", "/v1/"+engine+"/"+action, req, resp)
+}
+
+func (c *Client) observedRequest(ctx context.Context, hc *http.Client, engine, action, method, path string, input, output any) error {
+	if c.samples != nil && PushableAction(engine, action) {
+		var request []byte
+		if input != nil {
+			var err error
+			request, err = json.Marshal(input)
+			if err != nil {
+				return err
+			}
+		}
+		if infra.IsObservation(ctx) {
+			// Warm hits must renew subscriptions across long steady periods too.
+			c.samples.Subscribe(c.observationInstance, engine, action, request)
+		}
+		if infra.SteadyObservation(ctx) {
+			if response, sampledAt, ok := c.samples.PushedSample(c.observationInstance, engine, action, request); ok {
+				infra.NoteAgentSample(ctx, c.sampleMember, sampledAt)
+				if output == nil {
+					return nil
+				}
+				return json.NewDecoder(io.LimitReader(bytes.NewReader(response), 16<<20)).Decode(output)
+			}
+			if c.samples.Pushing(c.observationInstance) {
+				return ErrPushedSampleUnavailable
+			}
+			if c.observationInstance == "" {
+				if hc == c.engine {
+					hc = c.logicalEngineProbe
+				} else {
+					hc = c.logicalProbe
+				}
+			}
+		}
+		return c.requestBytes(ctx, hc, method, path, input, output, request)
+	}
+	return c.requestWith(ctx, hc, method, path, input, output)
 }
 
 // Maintenance sets database auto-restart suppression.
