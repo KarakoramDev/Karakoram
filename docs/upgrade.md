@@ -589,6 +589,12 @@ marker deletion is not a general readiness or lost-password workaround.
 
 ### Known issues in v0.4.7
 
+- **On Dokploy, a Neo4j cluster created with 1 GiB of memory never becomes ready**
+  (v0.4.7). At the documented minimum of 1 GiB, a new single-member Neo4j cluster
+  on Dokploy runs out of memory and CPU while starting: it never reports Ready
+  and the create operation fails after about 40 minutes. Workaround: create
+  Neo4j clusters on Dokploy with at least 2 GiB of memory. Existing clusters are
+  not affected. A fix is planned for the next release.
 - **On Dokploy, replacing a data member can put two members on the same node**
   (MySQL Group Replication and PXC also in v0.4.0–v0.4.6; PostgreSQL HA and
   Supabase also in v0.2.0–v0.4.6). After `karactl clusters replace-member` — for

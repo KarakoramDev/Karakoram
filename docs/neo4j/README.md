@@ -16,6 +16,8 @@ Karakoram operates a native [Neo4j](https://neo4j.com/) Community server with on
 | TLS | Required; cluster CA, `selfSigned` by default or `userProvided` |
 | Recovery | Offline `dump` of `system` and `neo4j`; every backup is an outage |
 
+**Known issue in v0.4.7:** on Dokploy, create Neo4j clusters with at least 2 GiB RAM rather than the 1 GiB minimum; see [the startup failure and workaround](../limitations.md#dokploy-neo4j-minimum-memory).
+
 Inspect `karactl providers get neo4j -o json` for the running catalog. Native downloads have exact sizes, SHA-256 hashes and upstream provenance in the [artifact lock](../../internal/engine/nativeartifacts/lock.json). An operator mirror takes precedence but must serve identical bytes; see [native artifacts](../native-artifacts.md). The member supervises the server JVM directly rather than retaining the launcher's additional JVM.
 
 Member agents validate Neo4j versions against the embedded native artifact lock,
