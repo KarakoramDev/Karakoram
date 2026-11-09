@@ -343,7 +343,9 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 					list = list[:count]
 				}
 				for len(list) < count {
-					list = append(list, RuntimeContainer{ID: f.next("container"), Hostname: fmt.Sprintf("%s%d", s.Name, len(list)+1), Status: "ACTIVE", IPv4: "192.0.2.2", IPv6: "2001:db8::2"})
+					containerID := f.next("container")
+					n := f.serial
+					list = append(list, RuntimeContainer{ID: containerID, Hostname: fmt.Sprintf("%s%d", s.Name, len(list)+1), Status: "ACTIVE", IPv4: fmt.Sprintf("198.18.%d.%d", (n/254)%256, n%254+1), IPv6: fmt.Sprintf("2001:db8::%x", n+1)})
 				}
 				f.containers[id] = list
 			}

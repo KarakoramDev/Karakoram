@@ -9,6 +9,14 @@
 // envSecrets. Deploy renders the neutral RuntimeSpec into zerops.yaml, including
 // non-secret variables, readiness checks and volume mounts.
 //
+// Steady observations share successful API GETs per base URL and project. A
+// paginated service listing validates stable platform facts every minute;
+// mutations invalidate the target before and after their requests. Lifecycle,
+// admission and fresh-task reads never consume this snapshot. Signed log URLs
+// are excluded, and the service-ID and deployment-admission caches are unchanged.
+// Response capture is bounded while streaming: oversized bodies still decode
+// and drain normally, but are never retained in the snapshot.
+//
 // SetResources preserves fetched effective autoscaling values when a bound is
 // zero. Growing persistent storage requires the volume's hostname and max disk;
 // runtime disk is ephemeral. SetContainerCount preserves the full vertical

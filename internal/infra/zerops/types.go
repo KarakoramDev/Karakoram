@@ -68,6 +68,8 @@ type ServiceStack struct {
 	Name                 string        `json:"name"`
 	Status               string        `json:"status"`
 	Base                 string        `json:"base"`
+	Mode                 string        `json:"mode"`
+	VersionNumber        string        `json:"versionNumber"`
 	IsSystem             bool          `json:"isSystem"`
 	SubdomainAccess      bool          `json:"subdomainAccess"`
 	NestID               string        `json:"nestId"`

@@ -42,6 +42,7 @@ type Client struct {
 	http                 *http.Client
 	retries              int
 	retryBase            time.Duration
+	snapshot             *infra.TargetSnapshot
 }
 
 // NewClient constructs a client. Credentials are never included in errors or logs.
@@ -74,7 +75,10 @@ func NewClient(o Options) (*Client, error) {
 	if o.RetryBase <= 0 {
 		o.RetryBase = 250 * time.Millisecond
 	}
-	return &Client{base: strings.TrimRight(o.BaseURL, "/"), token: o.Token, project: o.ProjectID, http: &h, retries: o.MaxRetries, retryBase: o.RetryBase}, nil
+	c := &Client{base: strings.TrimRight(o.BaseURL, "/"), token: o.Token, project: o.ProjectID, http: &h, retries: o.MaxRetries, retryBase: o.RetryBase}
+	c.snapshot = infra.PlatformSnapshot("zerops|" + c.base + "|" + c.project)
+	c.snapshot.SetListing(c.snapshotListing)
+	return c, nil
 }
 
 // SetToken replaces credentials without interrupting in-flight requests.
@@ -121,6 +125,23 @@ func networkFailure(err error) bool {
 	return errors.As(err, &network) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 func (c *Client) request(ctx context.Context, method, target string, body func() io.Reader, size int64, contentType string, out any, retry, auth bool) error {
+	// Signed log URLs are not API facts, even if a fake serves them on the API host.
+	apiRequest := auth && strings.HasPrefix(target, c.base+"/")
+	if apiRequest && method == http.MethodGet && infra.SteadyObservation(ctx) {
+		if data, ok := c.snapshot.Lookup(ctx, target); ok {
+			if out == nil {
+				return nil
+			}
+			if err := json.NewDecoder(bytes.NewReader(data)).Decode(out); err != nil {
+				return unavailable(errors.New("zerops: invalid JSON response"))
+			}
+			return nil
+		}
+	}
+	if apiRequest && method != http.MethodGet {
+		done := c.snapshot.BeginMutation(ctx)
+		defer done()
+	}
 	if method != http.MethodGet && method != http.MethodPut {
 		retry = false
 	}
@@ -139,6 +160,11 @@ func (c *Client) request(ctx context.Context, method, target string, body func()
 			c.tokenMu.RUnlock()
 		}
 		req.Header.Set("Accept", "application/json")
+		var readToken uint64
+		fetchedAt := infra.SnapshotNow()
+		if method == http.MethodGet {
+			readToken = c.snapshot.ReadStart(ctx)
+		}
 		resp, err := c.http.Do(req)
 		var retryAfter time.Duration
 		var retryable bool
@@ -172,16 +198,26 @@ func (c *Client) request(ctx context.Context, method, target string, body func()
 				token := c.token
 				c.tokenMu.RUnlock()
 				err = &APIError{StatusCode: resp.StatusCode, Code: envelope.Error.Code, Message: envelope.Error.Message, Meta: envelope.Error.Meta, token: token}
-			} else if out != nil {
-				if e := json.NewDecoder(resp.Body).Decode(out); e != nil {
-					retryable = networkFailure(e)
-					err = unavailable(errors.New("zerops: invalid JSON response"))
-				}
 			} else {
-				_, err = io.Copy(io.Discard, resp.Body)
-				retryable = networkFailure(err)
-				if err != nil {
-					err = unavailable(err)
+				reader := io.Reader(resp.Body)
+				var captured snapshotCapture
+				if apiRequest && method == http.MethodGet {
+					reader = io.TeeReader(resp.Body, &captured)
+				}
+				if out != nil {
+					if e := json.NewDecoder(reader).Decode(out); e != nil {
+						retryable = networkFailure(e)
+						err = unavailable(errors.New("zerops: invalid JSON response"))
+					}
+				}
+				if err == nil {
+					_, err = io.Copy(io.Discard, reader)
+					retryable = networkFailure(err)
+					if err != nil {
+						err = unavailable(err)
+					} else if apiRequest && method == http.MethodGet && !captured.overflow {
+						c.snapshot.Populate(target, readToken, fetchedAt, captured.data)
+					}
 				}
 			}
 			resp.Body.Close()

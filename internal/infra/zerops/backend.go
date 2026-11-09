@@ -37,6 +37,7 @@ type Backend struct {
 
 var _ infra.Backend = (*Backend)(nil)
 var _ infra.SubdomainAccess = (*Backend)(nil)
+var _ infra.PlatformSnapshotter = (*Backend)(nil)
 var hostnamePattern = regexp.MustCompile(`^[a-z][a-z0-9]{0,24}$`)
 
 // Zerops has no receipt CAS. Reconstructed backends in this control-plane
@@ -108,6 +109,9 @@ func New(o Options) (*Backend, error) {
 
 // Name returns the infrastructure backend identifier.
 func (b *Backend) Name() string { return "zerops" }
+
+// PlatformSnapshot returns the project-wide snapshot shared by backend instances.
+func (b *Backend) PlatformSnapshot() *infra.TargetSnapshot { return b.client.snapshot }
 
 // Capabilities reports the optional Zerops platform features.
 func (b *Backend) Capabilities() infra.Capabilities { return zeropsCapabilities }
