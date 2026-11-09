@@ -74,6 +74,15 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Known issues in v0.4.7
 
+<a id="dokploy-neo4j-minimum-memory"></a>
+
+- **On Dokploy, a Neo4j cluster created with 1 GiB of memory never becomes ready**
+  (v0.4.7). At the documented minimum of 1 GiB, a new single-member Neo4j cluster
+  on Dokploy runs out of memory and CPU while starting: it never reports Ready
+  and the create operation fails after about 40 minutes. Workaround: create
+  Neo4j clusters on Dokploy with at least 2 GiB of memory. Existing clusters are
+  not affected. A fix is planned for the next release.
+
 <a id="dokploy-replacement-placement"></a>
 
 - **On Dokploy, replacing a data member can put two members on the same node**
