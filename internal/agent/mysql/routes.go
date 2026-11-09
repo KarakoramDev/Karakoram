@@ -109,6 +109,11 @@ func observeNativeStatus(ctx context.Context, db *sql.DB, s myspec.Spec, p paths
 		if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM performance_schema.replication_group_members WHERE MEMBER_STATE='ONLINE'").Scan(&out.GroupMembers); err != nil {
 			return err
 		}
+		view, err := observeGroupView(ctx, db)
+		if err != nil {
+			return err
+		}
+		out.GroupView = view
 	} else {
 		out.MemberState = "ONLINE"
 		out.MemberRole = "PRIMARY"
@@ -118,6 +123,33 @@ func observeNativeStatus(ctx context.Context, db *sql.DB, s myspec.Spec, p paths
 		return err
 	}
 	return nil
+}
+
+func observeGroupView(ctx context.Context, db *sql.DB) (*myspec.GroupView, error) {
+	rows, err := db.QueryContext(ctx, "SELECT MEMBER_ID,MEMBER_HOST,MEMBER_PORT,MEMBER_STATE,MEMBER_ROLE FROM performance_schema.replication_group_members")
+	if err != nil {
+		return nil, err
+	}
+	view := &myspec.GroupView{Members: []myspec.GroupViewMember{}}
+	for rows.Next() {
+		var m myspec.GroupViewMember
+		var port sql.NullInt64
+		if err := rows.Scan(&m.ID, &m.Host, &port, &m.State, &m.Role); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		m.Port = int(port.Int64)
+		view.Members = append(view.Members, m)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	// VIEW_ID is optional across supported native builds. A missing stats
+	// observation must not turn a complete member list into a count fallback.
+	_ = db.QueryRowContext(ctx, "SELECT VIEW_ID FROM performance_schema.replication_group_member_stats WHERE MEMBER_ID=@@server_uuid").Scan(&view.ViewID)
+	return view, nil
 }
 
 // offlineGTID is exclusively a control-plane recovery observation of an

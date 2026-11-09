@@ -133,6 +133,11 @@ func (p *Core) reconcileMembership(ctx context.Context, rc *engine.Context, s *s
 			target = m
 		}
 	}
+	identityBarrier, err := preflightIdentityBarrier(ctx, rc, s, target.Name, false)
+	if err != nil {
+		return true, err
+	}
+	target.IdentityBarrier = identityBarrier
 	target.Retirement = "handoff"
 	return true, nil
 }

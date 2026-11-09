@@ -113,6 +113,9 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 				}
 			}
 			if replicated {
+				if _, err = preflightIdentityBarrier(ctx, rc, s, m.Name, true); err != nil {
+					return true, err
+				}
 				if err = p.volumeRecoverySafe(ctx, rc, s, m); err != nil {
 					m.RuntimeRecoveryReason = err.Error()
 					return true, err

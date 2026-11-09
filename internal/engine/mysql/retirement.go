@@ -5,13 +5,51 @@ package mysql
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"strings"
 	"time"
 )
+
+// A non-null full view is the agent's additive capability advertisement.
+// Admission observes every existing survivor freshly, before allocating a joiner
+// or starting retirement. PXC retains its independent Galera membership proof.
+// Confirmed loss alone may retain the released count proof for old survivors:
+// their executables cannot safely be rolled until replica recovery completes.
+func preflightIdentityBarrier(ctx context.Context, rc *engine.Context, s *state, old string, confirmedLoss bool) (bool, error) {
+	if s.Topology != "group" {
+		return false, nil
+	}
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
+	var unsupported, unknown []string
+	for _, m := range s.data() {
+		if m.Name == old || m.Removing || m.Retirement != "" {
+			continue
+		}
+		st, err := live(ctx, rc, m.Name)
+		if err != nil {
+			unknown = append(unknown, m.Name)
+		} else if st.GroupView == nil {
+			unsupported = append(unsupported, m.Name)
+		}
+	}
+	if len(unknown) != 0 {
+		return false, engine.Invalid("GR structural work refused: full GroupView capability is unknown or unreachable for members %s; restore agent reachability, then run karactl -n %s clusters upgrade-agents %s --wait before retrying", strings.Join(unknown, ", "), rc.Cluster.Ref().Namespace, rc.Cluster.Name)
+	}
+	if len(unsupported) != 0 {
+		if confirmedLoss {
+			return false, nil
+		}
+		return false, engine.Invalid("GR structural work refused: members %s lack full GroupView capability; run karactl -n %s clusters upgrade-agents %s --wait before retrying", strings.Join(unsupported, ", "), rc.Cluster.Ref().Namespace, rc.Cluster.Name)
+	}
+	return true, nil
+}
 
 // switchAway chooses an ONLINE secondary covering the writer's observed GTIDs.
 // Incomparable or unknown observations never become a zero-lag candidate.
@@ -297,6 +335,11 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 		m.Retirement = "credentials"
 		return false, nil
 	case "credentials":
+		if s.Topology == "group" {
+			if err := membershipRemoved(ctx, rc, s, m.Name); err != nil {
+				return false, err
+			}
+		}
 		if err := rc.Secrets.DeleteAgentToken(ctx, rc.Cluster.Ref(), m.Name); err != nil && !missing(err) {
 			return false, err
 		}
@@ -330,6 +373,29 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 }
 
 func membershipRemoved(ctx context.Context, rc *engine.Context, s *state, old string) error {
+	if s.Topology == "group" {
+		m := s.find(old)
+		if m == nil {
+			return engine.ErrUnavailable
+		}
+		if m.IdentityBarrier || s.Replacement != nil && s.Replacement.IdentityBarrier {
+			return groupMembershipRemoved(ctx, rc, s, old)
+		}
+		if err := countMembershipRemoved(ctx, rc, s, old); err != nil {
+			return err
+		}
+		if !m.LegacyRetirementWarned && rc.Events != nil {
+			if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Resource: old, Type: "Warning", Reason: "LegacyGRRetirement", Message: "Completing legacy in-flight GR structural work using the pre-upgrade ONLINE/count proof, not the full UUID identity barrier; upgrade surviving agents before starting new structural work", CreatedAt: now(rc)}); err != nil {
+				return err
+			}
+			m.LegacyRetirementWarned = true
+		}
+		return nil
+	}
+	return countMembershipRemoved(ctx, rc, s, old)
+}
+
+func countMembershipRemoved(ctx context.Context, rc *engine.Context, s *state, old string) error {
 	if err := survivorsOnline(ctx, rc, s, old); err != nil {
 		return err
 	}
@@ -357,6 +423,88 @@ func membershipRemoved(ctx context.Context, rc *engine.Context, s *state, old st
 		if err != nil || st.GroupMembers != expected {
 			return engine.ErrUnavailable
 		}
+	}
+	return nil
+}
+
+// Never infer membership from ONLINE counts: an extra UNREACHABLE retiree or
+// the wrong ONLINE identities can have exactly the expected count.
+func groupMembershipRemoved(ctx context.Context, rc *engine.Context, s *state, old string) error {
+	wait := func(reason string) error {
+		return fmt.Errorf("waiting for GR retirement identity convergence: %s: %w", reason, engine.ErrUnavailable)
+	}
+	retiree := s.find(old)
+	neverDeployed := retiree != nil && replacementNeverDeployed(s, retiree)
+	if retiree == nil || !neverDeployed && !myspec.ValidUUID(retiree.ServerUUID) {
+		return wait("retiree UUID is unknown in persisted state")
+	}
+	expected := make(map[string]string)
+	for _, m := range s.data() {
+		if m.Name == old || m.Removing || m.Retirement != "" {
+			continue
+		}
+		id := strings.ToLower(m.ServerUUID)
+		if !myspec.ValidUUID(id) || id == strings.ToLower(retiree.ServerUUID) {
+			return wait("survivor UUID is unknown or aliases the retiree")
+		}
+		if _, duplicate := expected[id]; duplicate {
+			return wait("duplicate persisted survivor UUID")
+		}
+		expected[id] = m.Name
+	}
+	if len(expected) == 0 {
+		return wait("no survivors")
+	}
+	viewID, allViewIDs, viewIDsDiffer := "", true, false
+	var reference map[string]myspec.GroupViewMember
+	for id, name := range expected {
+		st, err := live(ctx, rc, name)
+		if err != nil {
+			return wait("survivor observation unavailable")
+		}
+		if st.GroupView == nil {
+			return wait("upgrade agents: full GR membership view capability is required")
+		}
+		if st.MemberState != "ONLINE" || strings.ToLower(st.ServerUUID) != id || st.GroupName != s.Formation.GroupName {
+			return wait("survivor is not locally ONLINE with its persisted UUID")
+		}
+		rows := make(map[string]myspec.GroupViewMember, len(expected))
+		primary := false
+		for _, row := range st.GroupView.Members {
+			rowID := strings.ToLower(row.ID)
+			if rowID == strings.ToLower(retiree.ServerUUID) {
+				return wait("retiree UUID remains in a survivor view")
+			}
+			_, duplicate := rows[rowID]
+			if _, ok := expected[rowID]; !ok || duplicate || row.State != "ONLINE" {
+				return wait("survivor view does not contain exactly the ONLINE survivor UUID set")
+			}
+			primary = primary || row.Role == "PRIMARY"
+			if rowID == id && row.Role != st.MemberRole {
+				return wait("local role differs from its membership view")
+			}
+			row.ID = rowID
+			rows[rowID] = row
+			if reference != nil && reference[rowID] != row {
+				return wait("survivors report inconsistent member identities or roles")
+			}
+		}
+		if len(rows) != len(expected) || !primary {
+			return wait("survivor view is incomplete or has no PRIMARY")
+		}
+		if reference == nil {
+			reference = rows
+		}
+		if st.GroupView.ViewID == "" {
+			allViewIDs = false
+		} else if viewID == "" {
+			viewID = st.GroupView.ViewID
+		} else if viewID != st.GroupView.ViewID {
+			viewIDsDiffer = true
+		}
+	}
+	if allViewIDs && viewIDsDiffer {
+		return wait("survivor view identifiers differ")
 	}
 	return nil
 }

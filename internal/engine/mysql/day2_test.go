@@ -142,13 +142,29 @@ func TestReplacementCancellationReconcilesRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	op.Checkpoint = result.Checkpoint
+	s, err := load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := s.find(s.Replacement.New)
+	if next == nil || next.Stage != "planned" || next.ServerUUID != "" ||
+		next.ServiceID != "" || next.VolumeID != "" || next.ImportBatch != nil ||
+		next.DeployOp != nil || next.Resources != (domain.Resources{}) {
+		t.Fatalf("cancellation did not stop at untouched allocation: %+v", next)
+	}
+	if b.services[next.Name] != nil || b.services[next.Volume] != nil {
+		t.Fatal("replacement acquired backend resources before cancellation")
+	}
 	if _, err = p.CancelOperation(t.Context(), rc, op); err != nil {
 		t.Fatal(err)
 	}
 	day2Ticks(t, rc, b, func(s *state) bool { return s.Replacement == nil })
-	s, _ := load(rc.Cluster)
+	s, _ = load(rc.Cluster)
 	if len(s.data()) != 3 || s.find("demom0") == nil || s.find("demom3") != nil {
 		t.Fatalf("rollback retired predecessor: %+v", s)
+	}
+	if len(b.stopped) != 0 || len(b.deleted) != 0 {
+		t.Fatalf("untouched rollback mutated backend resources: stopped=%v deleted=%v", b.stopped, b.deleted)
 	}
 }
 

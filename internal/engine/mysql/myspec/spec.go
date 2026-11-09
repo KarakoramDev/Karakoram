@@ -176,12 +176,28 @@ type DataIdentity struct {
 	ServerUUID     string `json:"serverUUID"`
 	FormationEpoch uint64 `json:"formationEpoch"`
 }
+
+// GroupView is an additive capability: nil means the agent cannot supply the
+// complete native membership proof required for GR retirement.
+type GroupView struct {
+	Members []GroupViewMember `json:"members"`
+	ViewID  string            `json:"viewID,omitempty"`
+}
+
+type GroupViewMember struct {
+	ID    string `json:"id"`
+	Host  string `json:"host"`
+	Port  int    `json:"port"`
+	State string `json:"state"`
+	Role  string `json:"role"`
+}
 type StatusResponse struct {
 	Role             string       `json:"role"`
 	MemberState      string       `json:"memberState"`
 	MemberRole       string       `json:"memberRole"`
 	GroupMembers     int          `json:"groupMembers,omitempty"`
 	GroupName        string       `json:"groupName,omitempty"`
+	GroupView        *GroupView   `json:"groupView,omitempty"`
 	ServerUUID       string       `json:"serverUUID"`
 	GTIDExecuted     string       `json:"gtidExecuted"`
 	ReadOnly         bool         `json:"readOnly"`

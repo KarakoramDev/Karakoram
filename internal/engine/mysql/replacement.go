@@ -13,11 +13,12 @@ import (
 )
 
 type replacementState struct {
-	Operation string `json:"operation"`
-	Old       string `json:"old"`
-	New       string `json:"new"`
-	Stage     string `json:"stage"`
-	Recovery  string `json:"recovery,omitempty"`
+	Operation       string `json:"operation"`
+	Old             string `json:"old"`
+	New             string `json:"new"`
+	Stage           string `json:"stage"`
+	Recovery        string `json:"recovery,omitempty"`
+	IdentityBarrier bool   `json:"identityBarrier,omitempty"`
 }
 
 func replacementResult(cp *replacementState) engine.OpResult {
@@ -72,6 +73,10 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		if old == nil || old.Role != "data" {
 			return result, engine.Invalid("replacement target must be a MySQL data member")
 		}
+		identityBarrier, err := preflightIdentityBarrier(ctx, rc, s, old.Name, old.ConfirmedVolumeLost)
+		if err != nil {
+			return result, err
+		}
 		if old.ConfirmedVolumeLost {
 			if err := p.volumeRecoverySafe(ctx, rc, s, old); err != nil {
 				old.RuntimeRecoveryReason = err.Error()
@@ -88,11 +93,19 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		if err != nil {
 			return result, err
 		}
+		if s.Topology == "group" && !identityBarrier {
+			if rc.Events != nil {
+				if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Resource: old.Name, Type: "Warning", Reason: "LegacyGRRetirement", Message: "Admitting confirmed-loss GR replacement using the released ONLINE/count proof because surviving agents lack full GroupView capability; upgrade agents after recovery with karactl -n " + rc.Cluster.Ref().Namespace + " clusters upgrade-agents " + rc.Cluster.Name + " --wait", CreatedAt: now(rc)}); err != nil {
+					return result, err
+				}
+				old.LegacyRetirementWarned = true
+			}
+		}
 		index := s.NextIndex
 		s.NextIndex++
 		name := fmt.Sprintf("%sm%d", rc.Cluster.Name, index)
 		s.Members = append(s.Members, &member{Name: name, Index: index, Role: "data", Volume: name + "v", ReplacesVolume: old.Volume, PlacementAvoid: avoid, Stage: "planned", ConfigVersion: s.ConfigVersion})
-		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: name, Stage: "join"}
+		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: name, Stage: "join", IdentityBarrier: identityBarrier}
 		if rc.Cluster.Spec.Provider == "pxc" {
 			preparePXCFormationCertification(s)
 		}
@@ -102,6 +115,23 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		return result, engine.ErrConflict
 	}
 	return p.advanceReplacement(ctx, rc, s)
+}
+
+// replacementNeverDeployed recognizes only the untouched allocation checkpoint.
+// Import intent and resource settings are persisted before backend submission;
+// deploy requires the later imported checkpoint. Missing receipts or inventory
+// after a restart therefore cannot turn a possibly submitted deploy into proof.
+func replacementNeverDeployed(s *state, m *member) bool {
+	cp := s.Replacement
+	return cp != nil && cp.Recovery == "rollback" && cp.New == m.Name &&
+		m.Role == "data" && m.Stage == "planned" &&
+		m.ServiceID == "" && m.VolumeID == "" && m.ServerUUID == "" &&
+		m.ImportBatch == nil && m.DeployOp == nil && m.RetirementOp == nil &&
+		(s.Pending == nil || s.Pending.Member != m.Name) &&
+		m.Resources == (domain.Resources{}) && m.Replicas == 0 && m.Version == "" &&
+		!m.Initialized && m.NativeReadiness == nil && m.Clone == nil && !m.CloneDone &&
+		!m.CloneReplacesData && m.LastGTIDExecuted == "" && !m.ConfirmedVolumeLost &&
+		m.RuntimeRecovery == (engine.RuntimeRecovery{})
 }
 
 func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *state) (engine.OpResult, error) {
@@ -142,7 +172,8 @@ func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *st
 			}
 			next.Removing, next.Offline = true, true
 			next.Retirement = "runtime-stop"
-			if next.Stage == "planned" && next.ServiceID == "" && next.VolumeID == "" {
+			next.IdentityBarrier = cp.IdentityBarrier
+			if replacementNeverDeployed(s, next) {
 				next.Retirement = "credentials"
 			}
 			cp.Stage = "retire"
@@ -183,6 +214,7 @@ func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *st
 		if old != nil {
 			if old.Retirement == "" {
 				old.Retirement = "handoff"
+				old.IdentityBarrier = cp.IdentityBarrier
 				return replacementResult(cp), nil
 			}
 			done, err := p.retireMember(ctx, rc, s, old)

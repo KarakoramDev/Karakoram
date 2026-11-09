@@ -33,6 +33,9 @@ type fakeBackend struct {
 	applied           map[string]int64
 	native            map[string]myspec.StatusResponse
 	offline           map[string]myspec.OfflineGTIDResponse
+	membership        map[string]*myspec.GroupView
+	stopped           []string
+	deleted           []string
 	bootstrap         map[uint64]int
 	bootstrapReceipts map[uint64]bool
 	clones            map[string]string
@@ -98,12 +101,14 @@ func (b *fakeBackend) DeleteServiceByID(_ context.Context, name, id string) (inf
 	if service := b.services[name]; service != nil && service.ID != id {
 		return infra.Op{}, infra.ErrConflict
 	}
+	b.deleted = append(b.deleted, name)
 	delete(b.services, name)
 	delete(b.deployed, name)
 	return infra.Op{}, nil
 }
 
 func (b *fakeBackend) Stop(_ context.Context, name string) (infra.Op, error) {
+	b.stopped = append(b.stopped, name)
 	b.services[name].Status = infra.StatusStopped
 	return infra.Op{}, nil
 }
@@ -188,9 +193,23 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 			json.NewEncoder(w).Encode(agentapi.Status{Agent: b.agentBuild, ConfigVersion: b.applied[name]})
 		case "/v1/mysql/status":
 			status := b.native[name]
-			for _, member := range b.native {
+			status.GroupMembers = 0
+			status.GroupView = &myspec.GroupView{ViewID: "fixture-view"}
+			for peer, member := range b.native {
 				if member.MemberState == "ONLINE" {
 					status.GroupMembers++
+					status.GroupView.Members = append(status.GroupView.Members, myspec.GroupViewMember{ID: member.ServerUUID, Host: peer, Port: 3306, State: member.MemberState, Role: member.MemberRole})
+				}
+			}
+			if view, ok := b.membership[name]; ok {
+				status.GroupView = view
+				status.GroupMembers = 0
+				if view != nil {
+					for _, member := range view.Members {
+						if member.State == "ONLINE" {
+							status.GroupMembers++
+						}
+					}
 				}
 			}
 			json.NewEncoder(w).Encode(status)
@@ -310,6 +329,9 @@ func (b *fakeBackend) apply(t *testing.T, p *Core, rc *engine.Context) {
 		}
 		status := b.native[m.Name]
 		status.Version = sp.Version
+		if sp.GroupReplication != nil {
+			status.GroupName = sp.GroupReplication.GroupName
+		}
 		if status.ServerUUID == "" {
 			status.ServerUUID = fmt.Sprintf("11111111-2222-3333-4444-%012d", m.Index+1)
 			status.DataIdentity.Initialized = true
