@@ -213,10 +213,16 @@ func TestInitDoesNothingOutsidePID1(t *testing.T) {
 	}
 }
 func TestInitExitCode(t *testing.T) {
-	if initExitCode(syscall.WaitStatus(7<<8)) != 7 {
-		t.Fatal("normal exit status changed")
-	}
-	if initExitCode(syscall.WaitStatus(syscall.SIGTERM)) != 143 {
-		t.Fatal("signal exit status changed")
+	for status, want := range map[syscall.WaitStatus]int{
+		0:                                   0,
+		syscall.WaitStatus(1 << 8):          1,
+		syscall.WaitStatus(7 << 8):          7,
+		syscall.WaitStatus(syscall.SIGTERM): 143,
+		syscall.WaitStatus(syscall.SIGKILL): 137,
+		syscall.WaitStatus(syscall.SIGSEGV): 139,
+	} {
+		if got := initExitCode(status); got != want {
+			t.Errorf("init exit status %d = %d, want %d", status, got, want)
+		}
 	}
 }
