@@ -194,6 +194,7 @@ var OperationAgent = map[string]AgentRule{
 	"putSupabaseFunction":             {Tool: "supabase_function_replace", Exposed: true, Reason: "", Risk: "destructive", Confirm: "confirm", Secret: false, Async: "none", Idempotent: true, Untrusted: false},
 	"raiseClusterFCV":                 {Tool: "cluster_fcv_raise", Exposed: true, Reason: "", Risk: "destructive", Confirm: "name", Secret: false, Async: "operation", Idempotent: false, Untrusted: true},
 	"rebalancePostgres":               {Tool: "postgres_rebalance", Exposed: true, Reason: "", Risk: "destructive", Confirm: "confirm", Secret: false, Async: "operation", Idempotent: false, Untrusted: false},
+	"reconcileCluster":                {Tool: "cluster_reconcile", Exposed: true, Reason: "", Risk: "write", Confirm: "none", Secret: false, Async: "none", Idempotent: true, Untrusted: true},
 	"recoverMySQLQuorum":              {Tool: "mysql_quorum_recover", Exposed: true, Reason: "", Risk: "destructive", Confirm: "confirm", Secret: false, Async: "operation", Idempotent: false, Untrusted: false},
 	"refreshSession":                  {Tool: "", Exposed: false, Reason: "Browser-session plumbing or password input.", Risk: "write", Confirm: "none", Secret: true, Async: "none", Idempotent: false, Untrusted: false},
 	"replaceAPIToken":                 {Tool: "api_token_replace", Exposed: true, Reason: "", Risk: "destructive", Confirm: "confirm", Secret: false, Async: "none", Idempotent: true, Untrusted: false},

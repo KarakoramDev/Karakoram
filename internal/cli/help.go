@@ -124,6 +124,7 @@ var commandDescriptions = map[string]string{
 	"clusters delete":                   "Delete a cluster or suspend it with retained volumes",
 	"clusters resume":                   "Resume a suspended cluster from retained volumes",
 	"clusters restart":                  "Restart cluster members through a rolling operation",
+	"clusters reconcile":                "Request fresh reconciliation without changing desired state",
 	"clusters retry-deployments":        "Re-arm platform deployments stopped by the retry limit",
 	"clusters raise-fcv":                "Raise MongoDB feature compatibility after an upgrade",
 	"clusters replace-member":           "Replace a database member with a new instance",

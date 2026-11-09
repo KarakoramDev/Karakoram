@@ -2888,6 +2888,49 @@ paths:
           $ref: '#/components/responses/UnsupportedMediaType'
         '500':
           $ref: '#/components/responses/InternalError'
+  /clusters/{cluster}/reconcile:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: reconcileCluster
+      tags: [ClusterActions]
+      summary: Request a fresh cluster reconciliation
+      description: Requests a fresh reconcile without changing desired state, resuming suspended runtimes, or granting a deployment retry budget. Repeated requests coalesce with at least 30 seconds between forced triggers. Returns the current cluster without creating an operation; deleting clusters return 409.
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: cluster_reconcile
+        risk: write
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      responses:
+        '202':
+          description: Fresh reconciliation accepted or coalesced; no operation is created.
+          headers:
+            X-Request-ID:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cluster'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /clusters/{cluster}/retry-deployments:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'

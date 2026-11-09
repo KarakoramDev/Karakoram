@@ -5678,6 +5678,15 @@ type RaiseClusterFCVParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ReconcileClusterParams defines parameters for ReconcileCluster.
+type ReconcileClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // RestartClusterParams defines parameters for RestartCluster.
 type RestartClusterParams struct {
 	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
@@ -8607,6 +8616,9 @@ type ServerInterface interface {
 	// Explicitly raise feature compatibility version
 	// (POST /clusters/{cluster}/raise-fcv)
 	RaiseClusterFCV(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RaiseClusterFCVParams)
+	// Request a fresh cluster reconciliation
+	// (POST /clusters/{cluster}/reconcile)
+	ReconcileCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ReconcileClusterParams)
 	// Start a quorum-safe rolling restart
 	// (POST /clusters/{cluster}/restart)
 	RestartCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RestartClusterParams)
@@ -18707,6 +18719,71 @@ func (siw *ServerInterfaceWrapper) RaiseClusterFCV(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ReconcileCluster operation middleware
+func (siw *ServerInterfaceWrapper) ReconcileCluster(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReconcileClusterParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReconcileCluster(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RestartCluster operation middleware
 func (siw *ServerInterfaceWrapper) RestartCluster(w http.ResponseWriter, r *http.Request) {
 
@@ -23468,6 +23545,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/vhosts/{vhost}", wrapper.GetRabbitMQVhost)
 	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/rabbitmq/vhosts/{vhost}", wrapper.ReplaceRabbitMQVhost)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/raise-fcv", wrapper.RaiseClusterFCV)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/reconcile", wrapper.ReconcileCluster)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/restart", wrapper.RestartCluster)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/restores", wrapper.ListRestores)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/restores", wrapper.CreateRestore)
@@ -38773,6 +38851,101 @@ func (response RaiseClusterFCV503JSONResponse) VisitRaiseClusterFCVResponse(w ht
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ReconcileClusterRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ReconcileClusterParams
+}
+
+type ReconcileClusterResponseObject interface {
+	VisitReconcileClusterResponse(w http.ResponseWriter) error
+}
+
+type ReconcileCluster202ResponseHeaders struct {
+	XRequestID string
+}
+
+type ReconcileCluster202JSONResponse struct {
+	Body    Cluster
+	Headers ReconcileCluster202ResponseHeaders
+}
+
+func (response ReconcileCluster202JSONResponse) VisitReconcileClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReconcileCluster400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReconcileCluster400JSONResponse) VisitReconcileClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReconcileCluster401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReconcileCluster401JSONResponse) VisitReconcileClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReconcileCluster403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReconcileCluster403JSONResponse) VisitReconcileClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReconcileCluster404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReconcileCluster404JSONResponse) VisitReconcileClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReconcileCluster409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReconcileCluster409JSONResponse) VisitReconcileClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReconcileCluster500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReconcileCluster500JSONResponse) VisitReconcileClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReconcileCluster503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ReconcileCluster503JSONResponse) VisitReconcileClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type RestartClusterRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Params  RestartClusterParams
@@ -47431,6 +47604,9 @@ type StrictServerInterface interface {
 	// Explicitly raise feature compatibility version
 	// (POST /clusters/{cluster}/raise-fcv)
 	RaiseClusterFCV(ctx context.Context, request RaiseClusterFCVRequestObject) (RaiseClusterFCVResponseObject, error)
+	// Request a fresh cluster reconciliation
+	// (POST /clusters/{cluster}/reconcile)
+	ReconcileCluster(ctx context.Context, request ReconcileClusterRequestObject) (ReconcileClusterResponseObject, error)
 	// Start a quorum-safe rolling restart
 	// (POST /clusters/{cluster}/restart)
 	RestartCluster(ctx context.Context, request RestartClusterRequestObject) (RestartClusterResponseObject, error)
@@ -52067,6 +52243,33 @@ func (sh *strictHandler) RaiseClusterFCV(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RaiseClusterFCVResponseObject); ok {
 		if err := validResponse.VisitRaiseClusterFCVResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReconcileCluster operation middleware
+func (sh *strictHandler) ReconcileCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ReconcileClusterParams) {
+	var request ReconcileClusterRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReconcileCluster(ctx, request.(ReconcileClusterRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReconcileCluster")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReconcileClusterResponseObject); ok {
+		if err := validResponse.VisitReconcileClusterResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

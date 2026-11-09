@@ -178,6 +178,7 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"RaiseClusterFCV", "POST", "/api/v1/clusters/prod/raise-fcv", "{\"version\":\"8.0\"}"},
 		{"RestartCluster", "POST", "/api/v1/clusters/prod/restart", "{}"},
 		{"RebalancePostgres", "POST", "/api/v1/clusters/prod/actions/rebalance", "{}"},
+		{"ReconcileCluster", "POST", "/api/v1/clusters/prod/reconcile", ""},
 		{"RetryClusterDeployments", "POST", "/api/v1/clusters/prod/retry-deployments", ""},
 		{"ListRestores", "GET", "/api/v1/clusters/prod/restores", ""},
 		{"CreateRestore", "POST", "/api/v1/clusters/prod/restores", "{\"name\":\"restore\",\"source\":{\"sourceCluster\":\"prod\",\"backup\":\"backup\"}}"},

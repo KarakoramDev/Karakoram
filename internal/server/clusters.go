@@ -255,6 +255,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 		}
 		return listResponse(s, ctx, out, err)
+	case "ReconcileCluster":
+		// Scheduling needs only persisted identity, not a reachable runtime.
+		c, err := s.Store.GetCluster(ctx, clusterRef(ctx, in.Cluster))
+		if err != nil {
+			return s.failure(err)
+		}
+		return s.forceClusterReconcile(ctx, c)
 	case "CreateCluster":
 		return s.createCluster(ctx, in.Body.(*api.CreateClusterRequest), nil, dryRun)
 	}

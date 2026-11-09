@@ -5680,6 +5680,15 @@ type RaiseClusterFCVParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ReconcileClusterParams defines parameters for ReconcileCluster.
+type ReconcileClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // RestartClusterParams defines parameters for RestartCluster.
 type RestartClusterParams struct {
 	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
@@ -8790,6 +8799,9 @@ type ClientInterface interface {
 
 	RaiseClusterFCV(ctx context.Context, cluster ClusterPath, params *RaiseClusterFCVParams, body RaiseClusterFCVJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ReconcileCluster request
+	ReconcileCluster(ctx context.Context, cluster ClusterPath, params *ReconcileClusterParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RestartCluster request
 	RestartCluster(ctx context.Context, cluster ClusterPath, params *RestartClusterParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -11472,6 +11484,18 @@ func (c *Client) RaiseClusterFCVWithBody(ctx context.Context, cluster ClusterPat
 
 func (c *Client) RaiseClusterFCV(ctx context.Context, cluster ClusterPath, params *RaiseClusterFCVParams, body RaiseClusterFCVJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRaiseClusterFCVRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReconcileCluster(ctx context.Context, cluster ClusterPath, params *ReconcileClusterParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReconcileClusterRequest(c.Server, cluster, params)
 	if err != nil {
 		return nil, err
 	}
@@ -24138,6 +24162,77 @@ func NewRaiseClusterFCVRequestWithBody(server string, cluster ClusterPath, param
 	return req, nil
 }
 
+// NewReconcileClusterRequest generates requests for ReconcileCluster
+func NewReconcileClusterRequest(server string, cluster ClusterPath, params *ReconcileClusterParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/reconcile", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewRestartClusterRequest generates requests for RestartCluster
 func NewRestartClusterRequest(server string, cluster ClusterPath, params *RestartClusterParams) (*http.Request, error) {
 	var err error
@@ -29898,6 +29993,9 @@ type ClientWithResponsesInterface interface {
 
 	RaiseClusterFCVWithResponse(ctx context.Context, cluster ClusterPath, params *RaiseClusterFCVParams, body RaiseClusterFCVJSONRequestBody, reqEditors ...RequestEditorFn) (*RaiseClusterFCVResponse, error)
 
+	// ReconcileClusterWithResponse request
+	ReconcileClusterWithResponse(ctx context.Context, cluster ClusterPath, params *ReconcileClusterParams, reqEditors ...RequestEditorFn) (*ReconcileClusterResponse, error)
+
 	// RestartClusterWithResponse request
 	RestartClusterWithResponse(ctx context.Context, cluster ClusterPath, params *RestartClusterParams, reqEditors ...RequestEditorFn) (*RestartClusterResponse, error)
 
@@ -34537,6 +34635,35 @@ func (r RaiseClusterFCVResponse) StatusCode() int {
 	return 0
 }
 
+type ReconcileClusterResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *Cluster
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r ReconcileClusterResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReconcileClusterResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type RestartClusterResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -38591,6 +38718,15 @@ func (c *ClientWithResponses) RaiseClusterFCVWithResponse(ctx context.Context, c
 		return nil, err
 	}
 	return ParseRaiseClusterFCVResponse(rsp)
+}
+
+// ReconcileClusterWithResponse request returning *ReconcileClusterResponse
+func (c *ClientWithResponses) ReconcileClusterWithResponse(ctx context.Context, cluster ClusterPath, params *ReconcileClusterParams, reqEditors ...RequestEditorFn) (*ReconcileClusterResponse, error) {
+	rsp, err := c.ReconcileCluster(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReconcileClusterResponse(rsp)
 }
 
 // RestartClusterWithResponse request returning *RestartClusterResponse
@@ -51175,6 +51311,81 @@ func ParseRaiseClusterFCVResponse(rsp *http.Response) (*RaiseClusterFCVResponse,
 			return nil, err
 		}
 		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReconcileClusterResponse parses an HTTP response from a ReconcileClusterWithResponse call
+func ParseReconcileClusterResponse(rsp *http.Response) (*ReconcileClusterResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReconcileClusterResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Cluster
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError

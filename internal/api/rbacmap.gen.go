@@ -195,6 +195,7 @@ var OperationRBAC = map[string]RBACRule{
 	"putSupabaseFunction":             {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"raiseClusterFCV":                 {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"rebalancePostgres":               {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
+	"reconcileCluster":                {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"recoverMySQLQuorum":              {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"refreshSession":                  {Resource: "accounts", Action: "update", ObjectParam: "*", Public: false},
 	"replaceAPIToken":                 {Resource: "api-tokens", Action: "update", ObjectParam: "*", Public: false},
