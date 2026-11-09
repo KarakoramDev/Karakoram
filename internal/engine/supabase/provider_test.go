@@ -761,8 +761,8 @@ func TestOptionalDeploymentDoesNotBlockReplacementProvisioning(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(state.Pending, pending) || state.Members["rest"].Stage != engine.ComponentImported {
 				t.Fatalf("optional receipt or stage changed: %+v, %v", state, err)
 			}
-			if result.RequeueAfter == 0 || rc.Cluster.Status.ObservedGeneration != 1 {
-				t.Fatal("unfinished optional work lost its requeue or advanced the applied generation")
+			if result.Steady || result.RequeueAfter == 0 || rc.Cluster.Status.ObservedGeneration != 1 {
+				t.Fatal("unfinished optional work became steady, lost its requeue or advanced the applied generation")
 			}
 			// A simultaneous core error must also remain visible to callers.
 			backend.lookupErrors = map[string]error{"demop3": infra.ErrConflict}

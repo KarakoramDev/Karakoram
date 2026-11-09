@@ -95,7 +95,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, err
 	}
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
-	result.RequeueAfter = 30 * time.Second
+	// Namespace/configuration drift and long-horizon certificate renewal are
+	// revalidated by the steady resync; pending components returned above.
+	result = engine.Result{Steady: true}
 	return result, nil
 }
 

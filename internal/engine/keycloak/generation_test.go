@@ -84,8 +84,8 @@ func TestAppliedGenerationWaitsForDeferredApplicationConfiguration(t *testing.T)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if result.RequeueAfter != 10*time.Second {
-					t.Fatalf("health cadence changed: %s", result.RequeueAfter)
+				if (!result.Steady && result.RequeueAfter != 10*time.Second) || (result.Steady && result.RequeueAfter != 0) {
+					t.Fatalf("unexpected convergence schedule: %+v", result)
 				}
 			}
 			accept := func() {

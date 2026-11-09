@@ -16,7 +16,13 @@ func TestIdleReconcileZeroProviderMutations(t *testing.T) {
 		t.Run(fmt.Sprintf("raft/replicas%d", replicas), func(t *testing.T) {
 			p, rc, _, _ := setup(t)
 			rc.Cluster.Spec.Components.Engine.Replicas = replicas
+			if result, err := p.Sync(t.Context(), rc); err != nil || result.Steady {
+				t.Fatalf("initial work must not be steady: %+v, %v", result, err)
+			}
 			enginetest.AssertIdle(t, p, rc, nil)
+			if result, err := p.Sync(t.Context(), rc); err != nil || !result.Steady || result.RequeueAfter != 0 {
+				t.Fatalf("idle result: %+v, %v", result, err)
+			}
 		})
 	}
 	for _, replicas := range []int{1, 3} {
@@ -29,7 +35,13 @@ func TestIdleReconcileZeroProviderMutations(t *testing.T) {
 				t.Fatal(err)
 			}
 			p.options.Bindings = &sealBinding{c: pgbinding.Connection{Host: "postgres.example", Port: 5432, Username: "owner", PasswordSecretRef: "password", TLS: pgbinding.TLS{Mode: pgbinding.TLSVerifyFull, CAPEM: ca.CertPEM}, CredentialGeneration: 1}}
+			if result, err := p.Sync(t.Context(), rc); err != nil || result.Steady {
+				t.Fatalf("initial work must not be steady: %+v, %v", result, err)
+			}
 			enginetest.AssertIdle(t, p, rc, nil)
+			if result, err := p.Sync(t.Context(), rc); err != nil || !result.Steady || result.RequeueAfter != 0 {
+				t.Fatalf("idle result: %+v, %v", result, err)
+			}
 		})
 	}
 }

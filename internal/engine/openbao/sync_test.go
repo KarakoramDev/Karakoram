@@ -10,7 +10,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -57,7 +56,7 @@ func TestCreationConverges(t *testing.T) {
 			}
 			before := f.mutations
 			result, err := p.Sync(t.Context(), rc)
-			if err != nil || result.RequeueAfter != 30*time.Second {
+			if err != nil || result.RequeueAfter != 0 || !result.Steady {
 				t.Fatalf("converged sync: %+v %v", result, err)
 			}
 			if f.mutations != before {

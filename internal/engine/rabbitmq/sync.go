@@ -736,7 +736,18 @@ provision:
 	}
 	s.Phase = "ready"
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
-	result.RequeueAfter = 30 * time.Second
+	if s.ReplaceActive || len(s.RotationSecrets) != 0 {
+		return result, nil
+	}
+	for _, m := range s.Members {
+		if m.ChangeAction != "" || m.ResumeDeploy != nil || m.Removing || m.RemoveStep != "" {
+			return result, nil
+		}
+	}
+	// TLS renewal and native drift repair use the steady resync. Failed
+	// availability, changed agent identity and platform drift wake us earlier.
+	result.Steady = true
+	result.RequeueAfter = 0
 	return result, nil
 }
 

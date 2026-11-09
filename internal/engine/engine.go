@@ -99,6 +99,9 @@ type OperationCanceller interface {
 // Result requests a delay before the next level-triggered reconciliation.
 type Result struct {
 	RequeueAfter time.Duration
+	// Steady means the provider is fully converged with no pending work;
+	// RequeueAfter, if set, is a genuine timed wake-up.
+	Steady bool
 	// ConvergenceError fails tracking operations for the current generation
 	// without blocking independent queued operations or retrying reconciliation
 	// as an error. Providers retain diagnostics in status and own warning deduplication.

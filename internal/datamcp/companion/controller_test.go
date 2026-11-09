@@ -154,13 +154,16 @@ func TestLifecycleRotationDisable(t *testing.T) {
 	f := setup(t)
 	original := string(f.rc.Cluster.Internal)
 	result, err := f.controller.Sync(t.Context(), f.rc)
-	if err != nil || result.RequeueAfter == 0 {
+	if err != nil || result.RequeueAfter == 0 || result.Steady {
 		t.Fatal(result, err)
 	}
 	if slices.Contains(f.backend.Calls(), "ImportServices") {
 		t.Fatal("import submitted before frozen checkpoint")
 	}
 	f.converge(t)
+	if result, err := f.controller.Sync(t.Context(), f.rc); err != nil || !result.Steady || result.RequeueAfter != 0 {
+		t.Fatalf("idle result: %+v, %v", result, err)
+	}
 	if string(f.rc.Cluster.Internal) != original {
 		t.Fatal("provider state clobbered")
 	}
@@ -210,8 +213,14 @@ func TestLifecycleRotationDisable(t *testing.T) {
 	if err = f.controller.Observe(t.Context(), f.rc, &status); err != nil || status.DataMcp.Phase != "Degraded" {
 		t.Fatal(status, err)
 	}
+	if result, err := f.controller.Sync(t.Context(), f.rc); err != nil || result.Steady || result.RequeueAfter == 0 {
+		t.Fatalf("unhealthy companion must not be steady: %+v, %v", result, err)
+	}
 	f.rc.Cluster.Spec.DataMcp.Enabled = false
 	f.converge(t)
+	if result, err := f.controller.Sync(t.Context(), f.rc); err != nil || !result.Steady || result.RequeueAfter != 0 {
+		t.Fatalf("disabled, cleaned companion must be steady: %+v, %v", result, err)
+	}
 	if !slices.Contains(f.backend.Calls(), "DeleteServiceByID") {
 		t.Fatal("delete did not use identity")
 	}

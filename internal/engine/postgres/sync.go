@@ -1184,8 +1184,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	s.ConversionSeed = ""
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	rc.SyncWait = ""
-	result.RequeueAfter = 10 * time.Second
-	return result, nil
+	return steadyResult(ctx, rc, s)
 }
 
 // seedExposureAdmission migrates a retained route before recovery or cleanup

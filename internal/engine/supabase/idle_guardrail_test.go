@@ -26,7 +26,13 @@ func TestIdleReconcileZeroProviderMutations(t *testing.T) {
 					b.nativeStatus[fmt.Sprintf("demop%d", i)] = pgspec.StatusResponse{Running: true, Role: role, Leader: "demop0", Streaming: i != 0, EtcdHealthy: true, Version: rc.Cluster.Spec.Version, Timeline: 1, SystemID: "123456789", WALPosition: "1/100", SlotStatusKnown: true, WALStatusKnown: true, ArchiveStatusKnown: true}
 				}
 			}
+			if result, err := p.Sync(t.Context(), rc); err != nil || result.Steady {
+				t.Fatalf("initial work must not be steady: %+v, %v", result, err)
+			}
 			enginetest.AssertIdle(t, p, rc, nil)
+			if result, err := p.Sync(t.Context(), rc); err != nil || !result.Steady || result.RequeueAfter != 0 {
+				t.Fatalf("idle result: %+v, %v", result, err)
+			}
 		})
 	}
 }

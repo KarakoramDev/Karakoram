@@ -11,6 +11,9 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
 
+// Minimum spacing between repairs, not a wake-up deadline. Broken managed
+// authentication makes availability non-Ready and immediately wakes Sync;
+// otherwise the steady resync repairs native drift without minute polling.
 const managedAccessReconcileInterval = time.Minute
 
 // Native credentials are mutable independently of sealed desired secrets. Use

@@ -15,6 +15,13 @@
 // startup, so leaf changes participate in the durable rolling plan. Internal
 // gossip/Raft/data transports require a suitably isolated private backend network.
 //
+// Fully converged clusters return Steady without a routine requeue. Independent
+// availability, spec/operation changes, platform listing drift and new agent
+// identities wake reconciliation immediately. The ten-minute steady resync
+// checks TLS renewal thresholds and repairs otherwise invisible native drift.
+// Pending receipts, rolling/rotation journals, shard retirement, initial restores
+// and deferred exposure admission remain non-steady.
+//
 // Scale-down retires highest-index non-voters, moving native replicas to healthy
 // least-loaded peers before stopping, authenticated Raft removal, and ordered
 // runtime/volume deletion. Two empty sharding scans and verbose node statistics

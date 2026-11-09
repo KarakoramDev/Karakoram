@@ -638,7 +638,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		rc.Cluster.Status = status
 		if status.Phase == domain.PhaseReady {
 			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
-			result.RequeueAfter = 15 * time.Second
+			result = steadyResult(rc, s)
 		}
 	}
 	return result, nil

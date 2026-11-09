@@ -7,6 +7,14 @@
 // Public TCP, allowlists, public HTTPS and disk growth require backend support.
 // Unsupported requests are surfaced without scheduling platform retries.
 //
+// Fully converged clusters return Steady without a routine requeue. Independent
+// availability wakes reconciliation on broken native authentication or health;
+// spec/operation changes, platform listing drift and new agent identities also
+// wake it immediately. The ten-minute steady resync checks TLS renewal thresholds
+// and repairs otherwise invisible native-user/vhost drift. The managed-access
+// interval is minimum repair spacing, not a periodic wake-up. Pending receipts,
+// rolling work, replacement, rotation and maintenance waits remain non-steady.
+//
 // Data MCP uses the native-rabbitmq gateway and accepts only vhost scopes.
 // Reserved karakoram-mcp-ro/rw identities have the monitoring tag, never
 // administrator: configure is denied, read is allowed, and write is allowed

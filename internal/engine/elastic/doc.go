@@ -29,6 +29,13 @@
 // TCP digests seed admission only when the applied policy is recoverable;
 // otherwise an unacknowledged legacy generation falls back to private access.
 //
+// Fully converged clusters return Steady without a routine requeue. Availability,
+// spec/operation changes, platform listing drift and new agent identities wake
+// reconciliation immediately. The ten-minute steady resync checks TLS renewal
+// thresholds and reasserts security objects, repositories and admitted exposure.
+// Pending receipts, shard recovery, component acknowledgements, rolling work and
+// initial restores remain non-steady.
+//
 // Agent connectivity means a successful status response, independently of child
 // health. Node and pinned component observations retain paused/error diagnostics
 // as Process conditions without losing native roles. Every live component must

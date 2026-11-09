@@ -390,7 +390,10 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return rc.WaitForWindow(), nil
 	}
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
-	result.RequeueAfter = 10 * time.Second
+	// Health, identity changes and platform drift wake reconciliation immediately;
+	// the steady resync handles periodic repair without an idle polling cadence.
+	result.Steady = true
+	result.RequeueAfter = 0
 	return result, nil
 }
 

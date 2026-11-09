@@ -215,7 +215,7 @@ func coreConverge(t *testing.T, f *coreFixture) *state {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if s.Phase == "ready" && s.Rolling == nil && s.Pending == nil && r.RequeueAfter == 30*time.Second {
+		if s.Phase == "ready" && s.Rolling == nil && s.Pending == nil && r.Steady && r.RequeueAfter == 0 {
 			return s
 		}
 	}

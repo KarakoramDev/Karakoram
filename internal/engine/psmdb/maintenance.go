@@ -28,6 +28,9 @@ func mergeMaintenanceWait(rc *engine.Context, result *engine.Result) {
 	for _, c := range rc.Cluster.Status.Conditions {
 		if c.Type == "MaintenanceWindow" && c.Reason == "WaitingForWindow" {
 			wait := rc.WaitForWindow()
+			if wait.RequeueAfter > 0 {
+				result.Steady = false
+			}
 			if wait.RequeueAfter > 0 && (result.RequeueAfter == 0 || wait.RequeueAfter < result.RequeueAfter) {
 				result.RequeueAfter = wait.RequeueAfter
 			}

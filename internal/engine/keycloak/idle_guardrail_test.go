@@ -64,6 +64,12 @@ func TestIdleReconcileZeroProviderMutations(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 		rc.Agents = idleAgents{server}
+		if result, err := p.Sync(t.Context(), rc); err != nil || result.Steady {
+			t.Fatalf("initial work must not be steady: %+v, %v", result, err)
+		}
 		enginetest.AssertIdle(t, p, rc, nil)
+		if result, err := p.Sync(t.Context(), rc); err != nil || !result.Steady || result.RequeueAfter != 0 {
+			t.Fatalf("idle result: %+v, %v", result, err)
+		}
 	})
 }

@@ -4,6 +4,13 @@
 /*
 Package psmdb manages Percona Server for MongoDB without Kubernetes.
 
+Fully converged replica sets and sharded clusters return Steady without a routine
+requeue. Heartbeat availability, spec/operation changes, platform listing drift
+and new agent identities wake reconciliation; the ten-minute steady resync
+rechecks TLS renewal thresholds, PBM configuration and native access drift.
+Pending fresh-base backup hand-offs, restore consistency barriers, replacement,
+rotation and maintenance-window waits remain non-steady.
+
 # Catalog provenance
 
 The noble amd64 package indexes at

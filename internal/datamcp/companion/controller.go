@@ -137,7 +137,7 @@ func (c *Controller) Sync(ctx context.Context, rc *engine.Context) (engine.Resul
 		if !done {
 			return wait(), err
 		}
-		return engine.Result{}, err
+		return engine.Result{Steady: err == nil}, err
 	}
 	if err = Validate(rc.Cluster, b); err != nil {
 		return engine.Result{}, err
@@ -335,7 +335,9 @@ func (c *Controller) Sync(ctx context.Context, rc *engine.Context) (engine.Resul
 		return engine.Result{RequeueAfter: engine.ReadinessInterval}, nil
 	}
 
-	return engine.Result{}, nil
+	// Readiness includes the published configuration version and every
+	// process. Long-horizon certificate renewal is checked by steady resync.
+	return engine.Result{Steady: true}, nil
 }
 
 // Keep the rollout notification with the admitted receipt: retrying config

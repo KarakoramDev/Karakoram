@@ -103,8 +103,9 @@ func TestLegacyShardedAgentsConvergeSyncAndStatusWithoutRollout(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := len(f.deployments)
-	if _, err := p.Sync(t.Context(), rc); err != nil {
-		t.Fatal(err)
+	result, err := p.Sync(t.Context(), rc)
+	if err != nil || !result.Steady || result.RequeueAfter != 0 {
+		t.Fatalf("converged sharded Sync: %+v %v", result, err)
 	}
 	current, _ := load(rc.Cluster)
 	if current.Phase != "ready" || len(f.deployments) != before {
@@ -115,8 +116,9 @@ func TestLegacyShardedAgentsConvergeSyncAndStatusWithoutRollout(t *testing.T) {
 		t.Fatal("legacy full status did not converge", status, err, reads.Load())
 	}
 	partition.Store(true)
-	if _, err := p.Sync(t.Context(), rc); err != nil {
-		t.Fatal(err)
+	result, err = p.Sync(t.Context(), rc)
+	if err != nil || result.Steady {
+		t.Fatalf("partitioned sharded Sync: %+v %v", result, err)
 	}
 	status, err = p.Status(t.Context(), rc)
 	if err != nil || status.Phase != domain.PhaseDegraded {

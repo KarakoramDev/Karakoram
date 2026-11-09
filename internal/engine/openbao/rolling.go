@@ -323,7 +323,7 @@ func (p *Provider) finishNativeSync(ctx context.Context, rc *engine.Context, s *
 		return r, err
 	}
 	for _, m := range s.Members {
-		if !m.Healthy {
+		if !m.Healthy || m.Version != m.DesiredVersion || m.Change != nil || m.ResumeDeploy != nil || m.AppliedConfigVersion < m.ConfigVersion {
 			return r, nil
 		}
 	}
@@ -340,7 +340,8 @@ func (p *Provider) finishNativeSync(ctx context.Context, rc *engine.Context, s *
 	s.RollingKind = ""
 	s.RollingGeneration = 0
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
-	r.RequeueAfter = 30 * time.Second
+	// PostgreSQL storage has the same idle contract as Raft storage.
+	r = engine.Result{Steady: true}
 	return r, nil
 }
 

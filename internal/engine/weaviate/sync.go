@@ -445,6 +445,12 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	s.Phase = "ready"
 	rc.Cluster.Status.Phase = domain.PhaseReady
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
-	result.RequeueAfter = 30 * time.Second
+	if s.Rotation != nil || s.ScaleDown != nil || exposureDeferred {
+		return result, nil
+	}
+	// TLS renewal uses the steady resync. Availability, agent identity changes
+	// and platform drift independently wake reconciliation before that resync.
+	result.Steady = true
+	result.RequeueAfter = 0
 	return result, nil
 }

@@ -361,6 +361,12 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 	previous := rc.Cluster.Status
 	previous.Members = slices.Clone(previous.Members)
 	previous.Conditions = slices.Clone(previous.Conditions)
+	if SteadyEligible(ctx) {
+		if steady, accepted := observeSteady(ctx, p, rc, clock); accepted {
+			return steady, nil
+		}
+	}
+	ctx = infra.WithoutSteadyObservation(ctx)
 	for attempt := range 2 {
 		started := clock.Now()
 		probe, cancel := context.WithTimeout(ctx, ObservationSweepTimeout)

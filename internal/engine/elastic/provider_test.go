@@ -507,8 +507,8 @@ func coreConverge(t *testing.T, p *Provider, rc *engine.Context, f *coreInfra) *
 			t.Fatal(err)
 		}
 		if s.Phase == "ready" && s.Pending == nil && s.Rolling == nil {
-			if result.RequeueAfter != 30*time.Second {
-				t.Fatal("ready requeue", result)
+			if !result.Steady || result.RequeueAfter != 0 {
+				t.Fatal("ready cluster must be steady without routine requeue", result)
 			}
 			return s
 		}

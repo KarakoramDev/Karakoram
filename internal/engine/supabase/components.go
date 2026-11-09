@@ -608,6 +608,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 				wait := rc.WaitForWindow()
 				if wait.RequeueAfter > 0 && (result.RequeueAfter == 0 || wait.RequeueAfter < result.RequeueAfter) {
 					result.RequeueAfter = wait.RequeueAfter
+					result.Steady = false
 				}
 				break
 			}
@@ -622,6 +623,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	coreAcknowledged := rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation
 	// The core's applied generation does not include the Supabase services.
 	rc.Cluster.Status.ObservedGeneration = observed
+	// A converged PostgreSQL core does not imply converged optional services.
+	coreSteady := result.Steady
+	result.Steady = false
 	if busy || componentErr != nil {
 		// Optional infrastructure work serializes only other optional work,
 		// never database provisioning, replacement, or recovery.
@@ -655,6 +659,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		status, err = p.Status(ctx, rc)
 		if err == nil && status.Phase == domain.PhaseReady && coreAcknowledged {
 			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
+			result.Steady = coreSteady
 		} else if err == nil {
 			// Final gateway DNS convergence needs another observation even when
 			// every sequential component lifecycle has already joined.

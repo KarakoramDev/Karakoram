@@ -436,7 +436,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		}
 	}
 	for _, m := range s.Members {
-		if !m.Healthy || m.Version != m.DesiredVersion {
+		if !m.Healthy || m.Version != m.DesiredVersion || m.Change != nil || m.AppliedConfigVersion < m.ConfigVersion {
 			return result, nil
 		}
 	}
@@ -461,7 +461,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	s.RollingKind = ""
 	s.RollingGeneration = 0
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
-	result.RequeueAfter = 30 * time.Second
+	// Health is renewed independently. The steady resync still revalidates
+	// connections, exposure and the management token's 12-hour renewal horizon.
+	result = engine.Result{Steady: true}
 	return result, nil
 }
 

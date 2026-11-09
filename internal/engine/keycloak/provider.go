@@ -594,10 +594,11 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, nil
 	}
 	if configApplied && !configurationDeferred && !exposureDeferred {
-		// Periodic health requeues do not mean the desired generation is still
-		// pending. Only acknowledge after the live agent accepted configuration
-		// and every provider mutation above has completed.
+		// Live configuration acknowledgement and all infrastructure receipts
+		// have completed. Health is renewed independently; the steady resync
+		// also checks binding drift and the 30-day certificate renewal horizon.
 		rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
+		result = engine.Result{Steady: true}
 	}
 	return result, nil
 }

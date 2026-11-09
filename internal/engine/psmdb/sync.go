@@ -1103,7 +1103,19 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 	} else {
 		rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	}
-	result.RequeueAfter = 30 * time.Second
+	// A fresh PBM base is a pending hand-off, even when runtime convergence has
+	// finished. Keep polling its durable backup record until PITR can resume.
+	var fresh freshBaseState
+	if err = decodeJSON(rc.Cluster.Internal, &fresh); err != nil {
+		return result, err
+	}
+	if fresh.Pending || s.ReplaceActive || len(s.RotationSecrets) != 0 || s.RestoreWorkerUnconfirmed || s.RestoreConsistency != nil || engine.InitialDataSourceUnproven(rc.Cluster) {
+		return result, nil
+	}
+	// TLS renewal thresholds are checked by the ten-minute steady resync;
+	// native health, platform drift and agent identity changes wake us earlier.
+	result.Steady = true
+	result.RequeueAfter = 0
 	return result, nil
 }
 

@@ -1002,6 +1002,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	s.Phase = "ready"
 	rc.Cluster.Status.Phase = domain.PhaseReady
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
-	result.RequeueAfter = 30 * time.Second
+	// Steady resync retains periodic TLS/security/repository repair. Failed
+	// availability, platform drift and agent identity changes reconcile sooner.
+	result.Steady = true
+	result.RequeueAfter = 0
 	return result, nil
 }
