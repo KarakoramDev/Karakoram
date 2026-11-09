@@ -49,9 +49,11 @@ func (b *proxyUpdateBackend) SetResources(ctx context.Context, name string, r in
 }
 
 func TestProxyUpdateMaintenanceCapabilities(t *testing.T) {
+	t.Parallel()
 	for _, action := range []string{"up", "down", "resources", "excluded-resources", "legacy-up", "legacy-resources"} {
 		for _, serving := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/serving=%t", action, serving), func(t *testing.T) {
+				t.Parallel()
 				p, rc, inventory, s, first, second := replicatedProxyFixture(t)
 				b := &proxyUpdateBackend{proxyInventoryBackend: inventory, serving: serving, excluded: action == "excluded-resources", legacy: strings.HasPrefix(action, "legacy-")}
 				rc.Backend = b
@@ -113,9 +115,11 @@ func TestProxyUpdateMaintenanceCapabilities(t *testing.T) {
 }
 
 func TestProxyUpdateCompletionRequiresEveryInstanceAndReplays(t *testing.T) {
+	t.Parallel()
 	for _, action := range []string{"scale-up", "scale-down", "resize"} {
 		for _, failure := range []string{"config", "stopped", "writer", "missing-instance"} {
 			t.Run(action+"/"+failure, func(t *testing.T) {
+				t.Parallel()
 				p, rc, b, s, _, late := replicatedProxyFixture(t)
 				m := s.find("demopx")
 				beforeResources := m.Resources

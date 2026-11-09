@@ -116,6 +116,7 @@ func TestAdvertisedHealthProbeFailureDegrades(t *testing.T) {
 }
 
 func TestProxyStatusUsesIndependentInstanceBudgets(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []struct {
 		name      string
 		instances int
@@ -126,6 +127,7 @@ func TestProxyStatusUsesIndependentInstanceBudgets(t *testing.T) {
 		{"hung-first-plus-canary", 5, 0},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
+			t.Parallel()
 			p, rc, b := setup(t, "ha")
 			s := converge(t, p, rc)
 			component := rc.Cluster.Spec.Components.Extra["proxy"]

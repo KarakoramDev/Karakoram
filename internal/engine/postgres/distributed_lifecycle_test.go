@@ -242,8 +242,10 @@ func TestDistributedFormationLifecycle(t *testing.T) {
 }
 
 func TestDistributedScaleRegistrationAndDrainReplay(t *testing.T) {
+	t.Parallel()
 	for _, replicas := range []int{1, 3} {
 		t.Run(fmt.Sprint(replicas), func(t *testing.T) {
+			t.Parallel()
 			testDistributedScaleRegistrationAndDrainReplay(t, replicas)
 		})
 	}

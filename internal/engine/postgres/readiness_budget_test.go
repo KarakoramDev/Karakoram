@@ -21,12 +21,14 @@ import (
 )
 
 func TestDirectReadinessGenericStatusBudget(t *testing.T) {
+	t.Parallel()
 	for _, hang := range []bool{true, false} {
 		name := "reload_retains_parent"
 		if hang {
 			name = "hung_status"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			_, rc, _ := setup(t, "single")
 			var reloads atomic.Int32
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +82,7 @@ func TestDirectReadinessGenericStatusBudget(t *testing.T) {
 }
 
 func TestSharedMemoryGenericStatusBudget(t *testing.T) {
+	t.Parallel()
 	p, rc, _ := setup(t, "ha")
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/status" {

@@ -19,6 +19,7 @@ func TestExposureAdmissionSurvivesRecovery(t *testing.T) {
 		for _, recovery := range []string{"resume", "missing-runtime"} {
 			for _, change := range []string{"unchanged-public", "unchanged-private", "enable", "allowlist", "family"} {
 				t.Run(profile+"/"+recovery+"/"+change, func(t *testing.T) {
+					t.Parallel()
 					p, rc, base := setup(t, "single")
 					if profile == "timescaledb" {
 						rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"profiles":["timescaledb"]}`)

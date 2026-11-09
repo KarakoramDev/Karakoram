@@ -448,8 +448,10 @@ func (b *rotationRecoveryBackend) Deploy(ctx context.Context, name string, d inf
 }
 
 func TestAdministratorRotationRescuesLegacyHalfAppliedCitus(t *testing.T) {
+	t.Parallel()
 	for _, replicas := range []int{1, 3} {
 		t.Run(fmt.Sprint(replicas), func(t *testing.T) {
+			t.Parallel()
 			p, rc, backend, agents := setupDistributed(t, replicas)
 			rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"citus":{"workerGroups":2}}`)
 			for range 150 {

@@ -491,6 +491,7 @@ func TestKnownVersionDriftSurvivesMissingObservations(t *testing.T) {
 }
 
 func TestFreshnessHungFormerPrimaryDoesNotHideNewWriter(t *testing.T) {
+	t.Parallel()
 	p, rc, _ := setup(t, "ha")
 	s := converge(t, p, rc)
 	statuses := make(map[string]pgspec.StatusResponse, len(s.Members))

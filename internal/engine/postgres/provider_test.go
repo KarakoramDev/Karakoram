@@ -21,10 +21,10 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/enginetest"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
-	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 type fakeBackend struct {
@@ -166,11 +166,7 @@ func setupWithStatePath(t *testing.T, topology, statePath string) (*Core, *engin
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(statePath, sealer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { st.Close() })
+	st := enginetest.OpenStore(t, statePath, sealer)
 	p := New(Options{})
 	c := &domain.Cluster{Name: "demo", Namespace: "default", Generation: 1, Spec: domain.ClusterSpec{Topology: domain.Topology{Type: topology}}}
 	p.ApplyDefaults(&c.Spec)

@@ -101,8 +101,10 @@ func assertAdministratorIntent(t *testing.T, rc *engine.Context, original *admin
 }
 
 func TestAdministratorRecoveryTerminalDeploymentRetry(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"failed", "RETRY_REQUIRED", "exhausted", "exhausted-error"} {
 		t.Run(phase, func(t *testing.T) {
+			t.Parallel()
 			p, rc, backend, original := administratorRecoveryFixture(t, false, 1)
 			if _, err := p.Sync(t.Context(), rc); err != nil {
 				t.Fatal(err)
@@ -195,9 +197,11 @@ func TestAdministratorRecoveryCapablePrimaryRetiresFailedDeployment(t *testing.T
 }
 
 func TestAdministratorRecoveryUsesRetainedMaintenanceAuthorization(t *testing.T) {
+	t.Parallel()
 	for _, via := range []string{"sync", "foreign"} {
 		for _, authorized := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/owner-%t", via, authorized), func(t *testing.T) {
+				t.Parallel()
 				p, rc, backend, original := administratorRecoveryFixture(t, authorized, 1)
 				closeRolloutWindow(rc)
 				// Even an unrelated desired-generation override must not authorize recovery.
@@ -250,9 +254,11 @@ func TestAdministratorRecoveryMissingOwnerFailsClosed(t *testing.T) {
 }
 
 func TestAdministratorRecoveryDeploymentWithoutLivePrimary(t *testing.T) {
+	t.Parallel()
 	for _, outage := range []string{"unreachable", "starting"} {
 		for _, phase := range []string{"failed", "RETRY_REQUIRED", "exhausted", "exhausted-error"} {
 			t.Run(outage+"/"+phase, func(t *testing.T) {
+				t.Parallel()
 				p, rc, backend, original := administratorRecoveryFixture(t, false, 1)
 				if _, err := p.Sync(t.Context(), rc); err != nil {
 					t.Fatal(err)

@@ -181,10 +181,21 @@ func TestProxyAdmissionThroughCoreSync(t *testing.T) {
 				}
 			}))
 			defer server.Close()
+			// Core status may probe the incumbent for health after the operation
+			// terminates. Only the admission protocol must skip that old task.
+			incumbent := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v1/proxy-serving" {
+					t.Error("serving incumbent was probed for admission")
+					http.NotFound(w, r)
+					return
+				}
+				server.Config.Handler.ServeHTTP(w, r)
+			}))
+			defer incumbent.Close()
 			_, port, _ := net.SplitHostPort(server.Listener.Addr().String())
 			options := agentapi.ClientOptions{BaseURL: server.URL, CAPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), Token: "demopx", DialInstanceContext: func(ctx context.Context, network, logical, instance string) (net.Conn, error) {
-				if instance != "127.0.0.1" {
-					t.Errorf("serving incumbent was probed for admission: %s", instance)
+				if instance == "127.0.0.2" {
+					return (&net.Dialer{}).DialContext(ctx, network, incumbent.Listener.Addr().String())
 				}
 				return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(instance, port))
 			}}

@@ -10,10 +10,10 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/enginetest"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
-	"github.com/KarakoramDev/Karakoram/internal/store"
 	"io"
 	"net"
 	"net/http"
@@ -146,11 +146,7 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), sealer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { st.Close() })
+	st := enginetest.OpenStore(t, filepath.Join(t.TempDir(), "state.db"), sealer)
 	p := New(Options{})
 	c := &domain.Cluster{Name: "demo", Namespace: "default", Generation: 1, Spec: domain.ClusterSpec{Topology: domain.Topology{Type: topology}}}
 	p.ApplyDefaults(&c.Spec)

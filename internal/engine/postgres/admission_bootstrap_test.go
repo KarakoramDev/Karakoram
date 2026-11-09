@@ -16,10 +16,12 @@ import (
 )
 
 func TestCreateHAWithDeploymentAdmission(t *testing.T) {
+	t.Parallel()
 	for _, backend := range []string{"zerops", "dokploy"} {
 		for _, members := range []int{3, 5} {
 			for _, cap := range []int{1, 2} {
 				t.Run(fmt.Sprintf("%s/members%d/cap%d", backend, members, cap), func(t *testing.T) {
+					t.Parallel()
 					p, rc, b := setup(t, "ha")
 					rc.Cluster.Spec.Components.Engine.Replicas = members
 					peers := make([]string, members)
