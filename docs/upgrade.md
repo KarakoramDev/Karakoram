@@ -589,6 +589,18 @@ marker deletion is not a general readiness or lost-password workaround.
 
 ### Known issues in v0.4.7
 
+- **On Dokploy, replacing a data member can put two members on the same node**
+  (MySQL Group Replication and PXC also in v0.4.0–v0.4.6; PostgreSQL HA and
+  Supabase also in v0.2.0–v0.4.6). After `karactl clusters replace-member` — for
+  a healthy member or one whose volume was lost — the new member can be placed
+  on a Swarm node that already runs another data member of the same cluster,
+  even when another node has room. The operation still reports success, but
+  losing that node then loses quorum. Check placement after every replacement
+  with `karactl clusters members CLUSTER` (the `PLACEMENTGROUP` column shows the
+  node). If two data members share a node, there is no reliable way to move one
+  in this release: replacing again or draining nodes can make it worse. Keep
+  the cluster as it is, take a fresh full backup, and upgrade when the fix is
+  released. A fix is planned for the next release.
 - **Karakoram's status checks cause heavy disk writes on the Dokploy manager**
   (also present in v0.2.0–v0.4.6). Karakoram reads Dokploy's API several times per
   second for each cluster, and Dokploy records every API-key use in its own
