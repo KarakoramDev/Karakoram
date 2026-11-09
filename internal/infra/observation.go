@@ -43,6 +43,35 @@ func ObserveParallel(ctx context.Context, count int, observe func(int) error) er
 }
 
 type observationContextKey struct{}
+type observationCacheKey struct{}
+type freshTaskInventoryKey struct{}
+
+// WithFreshTaskInventory requires task enumeration to bypass sweep snapshots.
+// Authorization must apply it separately for every pinned transport connection.
+func WithFreshTaskInventory(ctx context.Context) context.Context {
+	return context.WithValue(ctx, freshTaskInventoryKey{}, true)
+}
+
+func FreshTaskInventory(ctx context.Context) bool {
+	fresh, _ := ctx.Value(freshTaskInventoryKey{}).(bool)
+	return fresh
+}
+
+// WithObservationCache attaches a single-pass cache for immutable platform
+// facts. Callers must discard its entries after mutations or identity changes.
+// Live task authorization must still fetch current tasks on every connection.
+func WithObservationCache(ctx context.Context, cache *sync.Map) context.Context {
+	return context.WithValue(ctx, observationCacheKey{}, cache)
+}
+
+// ObservationCache is deliberately unavailable to lifecycle/mutation reads.
+func ObservationCache(ctx context.Context) *sync.Map {
+	if !IsObservation(ctx) {
+		return nil
+	}
+	cache, _ := ctx.Value(observationCacheKey{}).(*sync.Map)
+	return cache
+}
 
 // ObservationContext marks read-only inventory HTTP requests for admission.
 func ObservationContext(ctx context.Context) context.Context {
@@ -54,6 +83,9 @@ func ObservationContext(ctx context.Context) context.Context {
 
 // WithoutObservation lets serialized lifecycle work bypass the observation queue.
 func WithoutObservation(ctx context.Context) context.Context {
+	if cache, _ := ctx.Value(observationCacheKey{}).(*sync.Map); cache != nil {
+		ctx = WithObservationCache(ctx, nil)
+	}
 	if !IsObservation(ctx) {
 		return ctx
 	}

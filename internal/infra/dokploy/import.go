@@ -108,6 +108,7 @@ func (b *Backend) importCandidate(ctx context.Context, s infra.ServiceSpec) (*ap
 }
 
 func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec) (op infra.Op, err error) {
+	ctx = infra.WithoutObservation(ctx)
 	if err = b.mu.Lock(ctx); err != nil {
 		return op, err
 	}

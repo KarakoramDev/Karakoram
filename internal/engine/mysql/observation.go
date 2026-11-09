@@ -88,13 +88,21 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 				defer batch.Done()
 				out[i].infrastructure, _, out[i].infrastructureErr = mysqlReadValue(ctx, rc, m.Name, "platform-status", func(probe context.Context) (memberInfrastructure, error) {
 					var value memberInfrastructure
-					var err error
-					value.service, err = mysqlReadService(probe, rc, m.Name)
-					if err != nil || value.service == nil {
-						return value, err
-					}
-					value.containers, err = rc.Backend.Containers(probe, m.Name)
-					return value, err
+					// Service/storage validation and task inventory are independent
+					// reads; overlap them within the shared absolute pass deadline.
+					var serviceErr, containersErr error
+					var reads sync.WaitGroup
+					reads.Add(2)
+					go func() {
+						defer reads.Done()
+						value.service, serviceErr = mysqlReadService(probe, rc, m.Name)
+					}()
+					go func() {
+						defer reads.Done()
+						value.containers, containersErr = rc.Backend.Containers(probe, m.Name)
+					}()
+					reads.Wait()
+					return value, errors.Join(serviceErr, containersErr)
 				})
 				out[i].infrastructureObserved = out[i].infrastructureErr == nil
 			}()

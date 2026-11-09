@@ -19,6 +19,7 @@ var _ infra.ProxyDeploymentLookup = (*Backend)(nil)
 // upgrade: installing policy before uploading the new image must be safe for the
 // incumbent image too. Only a successfully deployed probe marker proves that.
 func (b *Backend) ProxyUpdatesPreserveServing(ctx context.Context, hostname string) (bool, error) {
+	ctx = infra.ObservationContext(ctx)
 	a, err := b.application(ctx, hostname)
 	if err != nil || a == nil {
 		return false, err
@@ -31,10 +32,7 @@ func (b *Backend) ProxyUpdatesPreserveServing(ctx context.Context, hostname stri
 // remains valid even after the control-plane build changes; no artifact render,
 // policy update, upload or provider mutation is allowed during cancellation.
 func (b *Backend) LookupProxyDeployment(ctx context.Context, hostname, requestID string) (*infra.Op, error) {
-	if err := b.mu.Lock(ctx); err != nil {
-		return nil, err
-	}
-	defer b.mu.Unlock()
+	ctx = infra.ObservationContext(ctx)
 	_, m, err := b.require(ctx, hostname)
 	if err != nil {
 		return nil, err

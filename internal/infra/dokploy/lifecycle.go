@@ -128,6 +128,7 @@ func (b *Backend) reloadUpdated(ctx context.Context, a *application, m metadata,
 	return encodeOp(o), nil
 }
 func (b *Backend) SetResources(ctx context.Context, hostname string, r infra.Resources) (infra.Op, error) {
+	ctx = infra.WithoutObservation(ctx)
 	if err := resourceValidation(r); err != nil {
 		return infra.Op{}, err
 	}
@@ -155,6 +156,7 @@ func (b *Backend) SetResources(ctx context.Context, hostname string, r infra.Res
 	return b.reloadUpdated(ctx, a, m, resourceSettings(m.Resources), "restart", false)
 }
 func (b *Backend) SetContainerCount(ctx context.Context, hostname string, min, max int) (infra.Op, error) {
+	ctx = infra.WithoutObservation(ctx)
 	if min < 1 || max < min {
 		return infra.Op{}, reject("invalid container bounds")
 	}
@@ -213,6 +215,7 @@ func (b *Backend) DeleteServiceByID(ctx context.Context, hostname, expectedID st
 // obsolete deployment healthy. deleteService still waits for terminal delivery.
 func (*Backend) SupersedesDeploymentsOnDelete() bool { return true }
 func (b *Backend) deleteService(ctx context.Context, hostname, expectedID string, fenced bool) (infra.Op, error) {
+	ctx = infra.WithoutObservation(ctx)
 	if err := b.mu.Lock(ctx); err != nil {
 		return infra.Op{}, err
 	}

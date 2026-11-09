@@ -26,11 +26,14 @@ func (b *Backend) Capabilities() infra.Capabilities {
 func (b *Backend) SetToken(token string) { b.c.setToken(token) }
 func reject(message string) error        { return &infra.RejectedError{Code: "dokploy", Message: message} }
 func (b *Backend) environment(ctx context.Context) (environment, error) {
-	var e environment
-	err := b.c.get(ctx, "environment.one", map[string]string{"environmentId": b.target.ID}, &e)
-	return e, err
+	return observationValue(ctx, b.readKey("environment", ""), func() (environment, error) {
+		var e environment
+		err := b.c.get(ctx, "environment.one", map[string]string{"environmentId": b.target.ID}, &e)
+		return e, err
+	})
 }
 func (b *Backend) ProjectInfo(ctx context.Context) (infra.Project, error) {
+	ctx = infra.ObservationContext(ctx)
 	e, err := b.environment(ctx)
 	if err != nil {
 		return infra.Project{}, err
@@ -38,9 +41,11 @@ func (b *Backend) ProjectInfo(ctx context.Context) (infra.Project, error) {
 	return infra.Project{ID: e.ID, Name: e.Project.Name + " / " + e.Name, PublicIPv4: b.target.Config["publicIPv4"], PublicIPv6: b.target.Config["publicIPv6"]}, nil
 }
 func (b *Backend) nodes(ctx context.Context) ([]node, error) {
-	var ns []node
-	err := b.c.get(ctx, "cluster.getNodes", nil, &ns)
-	return ns, err
+	return observationValue(ctx, b.readKey("nodes", ""), func() ([]node, error) {
+		var ns []node
+		err := b.c.get(ctx, "cluster.getNodes", nil, &ns)
+		return ns, err
+	})
 }
 func eligibleNodes(ns []node) []node {
 	labelled := false
@@ -143,6 +148,12 @@ func (b *Backend) network() string {
 	return defaultNetworkName(b.target.ID)
 }
 func (b *Backend) application(ctx context.Context, hostname string) (*application, error) {
+	return observationValue(ctx, b.readKey("application", hostname), func() (*application, error) {
+		return b.lookupApplication(ctx, hostname)
+	})
+}
+
+func (b *Backend) lookupApplication(ctx context.Context, hostname string) (*application, error) {
 	e, err := b.environment(ctx)
 	if err != nil {
 		return nil, err
@@ -235,7 +246,7 @@ func identityKey(k string) bool {
 	}
 	return false
 }
-func (b *Backend) observedService(ctx context.Context, a application, m metadata) (infra.Service, error) {
+func (b *Backend) observedService(ctx context.Context, a application, m metadata, readOnly bool) (infra.Service, error) {
 	s := observe(a, m)
 	if m.Importing {
 		return s, nil
@@ -249,13 +260,12 @@ func (b *Backend) observedService(ctx context.Context, a application, m metadata
 	if m.Kind != infra.KindRuntime || !m.Deployed && m.Pending == nil {
 		return s, nil
 	}
-	return b.observeRuntime(ctx, a, m)
+	return b.observeRuntimeMode(ctx, a, m, readOnly)
 }
 func (b *Backend) GetService(ctx context.Context, hostname string) (*infra.Service, error) {
-	if err := b.mu.Lock(ctx); err != nil {
-		return nil, err
-	}
-	defer b.mu.Unlock()
+	// Every caller gets bounded, concurrent reads, including namespace relays,
+	// legacy callers without an observation marker and undeployed services.
+	ctx = infra.ObservationContext(ctx)
 	a, err := b.application(ctx, hostname)
 	if err != nil {
 		return nil, err
@@ -264,14 +274,37 @@ func (b *Backend) GetService(ctx context.Context, hostname string) (*infra.Servi
 		return b.orphanService(ctx, hostname)
 	}
 	m, _ := parseMetadata(a.Description)
-	s, err := b.observedService(ctx, *a, m)
+	s, err := b.observedService(ctx, *a, m, true)
+	if errors.Is(err, errObservationMutation) {
+		s, err = b.reconcileObservedService(ctx, *a)
+	}
 	return &s, err
 }
-func (b *Backend) ListServices(ctx context.Context, prefix string) ([]infra.Service, error) {
+
+// reconcileObservedService is a mutation transaction, not an inventory read.
+// The read-only phase has established work to do; reload under exclusion before
+// authorizing recovery or advancing a lifecycle receipt.
+func (b *Backend) reconcileObservedService(ctx context.Context, observed application) (infra.Service, error) {
+	ctx = infra.WithoutObservation(ctx)
 	if err := b.mu.Lock(ctx); err != nil {
-		return nil, err
+		return infra.Service{}, err
 	}
 	defer b.mu.Unlock()
+	var current application
+	if err := b.c.get(ctx, "application.one", map[string]string{"applicationId": observed.ID}, &current); err != nil {
+		return infra.Service{}, err
+	}
+	m, ok := parseMetadata(current.Description)
+	previous, previousOK := parseMetadata(observed.Description)
+	if !ok || !previousOK || current.ID != observed.ID || m.Hostname != previous.Hostname ||
+		current.Name != previous.Hostname || current.Environment != b.target.ID ||
+		m.Environment != "" && m.Environment != b.target.ID {
+		return infra.Service{}, restoreConflict("application ownership changed during observation; refusing adoption")
+	}
+	return b.observedService(ctx, current, m, false)
+}
+func (b *Backend) ListServices(ctx context.Context, prefix string) ([]infra.Service, error) {
+	ctx = infra.ObservationContext(ctx)
 	e, err := b.environment(ctx)
 	if err != nil {
 		return nil, err
@@ -308,11 +341,7 @@ func (b *Backend) ListServices(ctx context.Context, prefix string) ([]infra.Serv
 		}
 		results[i].application = a
 		var err error
-		if m.Kind == infra.KindRuntime && (m.Deployed || m.Pending != nil) {
-			results[i].service, err = b.observeRuntimeMode(ctx, a, m, true)
-		} else {
-			results[i].service, err = b.observedService(ctx, a, m)
-		}
+		results[i].service, err = b.observedService(ctx, a, m, true)
 		if errors.Is(err, errObservationMutation) {
 			results[i].mutation = true
 			return nil
@@ -329,18 +358,7 @@ func (b *Backend) ListServices(ctx context.Context, prefix string) ([]infra.Serv
 			continue
 		}
 		if result.mutation {
-			mutationCtx := infra.WithoutObservation(ctx)
-			// Reload under the existing target lock: an earlier serialized
-			// decision may already have advanced this application's journal.
-			var current application
-			if err := b.c.get(mutationCtx, "application.one", map[string]string{"applicationId": result.application.ID}, &current); err != nil {
-				return nil, errors.Join(err, ctx.Err())
-			}
-			m, ok := parseMetadata(current.Description)
-			if !ok {
-				return nil, restoreConflict("application ownership changed during observation; refusing adoption")
-			}
-			service, err := b.observedService(mutationCtx, current, m)
+			service, err := b.reconcileObservedService(ctx, result.application)
 			if err != nil {
 				return nil, errors.Join(err, ctx.Err())
 			}

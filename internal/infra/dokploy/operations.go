@@ -117,6 +117,15 @@ func decodeOp(op infra.Op) (operation, error) {
 	return o, nil
 }
 func (b *Backend) tasks(ctx context.Context, appName string) ([]task, error) {
+	if infra.FreshTaskInventory(ctx) {
+		return b.readTasks(ctx, appName)
+	}
+	return observationValue(ctx, b.readKey("tasks", appName), func() ([]task, error) {
+		return b.readTasks(ctx, appName)
+	})
+}
+
+func (b *Backend) readTasks(ctx context.Context, appName string) ([]task, error) {
 	var ts []task
 	err := b.c.get(ctx, "docker.getServiceContainersByAppName", map[string]string{"appName": appName}, &ts)
 	if errors.Is(err, infra.ErrNotFound) {
@@ -150,6 +159,7 @@ func (b *Backend) operation(ctx context.Context, a *application, m metadata, act
 	return o, nil
 }
 func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deployment) (infra.Op, error) {
+	ctx = infra.WithoutObservation(ctx)
 	if err := d.Validate(); err != nil {
 		return infra.Op{}, reject(err.Error())
 	}
@@ -292,6 +302,7 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	return encodeOp(o), nil
 }
 func (b *Backend) action(ctx context.Context, hostname, action string) (infra.Op, error) {
+	ctx = infra.WithoutObservation(ctx)
 	if err := b.mu.Lock(ctx); err != nil {
 		return infra.Op{}, err
 	}
@@ -370,6 +381,7 @@ func contains(xs []string, s string) bool {
 	return false
 }
 func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	ctx = infra.WithoutObservation(ctx)
 	if err := b.mu.Lock(ctx); err != nil {
 		return infra.OpState{}, err
 	}

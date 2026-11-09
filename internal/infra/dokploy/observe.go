@@ -14,6 +14,7 @@ import (
 )
 
 func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Container, error) {
+	ctx = infra.ObservationContext(ctx)
 	a, err := b.application(ctx, hostname)
 	if err != nil {
 		return nil, err
@@ -52,6 +53,7 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 	return out, nil
 }
 func (b *Backend) Logs(ctx context.Context, hostname string, q infra.LogQuery) ([]infra.LogLine, error) {
+	ctx = infra.ObservationContext(ctx)
 	if !b.Capabilities().Logs {
 		return nil, infra.ErrUnsupported
 	}

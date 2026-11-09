@@ -85,7 +85,19 @@ func TestMySQLReadObservationIsolationAndInvalidation(t *testing.T) {
 	check(ctx, 1, 1)
 	check(freshMySQLReads(ctx), 2, 2)
 	check(normalMySQLReads(freshMySQLReads(ctx)), 1, 2)
+	scope := mysqlObservationScope(ctx, rc)
+	scope.inventory.Store("old-platform-fact", true)
+	probe, stopProbe := mysqlReadContext(ctx, rc)
+	defer stopProbe()
+	actor, stopActor := mysqlReadContext(freshMySQLReads(probe), rc)
+	defer stopActor()
+	if infra.ObservationCache(probe) != &scope.inventory || infra.ObservationCache(actor) != nil {
+		t.Fatal("fresh actor inherited the read-only platform snapshot")
+	}
 	invalidateMySQLReadObservation(ctx, rc)
+	if _, ok := scope.inventory.Load("old-platform-fact"); ok {
+		t.Fatal("mutation invalidation retained platform snapshot")
+	}
 	check(ctx, 2, 3)
 	rc.Cluster.Generation++
 	check(ctx, 2, 4)
@@ -357,6 +369,63 @@ func TestMySQLReadObservationOuterAggregatePreservesHTTPFailure(t *testing.T) {
 			remote = nil
 			if actual := observedFailureCause(err); !errors.As(actual, &remote) || remote.StatusCode != http.StatusServiceUnavailable {
 				t.Fatalf("status classification discarded the retained HTTP failure: %v", actual)
+			}
+		})
+	}
+}
+
+type failedInfrastructureObservationBackend struct {
+	infra.Backend
+	serviceErr, containersErr error
+}
+
+func (b failedInfrastructureObservationBackend) GetService(context.Context, string) (*infra.Service, error) {
+	return nil, b.serviceErr
+}
+
+func (b failedInfrastructureObservationBackend) Containers(context.Context, string) ([]infra.Container, error) {
+	return nil, b.containersErr
+}
+
+func TestMySQLParallelInfrastructurePreservesFailureBesideServiceDeferral(t *testing.T) {
+	for _, deferred := range []bool{false, true} {
+		t.Run(fmt.Sprintf("serviceDeferred=%t", deferred), func(t *testing.T) {
+			rc, s := quorumObservationFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v1/status" {
+					_ = json.NewEncoder(w).Encode(agentapi.Status{})
+				} else {
+					_ = json.NewEncoder(w).Encode(myspec.StatusResponse{MemberState: "ONLINE", MemberRole: "PRIMARY"})
+				}
+			})
+			actual := errors.New("task inventory unavailable")
+			backend := failedInfrastructureObservationBackend{containersErr: actual}
+			if deferred {
+				backend.serviceErr = engine.ErrObservationBudgetExhausted
+			}
+			rc.Backend = backend
+			at := time.Now().UTC().Add(-time.Second)
+			rc.Cluster.Status = domain.ClusterStatus{Phase: domain.PhaseReady, ObservedAt: at, ObservationEpoch: "previous"}
+			for _, m := range s.Members {
+				rc.Cluster.Status.Members = append(rc.Cluster.Status.Members, domain.MemberStatus{
+					Name: m.Name, Health: true, Agent: domain.AgentStatus{Healthy: true, LastSeen: at},
+				})
+			}
+			observed := observeStatusMembers(engine.WithObservationPass(t.Context()), rc, s.Members)
+			for i, sample := range observed {
+				if !errors.Is(sample.infrastructureErr, actual) {
+					t.Fatalf("member %s dropped independent task failure: %v", s.Members[i].Name, sample.infrastructureErr)
+				}
+			}
+			if deferred {
+				status, err, ok := deferredMySQLObservation(rc, s, observed)
+				if !ok || !errors.Is(err, actual) || !errors.Is(err, engine.ErrObservationBudgetExhausted) {
+					t.Fatal("deferral erased genuine infrastructure failure", err)
+				}
+				for _, m := range status.Members {
+					if m.Health {
+						t.Fatal("genuine task failure retained old positive health", m.Name)
+					}
+				}
 			}
 		})
 	}

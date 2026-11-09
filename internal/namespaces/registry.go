@@ -640,7 +640,7 @@ func (r *Registry) authorizeInstance(ctx context.Context, namespace, member, ins
 	if err != nil {
 		return err
 	}
-	containers, err := b.Containers(ctx, member)
+	containers, err := b.Containers(infra.WithFreshTaskInventory(ctx), member)
 	if err != nil {
 		return err
 	}

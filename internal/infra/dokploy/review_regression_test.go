@@ -159,7 +159,11 @@ func TestTargetGuardWaitHonorsCancellationDuringUpload(t *testing.T) {
 		}()
 		select {
 		case err := <-returned:
-			if !errors.Is(err, context.DeadlineExceeded) {
+			if action == "observe" {
+				if err != nil {
+					t.Errorf("unrelated observation blocked behind upload: %v", err)
+				}
+			} else if !errors.Is(err, context.DeadlineExceeded) {
 				t.Errorf("%s ignored cancellation: %v", action, err)
 			}
 		case <-time.After(time.Second):
@@ -175,7 +179,7 @@ func TestTargetGuardWaitHonorsCancellationDuringUpload(t *testing.T) {
 		t.Fatal(err)
 	}
 	if fakeMeta(t, f, "upload").Pending == nil || fakeCalls(f, "application.dropDeployment") != 1 {
-		t.Fatal("canceled observer changed upload's durable fence")
+		t.Fatal("unrelated reader or canceled waiter changed upload's durable fence")
 	}
 }
 
@@ -253,5 +257,71 @@ func TestStorageBindsHoldersOwnIdentityNotRuntimesMarker(t *testing.T) {
 	f.mu.Unlock()
 	if service, err := b.GetService(t.Context(), "runtime"); err != nil || service == nil || service.Status != infra.StatusRunning {
 		t.Fatalf("original differently-marked holder was not restored: %+v %v", service, err)
+	}
+}
+
+func TestObservationMutationReloadRejectsChangedApplicationOwnership(t *testing.T) {
+	for _, mode := range []string{"get", "list"} {
+		for _, change := range []string{"name", "environment", "metadata-environment", "legacy-empty-metadata-environment"} {
+			t.Run(mode+"/"+change, func(t *testing.T) {
+				f := newFakeAPI(t)
+				b := fakeBackend(t, f, nil)
+				id := importFake(t, b, runtimeSpec("runtime", "")).Services["runtime"]
+				deployFake(t, b, "runtime", "")
+				m := fakeMeta(t, f, "runtime")
+				// Missing legacy intent requires a journal mutation, so the
+				// observation must reload before authorizing application.update.
+				m.Desired = ""
+				f.mu.Lock()
+				f.apps[id].row["description"] = m.description()
+				f.environments["foreign"] = map[string]any{"environmentId": "foreign", "projectId": "project", "name": "foreign"}
+				reads, mutations := 0, 0
+				f.requestHook = func(_ http.ResponseWriter, r *http.Request) (bool, func()) {
+					f.mu.Lock()
+					defer f.mu.Unlock()
+					if r.Method != http.MethodGet {
+						mutations++
+					}
+					if r.URL.Path == "/api/application.one" && r.URL.Query().Get("applicationId") == id {
+						reads++
+						if reads == 2 {
+							switch change {
+							case "name":
+								f.apps[id].row["name"] = "foreign"
+							case "environment":
+								f.apps[id].row["environmentId"] = "foreign"
+							case "metadata-environment":
+								m.Environment = "foreign"
+								f.apps[id].row["description"] = m.description()
+							case "legacy-empty-metadata-environment":
+								m.Environment = ""
+								f.apps[id].row["description"] = m.description()
+							}
+						}
+					}
+					return false, nil
+				}
+				f.mu.Unlock()
+				var err error
+				if mode == "get" {
+					_, err = b.GetService(t.Context(), "runtime")
+				} else {
+					_, err = b.ListServices(t.Context(), "runtime")
+				}
+				f.mu.Lock()
+				gotReads, gotMutations := reads, mutations
+				f.mu.Unlock()
+				if gotReads != 2 {
+					t.Fatalf("test did not reach the locked application reload: %d reads", gotReads)
+				}
+				if change == "legacy-empty-metadata-environment" {
+					if err != nil || gotMutations != 1 {
+						t.Fatalf("legacy empty metadata environment lost its existing admission: err=%v mutations=%d", err, gotMutations)
+					}
+				} else if !errors.Is(err, infra.ErrConflict) || gotMutations != 0 {
+					t.Fatalf("changed application ownership authorized mutation: err=%v mutations=%d", err, gotMutations)
+				}
+			})
+		}
 	}
 }

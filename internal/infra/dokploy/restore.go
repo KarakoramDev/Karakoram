@@ -109,6 +109,12 @@ func (b *Backend) ownsService(a application, m metadata, s *swarmService) bool {
 // swarm.getNodeApps returns [] on error: only a nonempty, valid inventory is
 // evidence of a successful read. An empty/null result is UNKNOWN, not absence.
 func (b *Backend) serviceInventory(ctx context.Context) ([]swarmSummary, error) {
+	return observationValue(ctx, b.readKey("services", ""), func() ([]swarmSummary, error) {
+		return b.readServiceInventory(ctx)
+	})
+}
+
+func (b *Backend) readServiceInventory(ctx context.Context) ([]swarmSummary, error) {
 	var services []swarmSummary
 	if err := b.c.get(ctx, "swarm.getNodeApps", nil, &services); err != nil {
 		return nil, err
@@ -281,10 +287,6 @@ func (b *Backend) mutationReady(ctx context.Context, a *application, m *metadata
 	return nil
 }
 
-func (b *Backend) observeRuntime(ctx context.Context, a application, m metadata) (infra.Service, error) {
-	return b.observeRuntimeMode(ctx, a, m, false)
-}
-
 // observeRuntimeMode may stop before a mutation so inventory workers can read
 // concurrently. The caller must hold the target lock before permitting writes.
 func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metadata, readOnly bool) (infra.Service, error) {
@@ -388,7 +390,14 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 	var service *swarmService
 	var storageErr, inspectionErr error
 	var ds []deploymentRecord
-	readErr := infra.ObserveParallel(ctx, 3, func(i int) error {
+	var ts []task
+	readCount := 3
+	if readOnly {
+		// Task inventory is independent of ownership/storage validation. Keep
+		// lifecycle transactions sequential, but overlap the immutable reads.
+		readCount++
+	}
+	readErr := infra.ObserveParallel(ctx, readCount, func(i int) error {
 		switch i {
 		case 0:
 			service, inspectionErr = b.inspectService(ctx, a.AppName)
@@ -396,9 +405,13 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 		case 1:
 			storageErr = b.checkStorage(ctx, a, m)
 			return storageErr
-		default:
+		case 2:
 			var err error
 			ds, err = b.deployments(ctx, a.ID)
+			return err
+		default:
+			var err error
+			ts, err = b.tasks(ctx, a.AppName)
 			return err
 		}
 	})
@@ -470,9 +483,11 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 		}
 		return b.restoreRuntime(ctx, a, m)
 	}
-	ts, err := b.tasks(ctx, a.AppName)
-	if err != nil {
-		return s, err
+	if !readOnly {
+		ts, err = b.tasks(ctx, a.AppName)
+		if err != nil {
+			return s, err
+		}
 	}
 	s.Status = infra.StatusCreating
 	for _, t := range ts {

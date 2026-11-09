@@ -17,7 +17,10 @@ type instanceInventoryBackend struct {
 	err         error
 }
 
-func (b *instanceInventoryBackend) Containers(_ context.Context, member string) ([]infra.Container, error) {
+func (b *instanceInventoryBackend) Containers(ctx context.Context, member string) ([]infra.Container, error) {
+	if !infra.FreshTaskInventory(ctx) {
+		return nil, errors.New("authorization did not require fresh task inventory")
+	}
 	return b.inventories[member], b.err
 }
 

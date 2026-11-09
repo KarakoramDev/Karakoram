@@ -7,6 +7,8 @@ import (
 	"context"
 	"sort"
 	"strings"
+
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func envKey(k string) bool {
@@ -127,6 +129,7 @@ func (b *Backend) SetEnvVars(ctx context.Context, hostname string, values map[st
 	return b.setEnv(ctx, hostname, values, false)
 }
 func (b *Backend) setEnv(ctx context.Context, hostname string, values map[string]string, secret bool) error {
+	ctx = infra.WithoutObservation(ctx)
 	if _, err := encodeEnvironment(values); err != nil {
 		return err
 	}

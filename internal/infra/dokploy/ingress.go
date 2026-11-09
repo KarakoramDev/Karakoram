@@ -77,6 +77,7 @@ func samePort(a port, p infra.PublicPort) bool {
 	return a.PublishedPort == p.Port && a.TargetPort == p.TargetPort && a.Protocol == p.Protocol && a.PublishMode == "ingress"
 }
 func (b *Backend) EnsurePublicPort(ctx context.Context, hostname string, p infra.PublicPort) error {
+	ctx = infra.WithoutObservation(ctx)
 	if err := validatePublicPort(p); err != nil {
 		return err
 	}
@@ -152,6 +153,7 @@ func (b *Backend) EnsurePublicPort(ctx context.Context, hostname string, p infra
 	return nil
 }
 func (b *Backend) ListPublicPorts(ctx context.Context) ([]infra.PublicPortRoute, error) {
+	ctx = infra.ObservationContext(ctx)
 	e, err := b.environment(ctx)
 	if err != nil {
 		return nil, err
@@ -187,6 +189,7 @@ func (b *Backend) ListPublicPorts(ctx context.Context) ([]infra.PublicPortRoute,
 	return out, nil
 }
 func (b *Backend) DeletePublicPorts(ctx context.Context, hostname string) error {
+	ctx = infra.WithoutObservation(ctx)
 	if err := b.mu.Lock(ctx); err != nil {
 		return err
 	}
@@ -263,6 +266,7 @@ const endpointRepairCooldown = 5 * time.Minute
 // Reloads are journaled and bounded independently of EnsurePublicPort's row
 // idempotency, so upgrading can also repair already-published broken services.
 func (b *Backend) RepairPublishedEndpoint(ctx context.Context, hostname string, reachable bool) (bool, error) {
+	ctx = infra.WithoutObservation(ctx)
 	if err := b.mu.Lock(ctx); err != nil {
 		return false, err
 	}
@@ -448,6 +452,7 @@ func (b *Backend) reconcileDomains(ctx context.Context, a *application, m *metad
 }
 
 func (b *Backend) SetSubdomainAccess(ctx context.Context, hostname string, enabled bool) (infra.Op, error) {
+	ctx = infra.WithoutObservation(ctx)
 	if enabled && !b.Capabilities().PublicHTTPS {
 		return infra.Op{}, infra.ErrUnsupported
 	}
@@ -500,6 +505,7 @@ func (b *Backend) SetSubdomainAccess(ctx context.Context, hostname string, enabl
 	return op, err
 }
 func (b *Backend) SubdomainURLs(ctx context.Context, hostname string) ([]string, error) {
+	ctx = infra.ObservationContext(ctx)
 	a, err := b.application(ctx, hostname)
 	if err != nil {
 		return nil, err

@@ -40,6 +40,7 @@ type mysqlReadCall struct {
 
 type mysqlReadScope struct {
 	mu                  sync.Mutex
+	inventory           sync.Map
 	deadline            time.Time
 	quorumDeadline      time.Time
 	identity            mysqlReadIdentity
@@ -86,7 +87,7 @@ func mysqlObservationScope(ctx context.Context, rc *engine.Context) *mysqlReadSc
 func mysqlReadContext(ctx context.Context, rc *engine.Context) (context.Context, context.CancelFunc) {
 	if mysqlReadsFresh(ctx) {
 		probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
-		return infra.ObservationContext(probe), cancel
+		return infra.WithObservationCache(infra.ObservationContext(probe), nil), cancel
 	}
 	engine.ObservationPassStart(ctx, now(rc))
 	scope := mysqlObservationScope(ctx, rc)
@@ -108,7 +109,7 @@ func mysqlReadContext(ctx context.Context, rc *engine.Context) (context.Context,
 	deadline := *budget
 	scope.mu.Unlock()
 	probe, cancel := context.WithDeadline(ctx, deadline)
-	return infra.ObservationContext(probe), cancel
+	return infra.WithObservationCache(infra.ObservationContext(probe), &scope.inventory), cancel
 }
 
 // Invalidation discards in-flight and completed payloads, never the pass budget.
@@ -123,6 +124,7 @@ func invalidateMySQLReadObservation(ctx context.Context, rc *engine.Context) {
 		scope := value.(*mysqlReadScope)
 		scope.mu.Lock()
 		scope.identityInvalidated = scope.identityInvalidated || scope.hasSample
+		scope.inventory.Clear()
 		scope.calls = nil
 		scope.initialized = false
 		scope.mu.Unlock()
@@ -185,6 +187,7 @@ func mysqlReadCachedValue(ctx context.Context, rc *engine.Context, key mysqlRead
 	scope.mu.Lock()
 	if !scope.match(identity, s) {
 		scope.identityInvalidated = scope.identityInvalidated || scope.initialized && scope.hasSample
+		scope.inventory.Clear()
 		scope.identity, scope.initialized = identity, true
 		scope.members = make([]mysqlReadMember, len(s.Members))
 		for i, m := range s.Members {
