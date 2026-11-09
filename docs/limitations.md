@@ -74,6 +74,21 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Known issues in v0.4.7
 
+<a id="mysql-gr-lost-member-cancellation"></a>
+
+- **Cancelling the replacement of a lost MySQL Group Replication member can
+  leave the cluster stuck** (also present in v0.4.0–v0.4.6). When replacing a
+  member whose volume is lost (the member and its data are gone), cancelling
+  the `karactl clusters replace-member CLUSTER MEMBER` operation with
+  `karactl operations cancel ID` after the new member has joined the group makes
+  the rollback wait for the lost member to come back, which never happens.
+  The cluster keeps serving, but new replacements and agent upgrades are
+  blocked and there is no supported way to recover in this release. Do not
+  cancel these replacements once they have started; let them finish. If a
+  cluster is already stuck, keep it serving, take a full backup and upgrade
+  when the fix is released, or open an issue. A fix is planned for the next
+  release.
+
 <a id="dokploy-neo4j-minimum-memory"></a>
 
 - **On Dokploy, a Neo4j cluster created with 1 GiB of memory never becomes ready**
