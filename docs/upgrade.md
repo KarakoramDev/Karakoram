@@ -589,6 +589,18 @@ marker deletion is not a general readiness or lost-password workaround.
 
 ### Known issues in v0.4.7
 
+- **Cancelling the replacement of a lost MySQL Group Replication member can
+  leave the cluster stuck** (also present in v0.4.0–v0.4.6). When replacing a
+  member whose volume is lost (the member and its data are gone), cancelling
+  the `karactl clusters replace-member CLUSTER MEMBER` operation with
+  `karactl operations cancel ID` after the new member has joined the group makes
+  the rollback wait for the lost member to come back, which never happens.
+  The cluster keeps serving, but new replacements and agent upgrades are
+  blocked and there is no supported way to recover in this release. Do not
+  cancel these replacements once they have started; let them finish. If a
+  cluster is already stuck, keep it serving, take a full backup and upgrade
+  when the fix is released, or open an issue. A fix is planned for the next
+  release.
 - **On Dokploy, a Neo4j cluster created with 1 GiB of memory never becomes ready**
   (v0.4.7). At the documented minimum of 1 GiB, a new single-member Neo4j cluster
   on Dokploy runs out of memory and CPU while starting: it never reports Ready

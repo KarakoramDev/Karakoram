@@ -632,6 +632,8 @@ and a message directing the operator to verify healthy surviving members, then r
 karactl clusters replace-member CLUSTER MEMBER --wait
 ```
 
+**Known issue:** do not cancel a Group Replication replacement after it starts when the old member and its volume are gone; [cancellation can leave the serving cluster stuck](../limitations.md#mysql-gr-lost-member-cancellation).
+
 Explicit replacement is unchanged and retains the native safety checks below.
 While a confirmed-lost member awaits explicit replacement, new rolling
 version/resource/parameter/proxy changes are deferred without taking maintenance
