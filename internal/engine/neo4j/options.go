@@ -62,6 +62,9 @@ func MemoryMB(ramGiB float64) (heap, pageCache int) {
 	pageCache = max(64, int(mb*.25)/64*64)
 	return
 }
+
+// memory also serves existing members below the create/resize admission floor.
+// Keep the legacy 1 GiB rendering floor so unchanged members can still restart.
 func memory(ram float64, o EngineOptions) (int, int, error) {
 	if math.IsNaN(ram) || math.IsInf(ram, 0) || ram < 1 {
 		return 0, 0, engine.Invalid("minimum RAM must be at least 1 GiB")

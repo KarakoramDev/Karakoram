@@ -99,7 +99,13 @@ func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 
 var clusterName = regexp.MustCompile(`^[a-z][a-z0-9]{0,11}$`)
 
-func (*Provider) Validate(_ context.Context, old, n *domain.Cluster) error {
+func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
+	return p.ValidateVolumeAdmission(ctx, old, old, n)
+}
+
+// ValidateVolumeAdmission keeps resource grandfathering tied to persisted
+// intent, even when observed volume sizes correct a stale desired disk bound.
+func (*Provider) ValidateVolumeAdmission(_ context.Context, old, volumeBaseline, n *domain.Cluster) error {
 	if n == nil {
 		return engine.Invalid("cluster is nil")
 	}
@@ -121,6 +127,12 @@ func (*Provider) Validate(_ context.Context, old, n *domain.Cluster) error {
 	}
 	if err := (engine.ComponentSet{{Name: "engine", MinReplicas: 1, MaxReplicas: 1}}).Validate(domain.Components{Extra: map[string]domain.ComponentSpec{"engine": s.Components.Engine}}); err != nil {
 		return err
+	}
+	// Keep existing small members operable, including configuration replay and
+	// agent upgrades. Any resource edit must meet the current admission floor.
+	if s.Components.Engine.Resources.MinRAM < 2 &&
+		(old == nil || !reflect.DeepEqual(old.Spec.Components.Engine.Resources, s.Components.Engine.Resources)) {
+		return engine.Invalid("Neo4j requires at least 2 GiB minimum RAM for new clusters and resource changes")
 	}
 	if s.Components.Engine.Resources.MinRAM < 1 || s.Components.Engine.Resources.MinDisk < 1 {
 		return engine.Invalid("Neo4j requires at least 1 GiB RAM and 1 GB disk")
@@ -152,7 +164,9 @@ func (*Provider) Validate(_ context.Context, old, n *domain.Cluster) error {
 		if old.Spec.Version != s.Version && !((old.Spec.Version == "2026.09.0" && s.Version == "2026.10.0") || ((old.Spec.Version == "2026.09.0" || old.Spec.Version == "2026.10.0") && s.Version == defaultVersion)) {
 			return engine.Invalid("unsupported Neo4j upgrade or downgrade")
 		}
-		a, b := old.Spec.Components.Engine.Resources, s.Components.Engine.Resources
+	}
+	if volumeBaseline != nil {
+		a, b := volumeBaseline.Spec.Components.Engine.Resources, s.Components.Engine.Resources
 		if b.MinDisk < a.MinDisk || b.MaxDisk < a.MaxDisk {
 			return engine.Invalid("data volumes cannot shrink")
 		}

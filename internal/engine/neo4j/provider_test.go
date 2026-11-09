@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -227,6 +228,9 @@ func TestMemoryMB(t *testing.T) {
 		if h != tc.heap || p != tc.page {
 			t.Fatalf("%g GiB: %d/%d", tc.ram, h, p)
 		}
+		if h+p > int(tc.ram*1024*.8) {
+			t.Fatal("derived memory exceeds the configured budget")
+		}
 	}
 }
 func TestDescribe(t *testing.T) {
@@ -286,6 +290,98 @@ func TestValidation(t *testing.T) {
 	if err := p.Validate(t.Context(), &n, &base); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestMinimumMemoryAdmission(t *testing.T) {
+	p := New(Options{})
+	base := domain.Cluster{Name: "demo"}
+	p.ApplyDefaults(&base.Spec)
+	for _, ram := range []float64{.5, 1, 1.5, 1.99, 2} {
+		t.Run(fmt.Sprintf("create-%g", ram), func(t *testing.T) {
+			next := base
+			next.Spec.Components.Engine.Resources.MinRAM = ram
+			next.Spec.Components.Engine.Resources.MaxRAM = ram
+			err := p.Validate(t.Context(), nil, &next)
+			if ram < 2 {
+				if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "at least 2 GiB minimum RAM") {
+					t.Fatalf("missing minimum diagnostic: %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	legacy := base
+	legacy.Spec.Components.Engine.Resources.MinRAM = 1
+	legacy.Spec.Components.Engine.Resources.MaxRAM = 1
+	for _, tc := range []struct {
+		name   string
+		old    domain.Cluster
+		change func(*domain.Cluster)
+		reject bool
+	}{
+		{"unchanged", legacy, func(*domain.Cluster) {}, false},
+		{"unrelated", legacy, func(c *domain.Cluster) {
+			c.Spec.EngineOptions = json.RawMessage(`{"settings":{"db.transaction.timeout":"30s"}}`)
+		}, false},
+		{"cpu", legacy, func(c *domain.Cluster) { c.Spec.Components.Engine.Resources.MaxCPU = 2 }, true},
+		{"disk", legacy, func(c *domain.Cluster) { c.Spec.Components.Engine.Resources.MaxDisk++ }, true},
+		{"ceiling", legacy, func(c *domain.Cluster) { c.Spec.Components.Engine.Resources.MaxRAM = 2 }, true},
+		{"partial-increase", legacy, func(c *domain.Cluster) {
+			c.Spec.Components.Engine.Resources.MinRAM = 1.5
+			c.Spec.Components.Engine.Resources.MaxRAM = 2
+		}, true},
+		{"resize", legacy, func(c *domain.Cluster) {
+			c.Spec.Components.Engine.Resources.MinRAM = 2
+			c.Spec.Components.Engine.Resources.MaxRAM = 2
+		}, false},
+		{"shrink", base, func(c *domain.Cluster) { c.Spec.Components.Engine.Resources.MinRAM = 1 }, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			next := tc.old
+			tc.change(&next)
+			err := p.Validate(t.Context(), &tc.old, &next)
+			if tc.reject {
+				if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "at least 2 GiB minimum RAM") {
+					t.Fatalf("missing minimum diagnostic: %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestLegacyMemoryReconciliationAndAgentUpgrade(t *testing.T) {
+	p, rc, b, a := setup(t)
+	rc.Cluster.Spec.Components.Engine.Resources.MinRAM = 1
+	rc.Cluster.Spec.Components.Engine.Resources.MaxRAM = 1
+	if err := rc.Store.(*store.Store).UpdateClusterSpec(t.Context(), rc.Cluster.Ref(), rc.Cluster.Spec); err != nil {
+		t.Fatal(err)
+	}
+	converge(t, p, rc)
+	if a.spec.HeapMB != 384 || a.spec.PageCacheMB != 256 {
+		t.Fatalf("legacy configuration changed: heap=%d page=%d", a.spec.HeapMB, a.spec.PageCacheMB)
+	}
+	build, _ := upgradeAgent(t, rc, a)
+	*build = engine.CurrentAgentBuild().Build
+	wrapped := &upgradeBackend{Backend: b}
+	rc.Backend = wrapped
+	op := upgradeOperation(true)
+	for range 12 {
+		result, err := p.RunOperation(t.Context(), rc, op)
+		if err != nil {
+			t.Fatal(err)
+		}
+		op.Checkpoint = result.Checkpoint
+		if result.Done {
+			if len(wrapped.names) != 1 || rc.Cluster.Spec.Components.Engine.Resources.MinRAM != 1 {
+				t.Fatal("legacy agent upgrade changed resources or skipped deployment")
+			}
+			return
+		}
+	}
+	t.Fatal("legacy agent upgrade did not finish")
 }
 func TestCreateMemberConfigAndStatus(t *testing.T) {
 	p, rc, b, _ := setup(t)

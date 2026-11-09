@@ -180,6 +180,7 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 		}
 	}
 	if previous != nil {
+		persisted := previous
 		if !have.DiskGrowth {
 			var err error
 			previous, err = engine.VolumeAdmissionBaseline(ctx, p, previous, c.Spec, resolvedBackend)
@@ -191,7 +192,13 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 				return &r
 			}
 		}
-		if err := p.Validate(ctx, previous, c); err != nil {
+		var validationErr error
+		if validator, ok := p.(engine.VolumeAdmissionValidator); ok {
+			validationErr = validator.ValidateVolumeAdmission(ctx, persisted, previous, c)
+		} else {
+			validationErr = p.Validate(ctx, previous, c)
+		}
+		if err := validationErr; err != nil {
 			r := s.failure(err)
 			return &r
 		}

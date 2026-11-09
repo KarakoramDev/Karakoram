@@ -24,6 +24,13 @@ type VolumeInventory interface {
 	VolumeReferences(*domain.Cluster) ([]VolumeReference, error)
 }
 
+// VolumeAdmissionValidator separates persisted intent from observed volume
+// bounds. Resource-change policies must compare previous, while disk shrink
+// rules use volumeBaseline, which may correct unapplied desired disk growth.
+type VolumeAdmissionValidator interface {
+	ValidateVolumeAdmission(ctx context.Context, previous, volumeBaseline, next *domain.Cluster) error
+}
+
 // ObserveVolumeSize reads the backend's volume record and fences identity reuse.
 // A missing or still-importing record has no acknowledged sizing observation.
 func ObserveVolumeSize(ctx context.Context, b infra.Backend, hostname, id string) (*domain.Resources, error) {

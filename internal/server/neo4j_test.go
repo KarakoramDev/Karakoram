@@ -13,6 +13,8 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/neo4j"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/fake"
 )
 
 type fakeNeo4jAccess struct {
@@ -195,6 +197,85 @@ func TestNeo4jRestrictedTokenDeniesPasswordReveal(t *testing.T) {
 		w := call(s, "POST", tc.path, tc.body, token)
 		if w.Code != http.StatusForbidden || p.writes != 0 {
 			t.Fatalf("restricted token allowed password mutation: %d %s", w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestNeo4jMinimumMemoryAdmission(t *testing.T) {
+	for _, kind := range []string{"zerops", "dokploy", "nomad"} {
+		for _, method := range []string{"PATCH", "PUT"} {
+			t.Run(kind+"/"+method, func(t *testing.T) {
+				s, _, token := testServer(t)
+				p := neo4j.New(neo4j.Options{})
+				var err error
+				s.Registry, err = engine.NewRegistry(p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				caps := infra.Capabilities{DiskGrowth: kind == "zerops"}
+				s.Backends, err = infra.NewRegistry(fake.NewFactory(fake.Options{Name: kind, Capabilities: caps}))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := s.Store.CreateNamespace(t.Context(), &domain.Namespace{Name: "target", Backend: kind, Phase: "Ready"}); err != nil {
+					t.Fatal(err)
+				}
+				s.namespaces = exposureNamespaces{backends: map[string]infra.Backend{"target": fake.New(fake.Options{Name: kind, Capabilities: caps})}}
+				for _, prefix := range []string{"/api/v1/dry-run/clusters", "/api/v1/clusters"} {
+					w := call(s, "POST", prefix+"?namespace=target", `{"name":"small","spec":{"provider":"neo4j","components":{"engine":{"resources":{"minRam":1,"maxRam":1}}}}}`, token)
+					if w.Code != 400 || !strings.Contains(w.Body.String(), "at least 2 GiB minimum RAM") {
+						t.Fatalf("below-minimum create: %d %s", w.Code, w.Body.String())
+					}
+				}
+				if w := call(s, "POST", "/api/v1/clusters?namespace=target", `{"name":"small","spec":{"provider":"neo4j"}}`, token); w.Code != 201 {
+					t.Fatal(w.Code, w.Body.String())
+				}
+				ref := domain.ClusterRef{Namespace: "target", Name: "small"}
+				c, err := s.Store.GetCluster(t.Context(), ref)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Seed a persisted pre-upgrade member rather than admitting a new
+				// undersized cluster through the changed create path.
+				c.Spec.Components.Engine.Resources.MinRAM = 1
+				c.Spec.Components.Engine.Resources.MaxRAM = 1
+				if err := s.Store.UpdateClusterSpec(t.Context(), ref, c.Spec); err != nil {
+					t.Fatal(err)
+				}
+				for _, prefix := range []string{"/api/v1/dry-run/clusters/", "/api/v1/clusters/"} {
+					for _, tc := range []struct {
+						name     string
+						min, max float64
+						status   int
+					}{
+						{"unchanged", 1, 1, 200},
+						{"partial-resize", 1.5, 2, 400},
+						{"ceiling-only", 1, 2, 400},
+						{"resize", 2, 2, 200},
+						{"shrink", 1, 2, 400},
+					} {
+						next := c.Spec
+						next.EngineOptions = json.RawMessage(`{"settings":{"db.transaction.timeout":"30s"}}`)
+						next.Components.Engine.Resources.MinRAM = tc.min
+						next.Components.Engine.Resources.MaxRAM = tc.max
+						var spec any = specPatchBase(next)
+						if method == "PATCH" {
+							spec = map[string]any{"engineOptions": next.EngineOptions}
+							if tc.name != "unchanged" {
+								spec.(map[string]any)["components"] = map[string]any{"engine": map[string]any{"resources": map[string]any{"minRam": tc.min, "maxRam": tc.max}}}
+							}
+						}
+						body, err := json.Marshal(map[string]any{"spec": spec})
+						if err != nil {
+							t.Fatal(err)
+						}
+						w := call(s, method, prefix+"small?namespace=target", string(body), token)
+						if w.Code != tc.status || (tc.status == 400 && !strings.Contains(w.Body.String(), "at least 2 GiB minimum RAM")) {
+							t.Fatalf("%s %s %s: %d %s", method, prefix, tc.name, w.Code, w.Body.String())
+						}
+					}
+				}
+			})
 		}
 	}
 }
