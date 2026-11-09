@@ -5,6 +5,7 @@ package namespaces
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"sync"
@@ -29,7 +30,11 @@ func RelayRuntime(publicURL, namespace string) infra.RuntimeSpec {
 }
 
 // Run reconciles projects independently. One unavailable project cannot stall another.
+// Local relay state runs every 15 s; settled relays check platform drift every
+// SnapshotListingInterval, like target listings, because liveness is pushed by
+// their hub sessions.
 func (r *Registry) Run(ctx context.Context) error {
+	ctx = infra.WithRequestCaller(ctx, infra.CallerNamespace)
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	var workers sync.WaitGroup
@@ -138,9 +143,14 @@ func (r *Registry) syncSessionSnapshot(ctx context.Context, n *domain.Namespace,
 	}
 }
 
+// step always maintains credentials, hub policy and session state. Only settled
+// relay platform reconciliation is reduced to the 60 s target-listing cadence.
 func (r *Registry) step(ctx context.Context, name string) {
 	n, err := r.o.Store.GetNamespaceForUpdate(ctx, name)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			r.forgetRelayCheck(name)
+		}
 		return
 	}
 	b := r.backend(name)
@@ -180,6 +190,7 @@ func (r *Registry) step(ctx context.Context, name string) {
 			if err := r.o.Store.DeleteNamespace(ctx, n); err == nil {
 				r.mu.Lock()
 				delete(r.backends, name)
+				delete(r.relayChecks, name)
 				r.mu.Unlock()
 				r.event(ctx, n, "NamespaceDeleted", "Namespace deleted")
 			}
@@ -209,8 +220,14 @@ func (r *Registry) step(ctx context.Context, name string) {
 		r.Hub.SetPolicy(name, targets)
 	}
 	r.syncSession(ctx, n)
+	// Observe state changes even while RetryAt defers platform work.
+	r.mu.Lock()
+	if last, ok := r.relayChecks[name]; ok && last.state != r.relayState(n) {
+		delete(r.relayChecks, name)
+	}
+	r.mu.Unlock()
 	if !n.RetryAt.After(time.Now()) && (n.Token.Valid || n.Phase == "Deleting") {
-		err = r.reconcile(ctx, n, b)
+		err = r.reconcileRelay(ctx, n, b)
 		if errors.Is(err, store.ErrStale) {
 			r.o.Logger.Debug("Dropping stale namespace reconciliation", "namespace", name)
 			return
@@ -229,12 +246,90 @@ func (r *Registry) step(ctx context.Context, name string) {
 	}
 	// Successful deletion already removed the record.
 	if _, e := r.o.Store.GetNamespaceForUpdate(ctx, name); errors.Is(e, store.ErrNotFound) {
+		r.forgetRelayCheck(name)
 		return
 	}
 	updatePhase(n)
 	if err = r.save(ctx, n); err != nil && !errors.Is(err, store.ErrStale) && ctx.Err() == nil {
 		r.o.Logger.Error("Namespace state persistence failed", "namespace", name, "error", err)
 	}
+}
+
+// relayPlatformState fences cached success against locally observed identity,
+// executable and pending-work changes, including changes made by reconcile.
+type relayPlatformState struct {
+	hostname, serviceID, owner, serial, deployedHash, desiredHash string
+	pendingID, pendingKind, pendingHash                           string
+	certificate                                                   [sha256.Size]byte
+	secretsPending, deleting                                      bool
+}
+
+type relayPlatformCheck struct {
+	state relayPlatformState
+	at    time.Time
+}
+
+func (r *Registry) relayState(n *domain.Namespace) relayPlatformState {
+	return relayPlatformState{
+		hostname: n.Relay.Hostname, serviceID: n.Relay.ServiceID,
+		owner: n.OwnershipMarker, serial: n.ClientSerial,
+		deployedHash: n.DeployedExecutableHash, desiredHash: r.o.ExecutableHash,
+		pendingID: n.PendingOpID, pendingKind: n.PendingOpKind,
+		pendingHash: n.PendingExecutableHash, certificate: sha256.Sum256(n.ClientCert),
+		secretsPending: n.SecretsPending, deleting: n.Phase == "Deleting",
+	}
+}
+
+func (r *Registry) forgetRelayCheck(name string) {
+	r.mu.Lock()
+	delete(r.relayChecks, name)
+	r.mu.Unlock()
+}
+
+func (r *Registry) relaySettled(n *domain.Namespace, now time.Time) bool {
+	if n.Phase == "Deleting" || n.PendingOpID != "" || n.SecretsPending ||
+		n.DeployedExecutableHash != r.o.ExecutableHash || n.Relay.ServiceID == "" {
+		return false
+	}
+	status := r.Hub.Status(n.Name)
+	if !status.Connected || (status.Hello.ExecutableSHA256 != "" && status.Hello.ExecutableSHA256 != r.o.ExecutableHash) {
+		return false
+	}
+	leaf, err := relay.ParseCertificatePEM(n.ClientCert)
+	return err == nil && !relay.NeedsRenewal(leaf, now)
+}
+
+func (r *Registry) reconcileRelay(ctx context.Context, n *domain.Namespace, b Backend) error {
+	now := time.Now
+	if r.now != nil {
+		now = r.now
+	}
+	started := now()
+	state := r.relayState(n)
+	r.mu.Lock()
+	last, ok := r.relayChecks[n.Name]
+	if ok && last.state != state {
+		delete(r.relayChecks, n.Name)
+		ok = false
+	}
+	r.mu.Unlock()
+	if ok && started.Sub(last.at) >= 0 && started.Sub(last.at) < infra.SnapshotListingInterval && r.relaySettled(n, started) {
+		return nil
+	}
+	err := r.reconcile(ctx, n, b)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	// Pending-operation polling is not a platform service check. Mutations and
+	// identity changes must settle on a subsequent successful service check.
+	if err != nil || state.pendingID != "" || state.deleting || state != r.relayState(n) {
+		delete(r.relayChecks, n.Name)
+	} else {
+		if r.relayChecks == nil {
+			r.relayChecks = make(map[string]relayPlatformCheck)
+		}
+		r.relayChecks[n.Name] = relayPlatformCheck{state: state, at: started}
+	}
+	return err
 }
 func (r *Registry) pending(ctx context.Context, n *domain.Namespace, b Backend, op infra.Op) error {
 	n.PendingOpID = op.ID
@@ -359,6 +454,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 		r.Hub.Revoke(n.Name)
 		r.mu.Lock()
 		delete(r.backends, n.Name)
+		delete(r.relayChecks, n.Name)
 		r.mu.Unlock()
 		r.event(ctx, n, "NamespaceDeleted", "Namespace deleted")
 		return nil

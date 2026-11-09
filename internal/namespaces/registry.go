@@ -79,6 +79,9 @@ type Registry struct {
 	notices  chan sessionNotice
 	wake     chan struct{}
 	refused  map[string]time.Time
+	// relayChecks is protected by mu; namespace workers also hold lock(name).
+	relayChecks map[string]relayPlatformCheck
+	now         func() time.Time // Optional clock for the settled-relay gate only.
 }
 
 var relayHostnamePattern = regexp.MustCompile(`^[a-z][a-z0-9]{0,24}$`)
@@ -640,7 +643,7 @@ func (r *Registry) authorizeInstance(ctx context.Context, namespace, member, ins
 	if err != nil {
 		return err
 	}
-	containers, err := b.Containers(infra.WithFreshTaskInventory(ctx), member)
+	containers, err := b.Containers(infra.WithFreshTaskInventory(infra.WithRequestCaller(ctx, infra.CallerDialAuthorization)), member)
 	if err != nil {
 		return err
 	}
