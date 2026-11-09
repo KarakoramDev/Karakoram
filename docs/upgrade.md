@@ -589,6 +589,18 @@ marker deletion is not a general readiness or lost-password workaround.
 
 ### Known issues in v0.4.7
 
+- **Karakoram's status checks cause heavy disk writes on the Dokploy manager**
+  (also present in v0.2.0–v0.4.6). Karakoram reads Dokploy's API several times per
+  second for each cluster, and Dokploy records every API-key use in its own
+  database, so each request writes to Dokploy's database. With a few clusters
+  this is around 1 MB/s and several hundred write operations per second on the
+  Dokploy manager — more with Group Replication clusters and several proxies —
+  which can slow down Dokploy on small virtual machines with slow disks and can
+  make clusters briefly report `Degraded`. Your data is not affected.
+  Workaround: run the Dokploy manager on fast SSD storage and give it enough
+  disk throughput for the number of clusters you manage; avoid co-locating
+  other disk-heavy workloads on the manager. A fix that reduces the number of
+  requests is planned for the next release.
 - **On Dokploy, a ProxySQL rollout whose new proxy instance fails to start can
   take down the existing proxies** (v0.4.7). For proxies using the
   serving-preserving rollout, when changing the proxy count or resources, or
