@@ -23,12 +23,16 @@ import (
 const jsonResponseLimit int64 = 16 << 20
 
 type client struct {
-	origin       string
-	region       string
-	namespace    string
-	token        atomic.Value // string
-	http         *http.Client
-	observations *infra.ReadBudget
+	origin               string
+	region               string
+	namespace            string
+	token                atomic.Value // string
+	http                 *http.Client
+	observations         *infra.ReadBudget
+	snapshot             *infra.TargetSnapshot
+	snapshotKey          string
+	observationEpoch     atomic.Uint64
+	observationMutations atomic.Int64
 }
 
 func newClient(origin, region, namespace, token string, tlsConfig *tls.Config) *client {
@@ -40,6 +44,9 @@ func newClient(origin, region, namespace, token string, tlsConfig *tls.Config) *
 	transport.TLSClientConfig = tlsConfig.Clone()
 	c := &client{origin: origin, region: region, namespace: namespace, http: &http.Client{Transport: transport, Timeout: 60 * time.Second, CheckRedirect: noRedirect}}
 	c.observations = infra.ObservationBudget("nomad\x00" + origin)
+	c.snapshotKey = "nomad|" + origin + "|" + region + "|" + namespace
+	c.snapshot = infra.PlatformSnapshot(c.snapshotKey)
+	c.snapshot.SetListing(c.snapshotListing)
 	c.setToken(token)
 	return c
 }
@@ -54,7 +61,19 @@ func (c *client) currentToken() string {
 }
 
 func (c *client) get(ctx context.Context, path string, query url.Values, out any) (uint64, error) {
-	return c.requestJSON(ctx, http.MethodGet, path, query, nil, out, 0)
+	response, err := c.observationGet(ctx, path, query)
+	if err != nil {
+		return 0, err
+	}
+	if out != nil && len(response.body) != 0 {
+		if json.Unmarshal(response.body, out) != nil {
+			if cache := infra.ObservationCache(ctx); cache != nil {
+				cache.Delete(observationKey{client: c, path: path, query: query.Encode(), epoch: c.observationEpoch.Load()})
+			}
+			return 0, silentFailure("invalid JSON response")
+		}
+	}
+	return response.index, nil
 }
 func (c *client) put(ctx context.Context, path string, query url.Values, body, out any) error {
 	_, err := c.requestJSON(ctx, http.MethodPut, path, query, body, out, 0)
@@ -132,6 +151,33 @@ func (c *client) request(ctx context.Context, method, path string, query url.Val
 	if len(query) != 0 {
 		target += "?" + query.Encode()
 	}
+	cacheable := method == http.MethodGet && !query.Has("index") && !query.Has("wait") && !strings.HasPrefix(parsed.Path, "/v1/client/fs/logs")
+	var readToken uint64
+	if cacheable {
+		if infra.SteadyObservation(ctx) {
+			if data, ok := c.snapshot.Lookup(ctx, target); ok {
+				if int64(len(data)) > limit {
+					if !truncate {
+						return nil, 0, silentFailure("platform response exceeds size limit")
+					}
+					data = data[:limit]
+				}
+				return data, 0, nil
+			}
+		}
+	}
+	if method == http.MethodGet {
+		readToken = c.snapshot.ReadStart(ctx)
+	} else {
+		c.observationMutations.Add(1)
+		c.observationEpoch.Add(1)
+		defer func() {
+			c.observationEpoch.Add(1)
+			c.observationMutations.Add(-1)
+		}()
+		defer c.snapshot.BeginMutation(ctx)()
+	}
+	fetchedAt := infra.SnapshotNow()
 	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, silentFailure("cannot construct request")
@@ -179,7 +225,8 @@ func (c *client) request(ctx context.Context, method, path string, query url.Val
 	if err != nil {
 		return nil, 0, silentFailure("cannot read platform response")
 	}
-	if int64(len(data)) > limit {
+	complete := int64(len(data)) <= limit
+	if !complete {
 		if !truncate {
 			return nil, 0, silentFailure("platform response exceeds size limit")
 		}
@@ -194,6 +241,9 @@ func (c *client) request(ctx context.Context, method, path string, query url.Val
 		if err != nil {
 			return nil, 0, silentFailure("invalid Nomad response index")
 		}
+	}
+	if cacheable && complete {
+		c.snapshot.Populate(target, readToken, fetchedAt, data)
 	}
 	return data, index, nil
 }

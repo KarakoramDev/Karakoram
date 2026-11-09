@@ -25,11 +25,9 @@ type allocation struct {
 	ID, JobID, NodeID, NodeName, ClientStatus, DesiredStatus string
 	JobVersion                                               uint64
 	CreateIndex                                              uint64
-	NetworkStatus                                            struct {
-		Address, AddressIPv6 string
-	}
-	TaskStates       map[string]allocationTaskState
-	DeploymentStatus *struct {
+	NetworkStatus                                            allocationAddresses
+	TaskStates                                               map[string]allocationTaskState
+	DeploymentStatus                                         *struct {
 		Healthy *bool
 	}
 }
@@ -73,18 +71,28 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 	}, len(allocs))
 	if err := infra.ObserveParallel(ctx, len(allocs), func(i int) error {
 		a := allocs[i]
-		if allocationTerminal(a) || a.NetworkStatus.Address != "" || a.NetworkStatus.AddressIPv6 != "" {
+		if allocationTerminal(a) {
 			return nil
 		}
-		// Hydrate CNI addresses independently; host-network addresses remain
-		// excluded and disappeared allocations are omitted, never adopted.
-		_, err := b.c.get(ctx, "/v1/allocation/"+url.PathEscape(a.ID), nil, &a)
-		if errors.Is(err, infra.ErrNotFound) {
-			hydration[i].gone = true
-			return nil
+		key := allocationAddressKey{target: b.c.snapshotKey, id: a.ID}
+		if a.NetworkStatus.Address == "" && a.NetworkStatus.AddressIPv6 == "" {
+			if addresses, ok := allocationAddressInventory.lookup(key); ok {
+				allocs[i].NetworkStatus = addresses
+				return nil
+			}
+			// Hydrate CNI addresses independently; host-network addresses remain
+			// excluded and disappeared allocations are omitted, never adopted.
+			_, err := b.c.get(ctx, "/v1/allocation/"+url.PathEscape(a.ID), nil, &a)
+			if errors.Is(err, infra.ErrNotFound) {
+				hydration[i].gone = true
+				return nil
+			}
+			if err != nil {
+				return err
+			}
 		}
-		if err != nil {
-			return err
+		if !allocationTerminal(a) {
+			allocationAddressInventory.store(key, a.NetworkStatus)
 		}
 		allocs[i] = a
 		return nil

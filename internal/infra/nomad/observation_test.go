@@ -47,7 +47,9 @@ func TestObservationRealBackendLatencyFitsSweep(t *testing.T) {
 	f := newFakeNomad(t)
 	b := fakeBackend(t, f, nil)
 	var names []string
-	for i := range 3 {
+	// Attempt-local memoization removes duplicate reads. Six members retain
+	// enough distinct work to require concurrency at the original latency.
+	for i := range 6 {
 		name, volume := fmt.Sprint("runtime", i), fmt.Sprint("volume", i)
 		importFake(t, b, volumeSpec(volume), runtimeSpec(name, volume))
 		deployFake(t, b, name, volume)

@@ -615,6 +615,16 @@ func (f *fakeNomad) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		fakeJSON(w, 200, fakeRow{"FailedTGAllocs": nil, "Annotations": fakeRow{"DesiredTGUpdates": fakeRow{"member": fakeRow{"DestructiveUpdate": replacements}}}})
 		return
 	}
+	if path == "/v1/allocations" && r.Method == http.MethodGet {
+		rows := []fakeRow{}
+		for _, a := range f.allocs {
+			if a.row["Namespace"] == ns {
+				rows = append(rows, a.row)
+			}
+		}
+		fakeJSON(w, 200, fakeSorted(rows, "ID"))
+		return
+	}
 	if path == "/v1/jobs" {
 		switch r.Method {
 		case http.MethodPut, http.MethodPost:

@@ -31,6 +31,9 @@ type Backend struct {
 
 var _ infra.Backend = (*Backend)(nil)
 var _ infra.CredentialRotator = (*Backend)(nil)
+var _ infra.PlatformSnapshotter = (*Backend)(nil)
+
+func (b *Backend) PlatformSnapshot() *infra.TargetSnapshot { return b.c.snapshot }
 
 func (b *Backend) Name() string                     { return "nomad" }
 func (b *Backend) Layout() infra.Layout             { return layout }
