@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func TestObservationPassCachedMetadataKeepsOriginalBoundary(t *testing.T) {
@@ -53,6 +54,46 @@ func TestObservationPassTimestampOptInAndIsolation(t *testing.T) {
 	}
 	if ObservationPassCache(ctx) == ObservationPassCache(next) {
 		t.Fatal("new pass inherited its parent's payload map")
+	}
+}
+
+func TestStatusInfrastructureSnapshotScope(t *testing.T) {
+	at := time.Now()
+	rc := &Context{Clock: observationClock{at}, Cluster: &domain.Cluster{}, ObservationEpoch: "process"}
+	outer := WithObservationPass(t.Context())
+	calls := 0
+	var first any
+	p := observationProvider{observe: func(ctx context.Context, _ *Context) (domain.ClusterStatus, error) {
+		cache := infra.ObservationCache(ctx)
+		if cache == nil {
+			t.Fatal("status has no infrastructure snapshot")
+		}
+		if calls == 0 {
+			first = cache
+			cache.Store("proof", true)
+		} else if cache == first {
+			t.Fatal("a retry or later status sweep reused the earlier snapshot")
+		} else if _, ok := cache.Load("proof"); ok {
+			t.Fatal("an earlier attempt's ownership proof leaked into a new attempt")
+		}
+		calls++
+		status := readyObservation(at)
+		if calls == 1 {
+			status.Phase = domain.PhaseDegraded
+		}
+		return status, nil
+	}}
+	if _, err := ObserveStatus(outer, p, rc); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected same-sweep retry, got %d calls", calls)
+	}
+	if infra.ObservationCache(outer) != nil {
+		t.Fatal("read-only snapshot leaked into the mutation context")
+	}
+	if _, err := ObserveStatus(outer, p, rc); err != nil {
+		t.Fatal(err)
 	}
 }
 

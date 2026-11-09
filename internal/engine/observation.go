@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -363,7 +364,9 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 	for attempt := range 2 {
 		started := clock.Now()
 		probe, cancel := context.WithTimeout(ctx, ObservationSweepTimeout)
-		probe = infra.ObservationContext(probe)
+		// Snapshot only this read-only attempt. A retry without a provider-owned
+		// sample clock must obtain new facts, not relabel an earlier snapshot.
+		probe = infra.WithObservationCache(infra.ObservationContext(probe), new(sync.Map))
 		status, err = p.Status(probe, rc)
 		if errors.Is(err, ErrObservationBudgetExhausted) {
 			cancel()

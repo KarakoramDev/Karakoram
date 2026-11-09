@@ -14,9 +14,6 @@ import (
 )
 
 func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Container, error) {
-	if infra.FreshTaskInventory(ctx) {
-		ctx = infra.WithoutObservation(ctx)
-	}
 	ctx = infra.ObservationContext(ctx)
 	a, err := b.application(ctx, hostname)
 	if err != nil {
@@ -29,16 +26,29 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 	if !ok || m.Kind != infra.KindRuntime {
 		return []infra.Container{}, nil
 	}
+	var ts []task
 	if infra.FreshTaskInventory(ctx) {
-		service, err := b.inspectService(ctx, a.AppName)
-		if err != nil {
-			return nil, err
-		}
-		if service == nil || !b.ownsService(*a, m, service) {
-			return nil, restoreConflict("cannot authorize tasks without the owned Swarm service")
-		}
+		// Current tasks and service ownership are independent prerequisites.
+		// Join both before returning any authorized address; sequencing them
+		// needlessly adds an HTTP RTT to every pinned transport's critical path.
+		err = infra.ObserveParallel(ctx, 2, func(i int) error {
+			if i == 0 {
+				service, err := b.inspectService(ctx, a.AppName)
+				if err != nil {
+					return err
+				}
+				if service == nil || !b.ownsService(*a, m, service) {
+					return restoreConflict("cannot authorize tasks without the owned Swarm service")
+				}
+				return nil
+			}
+			var err error
+			ts, err = b.tasks(ctx, a.AppName)
+			return err
+		})
+	} else {
+		ts, err = b.tasks(ctx, a.AppName)
 	}
-	ts, err := b.tasks(ctx, a.AppName)
 	if err != nil {
 		return nil, err
 	}

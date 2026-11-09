@@ -59,6 +59,10 @@ func (a *mysqlObservationAgents) Dial(_ context.Context, _ model.ClusterRef, mem
 	})
 }
 
+func TestMySQLGroupObservationRequestBudget(t *testing.T) {
+	testMySQLGroupObservation(t, 3, 0)
+}
+
 func TestMySQLGroupObservationWithThreeProxyTasksAndSlowPlatform(t *testing.T) {
 	testMySQLGroupObservation(t, 3, 300*time.Millisecond)
 }
@@ -78,6 +82,13 @@ func TestMySQLGroupObservationWithMeasuredInventoryLatency(t *testing.T) {
 func testMySQLGroupObservation(t *testing.T, proxyTasks int, latency time.Duration) {
 	t.Helper()
 	f := newFakeAPI(t)
+	var getCount atomic.Int64
+	f.requestHook = func(_ http.ResponseWriter, r *http.Request) (bool, func()) {
+		if r.Method == http.MethodGet {
+			getCount.Add(1)
+		}
+		return false, nil
+	}
 	b := fakeBackend(t, f, nil)
 	provider := mysql.New(mysql.Options{Provider: "mysql"})
 	c := &model.Cluster{Name: "sample", Generation: 2, Spec: model.ClusterSpec{Provider: "mysql", Topology: model.Topology{Type: "cluster"}}}
@@ -127,6 +138,7 @@ func testMySQLGroupObservation(t *testing.T, proxyTasks int, latency time.Durati
 		}
 	}))
 	defer server.Close()
+	setupGETs := getCount.Load()
 	agents := &mysqlObservationAgents{backend: b, endpoint: server.URL, ca: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})}
 	f.mu.Lock()
 	before := make(map[string]int, len(f.calls))
@@ -144,13 +156,25 @@ func testMySQLGroupObservation(t *testing.T, proxyTasks int, latency time.Durati
 		t.Fatalf("healthy group/proxies failed bounded observation after %s: phase=%s err=%v", time.Since(started), status.Phase, err)
 	}
 	t.Logf("healthy sweep completed in %s with unchanged four-second read budget", time.Since(started))
+	want := map[string]int{
+		"environment.one": 1, "application.one": 7, "cluster.getNodes": 1,
+		"swarm.getNodeApps": 1, "docker.getConfig": 4, "deployment.all": 4,
+		"docker.getServiceContainersByAppName": 4 + 2*proxyTasks,
+	}
 	f.mu.Lock()
 	for procedure, count := range f.calls {
 		if delta := count - before[procedure]; delta != 0 {
 			t.Logf("platform procedure %s: %d reads", procedure, delta)
+			if delta != want[procedure] {
+				t.Errorf("platform request budget %s: got %d, want %d", procedure, delta, want[procedure])
+			}
+			delete(want, procedure)
 		}
 	}
 	f.mu.Unlock()
+	for procedure, count := range want {
+		t.Errorf("platform request budget %s: got 0, want %d", procedure, count)
+	}
 	if agents.authorizations.Load() != int32(2*proxyTasks) {
 		t.Fatalf("expected fresh authorization for both transports of all %d proxies, got %d", proxyTasks, agents.authorizations.Load())
 	}
@@ -158,6 +182,33 @@ func testMySQLGroupObservation(t *testing.T, proxyTasks int, latency time.Durati
 		if !m.Health || !m.Agent.Healthy {
 			t.Fatalf("positive member proof missing: %s", m.Name)
 		}
+	}
+	if latency == 0 {
+		// Replay twelve independent five-second observation slots, without
+		// sleeping: this is cadence-normalized status work, not a wall-clock
+		// Manager/reconcile benchmark. Mutation reads remain outside snapshots.
+		t.Logf("create/import/deploy fixture GETs: %d", setupGETs)
+		measureMinute := func(label string) {
+			t.Helper()
+			before := getCount.Load()
+			for range 12 {
+				status, err := engine.ObserveStatus(engine.WithObservationPass(t.Context()), provider, rc)
+				if err != nil || status.Phase != model.PhaseReady {
+					t.Fatalf("%s observation: phase=%s err=%v", label, status.Phase, err)
+				}
+				rc.Cluster.Status = status
+			}
+			t.Logf("%s GETs per twelve status passes: %d", label, getCount.Load()-before)
+		}
+		measureMinute("idle")
+		beforeCount := getCount.Load()
+		op, err := b.SetContainerCount(t.Context(), "samplemx", proxyTasks+1, proxyTasks+1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		awaitFake(t, b, op)
+		t.Logf("proxy count-change operation GETs: %d", getCount.Load()-beforeCount)
+		measureMinute("after proxy count change")
 	}
 	// No cross-pass inventory or positive health may survive a stopped runtime.
 	f.mu.Lock()

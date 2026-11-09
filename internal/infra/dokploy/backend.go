@@ -152,6 +152,13 @@ func (b *Backend) application(ctx context.Context, hostname string) (*applicatio
 		return b.lookupApplication(ctx, hostname)
 	})
 }
+func (b *Backend) applicationRecord(ctx context.Context, id string) (application, error) {
+	return observationValue(ctx, b.readKey("application-record", id), func() (application, error) {
+		var full application
+		err := b.c.get(ctx, "application.one", map[string]string{"applicationId": id}, &full)
+		return full, err
+	})
+}
 
 func (b *Backend) lookupApplication(ctx context.Context, hostname string) (*application, error) {
 	e, err := b.environment(ctx)
@@ -187,8 +194,8 @@ func (b *Backend) lookupApplication(ctx context.Context, hostname string) (*appl
 	if id == "" {
 		return nil, nil
 	}
-	var full application
-	if err = b.c.get(ctx, "application.one", map[string]string{"applicationId": id}, &full); err != nil {
+	full, err := b.applicationRecord(ctx, id)
+	if err != nil {
 		if errors.Is(err, infra.ErrNotFound) {
 			b.remember(hostname, "")
 			return nil, nil
@@ -325,8 +332,8 @@ func (b *Backend) ListServices(ctx context.Context, prefix string) ([]infra.Serv
 		a := candidates[i]
 		m, _ := parseMetadata(a.Description)
 		if m.Kind == infra.KindRuntime && (m.Deployed || m.Pending != nil) {
-			var full application
-			if err := b.c.get(ctx, "application.one", map[string]string{"applicationId": a.ID}, &full); err != nil {
+			full, err := b.applicationRecord(ctx, a.ID)
+			if err != nil {
 				if errors.Is(err, infra.ErrNotFound) {
 					results[i].skip = true
 					return nil

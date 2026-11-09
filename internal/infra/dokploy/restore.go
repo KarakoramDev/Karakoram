@@ -81,6 +81,12 @@ func (b *Backend) inspectService(ctx context.Context, name string) (*swarmServic
 }
 
 func (b *Backend) inspectServiceSummary(ctx context.Context, summary swarmSummary) (*swarmService, error) {
+	return observationValue(ctx, b.readKey("service-inspection", summary.ID), func() (*swarmService, error) {
+		return b.readServiceSummary(ctx, summary)
+	})
+}
+
+func (b *Backend) readServiceSummary(ctx context.Context, summary swarmSummary) (*swarmService, error) {
 	// Dokploy passes this value to a shell. Accept only inventory ID tokens.
 	for _, c := range summary.ID {
 		if (c < 'a' || c > 'z') && (c < '0' || c > '9') {

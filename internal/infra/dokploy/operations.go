@@ -134,9 +134,11 @@ func (b *Backend) readTasks(ctx context.Context, appName string) ([]task, error)
 	return ts, err
 }
 func (b *Backend) deployments(ctx context.Context, id string) ([]deploymentRecord, error) {
-	var ds []deploymentRecord
-	err := b.c.get(ctx, "deployment.all", map[string]string{"applicationId": id}, &ds)
-	return ds, err
+	return observationValue(ctx, b.readKey("deployments", id), func() ([]deploymentRecord, error) {
+		var ds []deploymentRecord
+		err := b.c.get(ctx, "deployment.all", map[string]string{"applicationId": id}, &ds)
+		return ds, err
+	})
 }
 func (b *Backend) operation(ctx context.Context, a *application, m metadata, action string) (operation, error) {
 	o := operation{Action: action, AppID: a.ID, AppName: a.AppName, Hostname: m.Hostname, Issued: b.nowTime().UTC(), Node: m.Node}

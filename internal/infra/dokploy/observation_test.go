@@ -183,7 +183,10 @@ func TestObservationSnapshotKeepsTaskAuthorizationFresh(t *testing.T) {
 	f.apps[imported.Services["runtime"]].row["environmentId"] = "foreign"
 	f.mu.Unlock()
 	beforeUpdate, beforeReload := fakeCalls(f, "application.update"), fakeCalls(f, "application.reload")
-	if _, err := b.GetService(ctx, "runtime"); !errors.Is(err, infra.ErrConflict) {
+	// Ownership/service snapshots belong to the old pass. Recovery on the next
+	// pass must reload ownership before it can recreate the removed service.
+	recovery := infra.WithObservationCache(infra.ObservationContext(t.Context()), new(sync.Map))
+	if _, err := b.GetService(recovery, "runtime"); !errors.Is(err, infra.ErrConflict) {
 		t.Fatal("recovery trusted cached ownership instead of locked fresh reload", err)
 	}
 	if fakeCalls(f, "application.update") != beforeUpdate || fakeCalls(f, "application.reload") != beforeReload {
@@ -339,5 +342,85 @@ func TestObservationSnapshotWaiterCancellationDoesNotCancelLeader(t *testing.T) 
 	value, err := observationValue(ctx, key, func() (int, error) { return 0, errors.New("successful read was not cached") })
 	if err != nil || value != 42 {
 		t.Fatal("successful shared result lost", value, err)
+	}
+}
+
+func TestObservationSnapshotBoundsRepeatedDiscovery(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, volumeSpec("volume"), runtimeSpec("runtime", "volume"))
+	deployFake(t, b, "runtime", "volume")
+	ctx := infra.WithObservationCache(infra.ObservationContext(t.Context()), new(sync.Map))
+	before := make(map[string]int)
+	f.mu.Lock()
+	for procedure, count := range f.calls {
+		before[procedure] = count
+	}
+	f.mu.Unlock()
+	if _, err := b.ListServices(ctx, "runtime"); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := b.GetService(ctx, "runtime"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := b.Containers(ctx, "runtime"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := b.Containers(infra.WithFreshTaskInventory(ctx), "runtime"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := map[string]int{
+		"environment.one": 1, "application.one": 2, "cluster.getNodes": 1,
+		"swarm.getNodeApps": 1, "docker.getConfig": 1, "deployment.all": 1,
+		"docker.getServiceContainersByAppName": 3,
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for procedure, count := range f.calls {
+		if delta := count - before[procedure]; delta != want[procedure] {
+			t.Errorf("same-pass %s reads: got %d, want %d", procedure, delta, want[procedure])
+		}
+		delete(want, procedure)
+	}
+	for procedure, count := range want {
+		t.Errorf("same-pass %s reads: got 0, want %d", procedure, count)
+	}
+}
+
+func TestFreshTaskAuthorizationOverlapsOwnershipInspection(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, runtimeSpec("runtime", ""))
+	deployFake(t, b, "runtime", "")
+	inspection, tasks := make(chan struct{}), make(chan struct{})
+	var inspectionOnce, tasksOnce sync.Once
+	f.mu.Lock()
+	f.requestHook = func(_ http.ResponseWriter, r *http.Request) (bool, func()) {
+		var other <-chan struct{}
+		switch r.URL.Path {
+		case "/api/docker.getConfig":
+			inspectionOnce.Do(func() { close(inspection) })
+			other = tasks
+		case "/api/docker.getServiceContainersByAppName":
+			tasksOnce.Do(func() { close(tasks) })
+			other = inspection
+		default:
+			return false, nil
+		}
+		select {
+		case <-other:
+		case <-r.Context().Done():
+		}
+		return false, nil
+	}
+	f.mu.Unlock()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	ctx = infra.WithFreshTaskInventory(infra.WithObservationCache(infra.ObservationContext(ctx), new(sync.Map)))
+	containers, err := b.Containers(ctx, "runtime")
+	if err != nil || len(containers) != 1 {
+		t.Fatalf("independent authorization prerequisites were serialized: count=%d err=%v", len(containers), err)
 	}
 }
