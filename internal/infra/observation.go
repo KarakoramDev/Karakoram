@@ -49,6 +49,7 @@ type freshTaskInventoryKey struct{}
 // WithFreshTaskInventory requires task enumeration to bypass sweep snapshots.
 // Authorization must apply it separately for every pinned transport connection.
 func WithFreshTaskInventory(ctx context.Context) context.Context {
+	ctx = WithoutSteadyObservation(ctx)
 	return context.WithValue(ctx, freshTaskInventoryKey{}, true)
 }
 
@@ -83,6 +84,7 @@ func ObservationContext(ctx context.Context) context.Context {
 
 // WithoutObservation lets serialized lifecycle work bypass the observation queue.
 func WithoutObservation(ctx context.Context) context.Context {
+	ctx = WithoutSteadyObservation(ctx)
 	if cache, _ := ctx.Value(observationCacheKey{}).(*sync.Map); cache != nil {
 		ctx = WithObservationCache(ctx, nil)
 	}
