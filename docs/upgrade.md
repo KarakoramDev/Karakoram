@@ -587,6 +587,21 @@ queries. Stop retrying starts on failure and repair the underlying diagnostic.
 Follow the full [stopped-member procedure](neo4j/operations.md#legacy-bootstrap-marker-with-expired-credentials);
 marker deletion is not a general readiness or lost-password workaround.
 
+### Known issues in v0.4.7
+
+- **MySQL Group Replication clusters on Dokploy can briefly report Degraded, and
+  adding proxy instances can be reported as failed** (also present in
+  v0.4.3–v0.4.6). The Dokploy provider reads the state of each member and proxy
+  one at a time, so on clusters with several ProxySQL instances a status check
+  can run out of time: the cluster occasionally reports `Degraded` for a moment,
+  and changing the proxy count (for example from 2 to 3) can end as failed after
+  about 20 minutes even though Dokploy finished the change and all proxy
+  instances are healthy. Your data and client traffic are not affected.
+  Workaround: keep two proxy instances on Dokploy; if a proxy-count change
+  fails, check the cluster's status and the Dokploy service before retrying,
+  because the change has usually been applied. A fix is planned for the next
+  release.
+
 ## Upgrading to v0.4.6
 
 v0.4.6 is a security hotfix of v0.4.5 with one change: the

@@ -74,6 +74,18 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Known issues in v0.4.7
 
+- **MySQL Group Replication clusters on Dokploy can briefly report Degraded, and
+  adding proxy instances can be reported as failed** (also present in
+  v0.4.3–v0.4.6). The Dokploy provider reads the state of each member and proxy
+  one at a time, so on clusters with several ProxySQL instances a status check
+  can run out of time: the cluster occasionally reports `Degraded` for a moment,
+  and changing the proxy count (for example from 2 to 3) can end as failed after
+  about 20 minutes even though Dokploy finished the change and all proxy
+  instances are healthy. Your data and client traffic are not affected.
+  Workaround: keep two proxy instances on Dokploy; if a proxy-count change
+  fails, check the cluster's status and the Dokploy service before retrying,
+  because the change has usually been applied. A fix is planned for the next
+  release.
 - **MySQL/PXC automatic lost-volume replacement is experimental and off by
   default.** Testing observed Group Replication quorum loss after an automatic
   confirmed-loss replacement; its cause is not yet known. Leave
