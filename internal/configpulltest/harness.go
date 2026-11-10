@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,7 +35,10 @@ import (
 // The fixture is already deployed. Isolate the config transport from lifecycle
 // ownership proofs the existing budget fixtures cannot satisfy. Config rendering
 // delegates unchanged to the real engine; manager eligibility is not stubbed.
-type convergedProvider struct{ engine.Provider }
+type convergedProvider struct {
+	engine.Provider
+	renders *atomic.Int64
+}
 
 func (p convergedProvider) Sync(context.Context, *engine.Context) (engine.Result, error) {
 	return engine.Result{Steady: true}, nil
@@ -43,6 +47,7 @@ func (p convergedProvider) Status(_ context.Context, rc *engine.Context) (domain
 	return domain.ClusterStatus{Phase: domain.PhaseReady, Conditions: []domain.Condition{{Type: "Ready", Status: "True"}}, Members: []domain.MemberStatus{{Name: rc.Cluster.Name + "p0", Health: true, Agent: domain.AgentStatus{Healthy: true, LastSeen: rc.Clock.Now()}}}}, nil
 }
 func (p convergedProvider) MemberConfig(ctx context.Context, rc *engine.Context, member string) (agentapi.MemberConfig, error) {
+	p.renders.Add(1)
 	return p.Provider.(engine.AgentConfigSource).MemberConfig(ctx, rc, member)
 }
 
@@ -104,7 +109,8 @@ func Run(t *testing.T, p engine.Provider, rc *engine.Context, advance func(time.
 	if err = st.CreateBackupStorage(t.Context(), storage); err != nil {
 		t.Fatal(err)
 	}
-	registry, err := engine.NewRegistry(convergedProvider{p})
+	renderCalls := &atomic.Int64{}
+	registry, err := engine.NewRegistry(convergedProvider{Provider: p, renders: renderCalls})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,6 +148,7 @@ func Run(t *testing.T, p engine.Provider, rc *engine.Context, advance func(time.
 	}
 	waitSteady()
 	snapshot := rc.Backend.(infra.PlatformSnapshotter).PlatformSnapshot()
+	renewalGridStart := rc.Clock.Now()
 	listing := func() {
 		snapshot.Lookup(infra.WithSteadyObservation(infra.ObservationContext(t.Context())), "config-integration-baseline")
 	}
@@ -217,6 +224,7 @@ func Run(t *testing.T, p engine.Provider, rc *engine.Context, advance func(time.
 	}
 	pulls := 0
 	networkStart := total()
+	rendersBefore := renderCalls.Load()
 	configNetwork := func() uint64 {
 		var requests uint64
 		for _, provider := range infra.PlatformCounters() {
@@ -229,7 +237,9 @@ func Run(t *testing.T, p engine.Provider, rc *engine.Context, advance func(time.
 		return requests
 	}
 	for second := 1; second <= 3600; second++ {
-		advance(time.Second)
+		if remaining := renewalGridStart.Add(time.Duration(second) * time.Second).Sub(rc.Clock.Now()); remaining > 0 {
+			advance(remaining)
+		}
 		if second%5 == 0 {
 			publish()
 			listing()
@@ -249,6 +259,9 @@ func Run(t *testing.T, p engine.Provider, rc *engine.Context, advance func(time.
 	}
 	if pulls != 60*replicas {
 		t.Fatal("missing actual minute pulls", pulls)
+	}
+	if renderCalls.Load() != rendersBefore {
+		t.Fatal("unchanged hour performed full configuration rendering", renderCalls.Load()-rendersBefore)
 	}
 	t.Logf("M4 production HTTP pulls=%d configuration network requests=0 shared/background requests=%d", pulls, total()-networkStart)
 	// These are real MySQL/PG data renderers, not a renderer stub. Storage-only

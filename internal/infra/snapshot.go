@@ -17,6 +17,10 @@ import (
 // SnapshotListingInterval bounds out-of-band drift visible in the target listing.
 const SnapshotListingInterval = time.Minute
 
+// SnapshotListingRequestBudget bounds an on-demand configuration listing too,
+// where the request does not already carry an observation sweep deadline.
+const SnapshotListingRequestBudget = 5 * time.Second
+
 // SnapshotMaxAge outlives one steady deep revalidation (engine.SteadyResyncInterval,
 // 30 min) so steady observations do not refetch between reconciles; the listing,
 // mutation epochs and agent identity changes invalidate entries earlier.
@@ -306,6 +310,12 @@ func SetSnapshotClockForTest(now func() time.Time) (restore func()) {
 	return func() { snapshotClock.Lock(); snapshotClock.now = previous; snapshotClock.Unlock() }
 }
 
+// EnsureListing shares the target's normal single-flight drift check. A config
+// pull can refresh an expired proof without falling back to per-member reads.
+func (s *TargetSnapshot) EnsureListing(ctx context.Context) bool {
+	return s.ensureListing(ctx)
+}
+
 // ensureListing does not launch workers: the first caller checks and waiters can
 // abandon the shared flight independently when their own sweep expires.
 func (s *TargetSnapshot) ensureListing(ctx context.Context) bool {
@@ -338,9 +348,18 @@ func (s *TargetSnapshot) ensureListing(ctx context.Context) bool {
 		flight := make(chan struct{})
 		s.checking, s.attemptedAt, s.attempted = flight, now, true
 		s.mu.Unlock()
-		fingerprint, err := check(WithRequestCaller(WithoutSteadyObservation(ctx), CallerListing))
+		checkCtx := ctx
+		var cancel context.CancelFunc
+		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > SnapshotListingRequestBudget {
+			checkCtx, cancel = context.WithTimeout(ctx, SnapshotListingRequestBudget)
+		}
+		fingerprint, err := check(WithRequestCaller(WithoutSteadyObservation(checkCtx), CallerListing))
+		checkErr := checkCtx.Err()
+		if cancel != nil {
+			cancel()
+		}
 		s.mu.Lock()
-		s.listingOK = err == nil && ctx.Err() == nil && s.epoch == epoch && s.inFlight == 0 && version == s.listingVersion
+		s.listingOK = err == nil && checkErr == nil && ctx.Err() == nil && s.epoch == epoch && s.inFlight == 0 && version == s.listingVersion
 		if s.metrics != nil {
 			switch {
 			case !s.listingOK:
@@ -362,7 +381,9 @@ func (s *TargetSnapshot) ensureListing(ctx context.Context) bool {
 				// listing cannot certify facts from the preceding baseline.
 				s.epoch++
 			}
-			s.fingerprint, s.fingerprintSet, s.checkedAt = fingerprint, true, SnapshotNow()
+			// A proof is no newer than its request start. Completion time
+			// shifts a 60s listing onto the next 5s renewal tick (about 65s).
+			s.fingerprint, s.fingerprintSet, s.checkedAt = fingerprint, true, now
 		}
 		ok := s.listingOK
 		s.checking = nil

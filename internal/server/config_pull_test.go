@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -32,13 +33,18 @@ func (b *configBaseline) SteadyConfigBaseline(context.Context, *domain.Cluster) 
 
 type configPullProvider struct {
 	fakeProvider
-	calls int
+	calls  int
+	render func(*agentapi.MemberConfig)
 }
 
 func (p *configPullProvider) MemberConfig(ctx context.Context, rc *engine.Context, member string) (agentapi.MemberConfig, error) {
 	p.calls++
 	rc.Backend.(infra.PlatformSnapshotter).PlatformSnapshot().ReadStart(ctx)
-	return p.fakeProvider.MemberConfig(ctx, rc, member)
+	cfg, err := p.fakeProvider.MemberConfig(ctx, rc, member)
+	if p.render != nil {
+		p.render(&cfg)
+	}
+	return cfg, err
 }
 
 func TestConditionalAgentConfigPull(t *testing.T) {
@@ -91,5 +97,74 @@ func TestConditionalAgentConfigPull(t *testing.T) {
 	baseline.eligible = false
 	if code, _ = pull(changed); code != 200 || p.calls != 4 {
 		t.Fatal("lost steady baseline reused revision", code, p.calls)
+	}
+}
+
+func TestConfigStaleListingAndFreshPayloadRevision(t *testing.T) {
+	now := time.Now()
+	defer infra.SetSnapshotClockForTest(func() time.Time { return now })()
+	s, _, _ := testServer(t)
+	p := &configPullProvider{}
+	p.render = func(cfg *agentapi.MemberConfig) { cfg.EngineSpec = json.RawMessage(`{"peers":["original"]}`) }
+	s.Registry, _ = engine.NewRegistry(p)
+	snapshot := infra.PlatformSnapshot(t.Name() + "|target")
+	s.namespaces = engine.StaticNamespaces{DefaultBackend: configPullBackend{snapshot: snapshot}}
+	listings := 0
+	snapshot.SetListing(func(ctx context.Context) (string, error) {
+		if infra.RequestCaller(ctx) != infra.CallerListing {
+			t.Fatal("on-demand refresh lost listing attribution")
+		}
+		listings++
+		now = now.Add(250 * time.Millisecond)
+		return "unchanged", nil
+	})
+	baseline := &configBaseline{eligible: true}
+	s.Trigger = baseline
+	if err := s.Store.SetAgentToken(t.Context(), &domain.AgentToken{Cluster: "prod", Member: "prodm0", Token: "token"}); err != nil {
+		t.Fatal(err)
+	}
+	pull := func(revision string) (int, agentapi.MemberConfig) {
+		t.Helper()
+		request := httptest.NewRequest("GET", "/internal/agent/v1/config?revision="+url.QueryEscape(revision), nil)
+		request.Header.Set("Authorization", "Bearer token")
+		response := httptest.NewRecorder()
+		s.InternalHandler().ServeHTTP(response, request)
+		var cfg agentapi.MemberConfig
+		if response.Code == 200 {
+			if err := json.Unmarshal(response.Body.Bytes(), &cfg); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return response.Code, cfg
+	}
+	code, initial := pull("")
+	if code != 200 || initial.PullRevision == "" || p.calls != 1 || listings != 1 {
+		t.Fatal("initial full response lacked a usable revision", code, p.calls, listings)
+	}
+	// A slow/jittered 65s listing schedule must add one shared listing,
+	// not nine peer GETs and then another full pull to recover an empty token.
+	for minute := range 60 {
+		now = now.Add(65 * time.Second)
+		if code, _ = pull(initial.PullRevision); code != 304 || p.calls != 1 || listings != minute+2 {
+			t.Fatal("stale proof caused a full render or duplicate listing", minute, code, p.calls, listings)
+		}
+	}
+	// Eligibility may become known during a full render. Certify the actual
+	// new payload at completion, never reissue the old input-only token.
+	baseline.eligible = false
+	p.render = func(cfg *agentapi.MemberConfig) {
+		cfg.EngineSpec = json.RawMessage(`{"peers":["fresh"]}`)
+		baseline.eligible = true
+	}
+	code, fresh := pull(initial.PullRevision)
+	if code != 200 || fresh.PullRevision == "" || fresh.PullRevision == initial.PullRevision {
+		t.Fatal("fresh resolution did not get its own usable payload token", code, fresh.PullRevision)
+	}
+	renders := p.calls
+	if code, _ = pull(fresh.PullRevision); code != 304 || p.calls != renders {
+		t.Fatal("full response forced a second full pull to recover its token", code, p.calls)
+	}
+	if code, changed := pull(initial.PullRevision); code != 200 || changed.PullRevision != fresh.PullRevision {
+		t.Fatal("older payload token hid a changed fresh peer set", code)
 	}
 }

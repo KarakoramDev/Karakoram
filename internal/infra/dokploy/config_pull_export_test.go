@@ -24,6 +24,7 @@ func ExportConfigPullFixture(t *testing.T, kind string) (engine.Provider, *engin
 	now := time.Now()
 	clock := func() time.Time { mu.Lock(); defer mu.Unlock(); return now }
 	advance := func(d time.Duration) { mu.Lock(); now = now.Add(d); mu.Unlock() }
+	b.c.http = withConfigListingLatency(b.c.http, advance)
 	t.Cleanup(infra.SetSnapshotClockForTest(clock))
 	x.rc.Clock = steadyBudgetClock(clock)
 	st := x.rc.Store.(*store.Store)

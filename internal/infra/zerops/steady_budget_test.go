@@ -264,6 +264,8 @@ func TestZeropsSteadyRequestBudget(t *testing.T) {
 	advance := func(d time.Duration) { clockMu.Lock(); now = now.Add(d); clockMu.Unlock() }
 	restore := infra.SetSnapshotClockForTest(clock)
 	defer restore()
+	originalHTTP := b.client.http
+	b.client.http = withConfigListingLatency(b.client.http, advance)
 	pushed := agentpush.NewStore(clock)
 	var fixtures []*steadyBudgetFixture
 	for _, kind := range []string{"mysql", "postgres", "neo4j"} {
@@ -391,8 +393,11 @@ func TestZeropsSteadyRequestBudget(t *testing.T) {
 		for i, x := range fixtures {
 			configRevisions[i] = x.configPullBaseline(t)
 		}
+		gridStart := clock().Truncate(engine.ReadinessInterval)
 		for second := 1; second <= 3600; second++ {
-			advance(time.Second)
+			if remaining := gridStart.Add(time.Duration(second) * time.Second).Sub(clock()); remaining > 0 {
+				advance(remaining)
+			}
 			if second%60 == 0 {
 				expireIDs()
 			}
@@ -442,6 +447,13 @@ func TestZeropsSteadyRequestBudget(t *testing.T) {
 		}
 	}
 	x := fixtures[0]
+	// M4 deliberately injects proof-clock latency. Start M5's existing
+	// warm-idle burst scenario with fresh evidence rather than inheriting
+	// the hour replay's arbitrary listing/heartbeat phase.
+	b.client.http = originalHTTP
+	advance(infra.SnapshotListingInterval)
+	beat()
+	x.ready(t, true)
 	counts.reset()
 	op, err := b.SetContainerCount(t.Context(), x.proxy, 4, 4)
 	if err != nil {
@@ -466,7 +478,7 @@ func TestZeropsSteadyRequestBudget(t *testing.T) {
 	x.ready(t, true)
 	refetch := requestTotal(counts.snapshotRequests())
 	if refetch == 0 || refetch > 17 {
-		t.Fatalf("M5 first steady refetch=%d, want 1..17", refetch)
+		t.Fatalf("M5 first steady refetch=%d, want 1..17: %v", refetch, counts.snapshotRequests())
 	}
 	t.Logf("M5 first steady=%d", refetch)
 	counts.reset()

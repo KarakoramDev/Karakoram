@@ -271,6 +271,7 @@ func TestDokploySteadyRequestBudget(t *testing.T) {
 	advance := func(d time.Duration) { clockMu.Lock(); now = now.Add(d); clockMu.Unlock() }
 	restore := infra.SetSnapshotClockForTest(clock)
 	defer restore()
+	b.c.http = withConfigListingLatency(b.c.http, advance)
 	pushed := agentpush.NewStore(clock)
 	var fixtures []*steadyBudgetFixture
 	for _, kind := range []string{"mysql", "postgres", "neo4j"} {
@@ -372,8 +373,11 @@ func TestDokploySteadyRequestBudget(t *testing.T) {
 	for i, x := range fixtures {
 		configRevisions[i] = x.configPullBaseline(t)
 	}
+	gridStart := clock().Truncate(engine.ReadinessInterval)
 	for second := 1; second <= 3600; second++ {
-		advance(time.Second)
+		if remaining := gridStart.Add(time.Duration(second) * time.Second).Sub(clock()); remaining > 0 {
+			advance(remaining)
+		}
 		if second%int(agentapi.HeartbeatInterval/time.Second) == 0 {
 			beat()
 		}

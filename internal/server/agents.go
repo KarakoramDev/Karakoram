@@ -125,9 +125,22 @@ func (s *Server) InternalHandler() http.Handler {
 			return
 		}
 		rc.AgentConfigCapabilities = r.URL.Query()["capability"]
-		revision := s.memberConfigRevision(r.Context(), rc, token.Member)
+		inputs, eligible := s.memberConfigInputs(r.Context(), rc, token.Member)
+		key := memberConfigKey(rc, token.Member)
+		revision := s.conditionalConfigRevision(key, inputs, eligible)
 		changeRevision := s.memberConfigChangeRevision(r.Context(), rc, token.Member)
+		var renderGate *configRenderGate
+		defer func() {
+			if renderGate != nil {
+				s.releaseConfigRender(renderGate)
+			}
+		}()
 		cfg, unchanged, err := engine.PullMemberConfig(r.URL.Query().Get("revision"), revision, func() (agentapi.MemberConfig, error) {
+			gate, acquireErr := s.acquireConfigRender(r.Context(), key)
+			if acquireErr != nil {
+				return agentapi.MemberConfig{}, acquireErr
+			}
+			renderGate = gate
 			if token.Member == companion.Member(rc.Cluster.Name) {
 				return companion.MemberConfig(r.Context(), rc, token.Member)
 			}
@@ -158,10 +171,19 @@ func (s *Server) InternalHandler() http.Handler {
 			_ = failure.write(w)
 			return
 		}
-		// Do not let a response rendered across a mutation establish a baseline.
-		if revision != s.memberConfigRevision(r.Context(), rc, token.Member) {
-			cfg.PullRevision = ""
+		// Certify only unchanged inputs with a current render-end baseline.
+		// The returned token also binds this actual freshly rendered payload.
+		finalInputs, finalEligible := s.memberConfigInputs(r.Context(), rc, token.Member)
+		certifiedInputs := ""
+		if inputs != "" && inputs == finalInputs && finalEligible {
+			certifiedInputs = finalInputs
 		}
+		if err := s.issueConfigRevision(key, certifiedInputs, rc.ObservationEpoch, &cfg); err != nil {
+			_ = s.failure(err).write(w)
+			return
+		}
+		s.releaseConfigRender(renderGate)
+		renderGate = nil
 		cfg.ChangeRevision = changeRevision
 		_ = ok(cfg).write(w)
 	})

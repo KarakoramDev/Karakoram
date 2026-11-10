@@ -73,6 +73,7 @@ type Server struct {
 	mcpHandler       http.Handler
 	dataMcp          *datamcp.Gateway
 	postgresBindings *pgbinding.Manager
+	*configPullState
 }
 
 // New assembles HTTP handlers over initialized dependencies.
@@ -95,7 +96,7 @@ func New(o Options) (*Server, error) {
 	if o.Namespaces == nil {
 		o.Namespaces = engine.StaticNamespaces{DefaultBackend: o.Context.Backend, DefaultAgentURL: o.Context.AgentURL}
 	}
-	s := &Server{Options: o, namespaces: o.Namespaces, postgresBindings: o.Bindings}
+	s := &Server{Options: o, namespaces: o.Namespaces, postgresBindings: o.Bindings, configPullState: &configPullState{}}
 	if s.postgresBindings == nil {
 		s.postgresBindings = pgbinding.New(s.bindingOptions())
 	}
