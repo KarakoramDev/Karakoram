@@ -25,6 +25,38 @@ type observationClock struct{ at time.Time }
 
 func (c observationClock) Now() time.Time { return c.at }
 
+type sweepBudgetTestClock struct {
+	RealClock
+	timeout time.Duration
+}
+
+func (c sweepBudgetTestClock) ObservationSweepTimeoutForTest() time.Duration { return c.timeout }
+
+func TestObservationSweepTimeoutDefaultsAndTestClock(t *testing.T) {
+	for _, clock := range []Clock{nil, RealClock{}, observationClock{at: time.Now()}} {
+		if got := observationSweepTimeout(clock); got != 5*time.Second {
+			t.Fatalf("production/default sweep budget=%s, want fixed 5s", got)
+		}
+	}
+	const budget = 5 * time.Minute
+	clock := sweepBudgetTestClock{timeout: budget}
+	if got := observationSweepTimeout(clock); got != budget {
+		t.Fatalf("test-clock sweep budget=%s, want %s", got, budget)
+	}
+	started := time.Now()
+	p := observationProvider{observe: func(ctx context.Context, _ *Context) (domain.ClusterStatus, error) {
+		deadline, ok := ctx.Deadline()
+		if !ok || deadline.Before(started.Add(budget)) {
+			t.Fatal("fresh observation did not use the test-clock sweep budget")
+		}
+		return readyObservation(clock.Now()), nil
+	}}
+	rc := &Context{Clock: clock, Cluster: &domain.Cluster{}}
+	if _, err := ObserveStatus(t.Context(), p, rc); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func readyObservation(at time.Time) domain.ClusterStatus {
 	return domain.ClusterStatus{
 		Phase: domain.PhaseReady, ObservedAt: at, ObservedGeneration: 7,

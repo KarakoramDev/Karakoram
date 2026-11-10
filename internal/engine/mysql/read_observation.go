@@ -81,18 +81,28 @@ func mysqlObservationScope(ctx context.Context, rc *engine.Context) *mysqlReadSc
 	return value.(*mysqlReadScope)
 }
 
+// Request-count replay clocks may separate the shared pass budget from slow
+// race-instrumented transports. Production clocks retain the fixed four-second
+// budget, including its absolute deadline shared across pre/Sync/post callers.
+func mysqlReadTimeout(rc *engine.Context) time.Duration {
+	if clock, ok := rc.Clock.(interface{ ObservationReadTimeoutForTest() time.Duration }); ok {
+		return clock.ObservationReadTimeoutForTest()
+	}
+	return engine.ObservationTimeout
+}
+
 // mysqlReadContext bounds network and lock waits by one absolute four-second
 // deadline per cluster/pass, not four seconds per caller. Successful memo hits
 // remain usable without issuing network calls after that budget is exhausted.
 func mysqlReadContext(ctx context.Context, rc *engine.Context) (context.Context, context.CancelFunc) {
 	if mysqlReadsFresh(ctx) {
-		probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+		probe, cancel := context.WithTimeout(ctx, mysqlReadTimeout(rc))
 		return infra.WithObservationCache(infra.ObservationContext(probe), nil), cancel
 	}
 	engine.ObservationPassStart(ctx, now(rc))
 	scope := mysqlObservationScope(ctx, rc)
 	if scope == nil {
-		probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+		probe, cancel := context.WithTimeout(ctx, mysqlReadTimeout(rc))
 		return infra.ObservationContext(probe), cancel
 	}
 	// Continuity gets its own bounded reservation, not the leftovers of native
@@ -104,7 +114,7 @@ func mysqlReadContext(ctx context.Context, rc *engine.Context) (context.Context,
 		budget = &scope.quorumDeadline
 	}
 	if budget.IsZero() {
-		*budget = time.Now().Add(engine.ObservationTimeout)
+		*budget = time.Now().Add(mysqlReadTimeout(rc))
 	}
 	deadline := *budget
 	scope.mu.Unlock()

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/agentpush"
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companionspec"
 	model "github.com/KarakoramDev/Karakoram/internal/domain"
@@ -39,9 +40,10 @@ type providerBudgetAgents struct {
 	backend  *Backend
 	endpoint string
 	ca       []byte
+	samples  *agentpush.Store
 }
 
-func (a *providerBudgetAgents) Dial(_ context.Context, _ model.ClusterRef, member string) (*agentapi.Client, error) {
+func (a *providerBudgetAgents) Dial(_ context.Context, ref model.ClusterRef, member string) (*agentapi.Client, error) {
 	endpoint, err := url.Parse(a.endpoint)
 	if err != nil {
 		return nil, err
@@ -49,7 +51,11 @@ func (a *providerBudgetAgents) Dial(_ context.Context, _ model.ClusterRef, membe
 	dial := func(ctx context.Context, network, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, network, endpoint.Host)
 	}
-	return agentapi.NewClient(agentapi.ClientOptions{BaseURL: a.endpoint, Token: member, CAPEM: a.ca, DialContext: dial,
+	var samples agentapi.SampleSource
+	if a.samples != nil {
+		samples = a.samples.Source(agentpush.MemberKey{Namespace: ref.Namespace, Cluster: ref.Name, Member: member})
+	}
+	return agentapi.NewClient(agentapi.ClientOptions{BaseURL: a.endpoint, Token: member, CAPEM: a.ca, DialContext: dial, Samples: samples, SampleMember: member,
 		DialInstanceContext: func(ctx context.Context, network, logical, instance string) (net.Conn, error) {
 			containers, err := a.backend.Containers(infra.WithFreshTaskInventory(ctx), member)
 			if err != nil {
@@ -68,12 +74,16 @@ type providerGETCounts struct {
 	mu        sync.Mutex
 	endpoints map[string]int
 	uris      map[string]int
+	requests  map[string]int
 }
 
 func countProviderGETs(f *fakeAPI) *providerGETCounts {
-	c := &providerGETCounts{endpoints: map[string]int{}, uris: map[string]int{}}
+	c := &providerGETCounts{endpoints: map[string]int{}, uris: map[string]int{}, requests: map[string]int{}}
 	f.mu.Lock()
 	f.requestHook = func(_ http.ResponseWriter, r *http.Request) (bool, func()) {
+		c.mu.Lock()
+		c.requests[r.Method+" "+strings.TrimPrefix(r.URL.Path, "/api/")]++
+		c.mu.Unlock()
 		if r.Method == http.MethodGet {
 			c.mu.Lock()
 			c.endpoints[strings.TrimPrefix(r.URL.Path, "/api/")]++
@@ -89,6 +99,7 @@ func (c *providerGETCounts) reset() {
 	c.mu.Lock()
 	clear(c.endpoints)
 	clear(c.uris)
+	clear(c.requests)
 	c.mu.Unlock()
 }
 func (c *providerGETCounts) report(t *testing.T, budget map[string]int, idle bool) {

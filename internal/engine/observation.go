@@ -67,6 +67,17 @@ func ObserveAgentStatus(ctx context.Context, client *agentapi.Client, engineName
 const ObservationSweepTimeout = 5 * time.Second
 const ReadinessInterval = 5 * time.Second
 
+// Request-count harnesses exercise real transports under arbitrarily slow race
+// instrumentation. Let their test clocks separate the sweep's deadline from
+// the traffic being measured without making the production budget configurable.
+// Production clocks do not implement this test-only structural interface.
+func observationSweepTimeout(clock Clock) time.Duration {
+	if testClock, ok := clock.(interface{ ObservationSweepTimeoutForTest() time.Duration }); ok {
+		return testClock.ObservationSweepTimeoutForTest()
+	}
+	return ObservationSweepTimeout
+}
+
 // InitialDataSourceObserver reports durable native restore completion, not
 // process health or the desired generation observed by an earlier operation.
 // A provider supporting dataSource must implement this fail-closed contract.
@@ -369,7 +380,7 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 	ctx = infra.WithoutSteadyObservation(ctx)
 	for attempt := range 2 {
 		started := clock.Now()
-		probe, cancel := context.WithTimeout(ctx, ObservationSweepTimeout)
+		probe, cancel := context.WithTimeout(ctx, observationSweepTimeout(clock))
 		// Snapshot only this read-only attempt. A retry without a provider-owned
 		// sample clock must obtain new facts, not relabel an earlier snapshot.
 		probe = infra.WithObservationCache(infra.ObservationContext(probe), new(sync.Map))

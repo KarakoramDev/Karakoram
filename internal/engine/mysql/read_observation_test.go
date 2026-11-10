@@ -20,6 +20,39 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
+type readBudgetTestClock struct{ engine.RealClock }
+
+func (readBudgetTestClock) ObservationReadTimeoutForTest() time.Duration { return 5 * time.Minute }
+
+func TestMySQLReadBudgetDefaultsAndTestClock(t *testing.T) {
+	for _, clock := range []engine.Clock{nil, engine.RealClock{}} {
+		if got := mysqlReadTimeout(&engine.Context{Clock: clock}); got != 4*time.Second {
+			t.Fatalf("production/default read budget=%s, want fixed 4s", got)
+		}
+	}
+	rc := &engine.Context{Clock: readBudgetTestClock{}, Cluster: &domain.Cluster{Name: "budget"}}
+	started := time.Now()
+	ctx := engine.WithObservationPass(t.Context())
+	first, cancelFirst := mysqlReadContext(ctx, rc)
+	defer cancelFirst()
+	deadline, ok := first.Deadline()
+	if !ok || deadline.Before(started.Add(5*time.Minute)) {
+		t.Fatal("read context did not use the test-clock budget")
+	}
+	second, cancelSecond := mysqlReadContext(ctx, rc)
+	defer cancelSecond()
+	secondDeadline, ok := second.Deadline()
+	if !ok || !secondDeadline.Equal(deadline) {
+		t.Fatal("test-clock override changed the absolute shared-pass deadline")
+	}
+	fresh, cancelFresh := mysqlReadContext(freshMySQLReads(ctx), rc)
+	defer cancelFresh()
+	freshDeadline, ok := fresh.Deadline()
+	if !ok || freshDeadline.Before(deadline) {
+		t.Fatal("fresh read did not use its independent test-clock budget")
+	}
+}
+
 func TestMySQLReadObservationSingleFlight(t *testing.T) {
 	var calls atomic.Int32
 	rc, _ := quorumObservationFixture(t, func(w http.ResponseWriter, r *http.Request) {

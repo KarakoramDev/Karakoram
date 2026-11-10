@@ -65,7 +65,7 @@ func observeSteady(ctx context.Context, p Provider, rc *Context, clock Clock) (d
 	}
 	started := clock.Now()
 	// A rejected push result must not seed provider memos used by live retries.
-	probe, cancel := context.WithTimeout(WithObservationPass(ctx), ObservationSweepTimeout)
+	probe, cancel := context.WithTimeout(WithObservationPass(ctx), observationSweepTimeout(clock))
 	defer cancel()
 	probe = infra.WithObservationCache(infra.WithSteadyObservation(infra.ObservationContext(probe)), new(sync.Map))
 	probe, evidence := infra.WithEvidence(probe)

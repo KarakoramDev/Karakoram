@@ -188,19 +188,25 @@ func testMySQLGroupObservation(t *testing.T, proxyTasks int, latency time.Durati
 		// sleeping: this is cadence-normalized status work, not a wall-clock
 		// Manager/reconcile benchmark. Mutation reads remain outside snapshots.
 		t.Logf("create/import/deploy fixture GETs: %d", setupGETs)
-		measureMinute := func(label string) {
+		measureMinute := func(label string, tasks int) {
 			t.Helper()
 			before := getCount.Load()
 			for range 12 {
+				passStart := getCount.Load()
 				status, err := engine.ObserveStatus(engine.WithObservationPass(t.Context()), provider, rc)
 				if err != nil || status.Phase != model.PhaseReady {
 					t.Fatalf("%s observation: phase=%s err=%v", label, status.Phase, err)
+				}
+				// The per-pass bound includes both pinned transports per proxy;
+				// assert every slot independently, including the scaled fleet.
+				if got, max := getCount.Load()-passStart, int64(22+2*tasks); got > max {
+					t.Errorf("%s pass GETs=%d exceeds %d", label, got, max)
 				}
 				rc.Cluster.Status = status
 			}
 			t.Logf("%s GETs per twelve status passes: %d", label, getCount.Load()-before)
 		}
-		measureMinute("idle")
+		measureMinute("idle", proxyTasks)
 		beforeCount := getCount.Load()
 		op, err := b.SetContainerCount(t.Context(), "samplemx", proxyTasks+1, proxyTasks+1)
 		if err != nil {
@@ -208,7 +214,7 @@ func testMySQLGroupObservation(t *testing.T, proxyTasks int, latency time.Durati
 		}
 		awaitFake(t, b, op)
 		t.Logf("proxy count-change operation GETs: %d", getCount.Load()-beforeCount)
-		measureMinute("after proxy count change")
+		measureMinute("after proxy count change", proxyTasks+1)
 	}
 	// No cross-pass inventory or positive health may survive a stopped runtime.
 	f.mu.Lock()
