@@ -157,9 +157,15 @@ An unidentified health-gated receipt is not treated as legacy and fails closed.
 Admission or supervisor-liveness failure **pauses** the rollout, retaining the
 remaining incumbents. The healthcheck runs every five seconds, with a ten-second
 timeout, a sixty-second start period and three retries; Swarm monitors updates
-for thirty seconds with zero tolerated failures. A paused or rolled-back update
-is reported as failed. If spare capacity or native readiness never arrives, the
-operation reports failure after fifteen minutes without switching to stop-first.
+for thirty seconds with zero tolerated failures. If spare capacity or native
+readiness never arrives, the operation reports failure after fifteen minutes
+without switching to stop-first.
+
+**Known issue in v0.4.7:** an ordinary proxy count/resource update paused by
+Swarm can remain Running for about fifteen minutes before failing, cannot be
+cancelled, and can leave the cluster Degraded with a retained failed receipt;
+see [the paused-update warning and containment guidance](limitations.md#dokploy-proxy-paused-update).
+
 Inspect task health, config-pull connectivity, writer availability and surge
 capacity before retrying. A single extra replacement slot is required in addition
 to the larger of the old and desired fleet; insufficient capacity can leave the
