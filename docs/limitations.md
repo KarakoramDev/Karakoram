@@ -74,6 +74,21 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Known issues in v0.4.7
 
+<a id="dokploy-proxy-paused-update"></a>
+
+- **On Dokploy, a ProxySQL count or resource change can leave a cluster stuck**
+  (v0.4.7 only; ProxySQL in front of MySQL, PXC, PostgreSQL and Supabase). If the
+  new proxy task does not become healthy (for example, the node lacks CPU or
+  memory), Docker Swarm pauses the update. The existing proxies keep serving,
+  but the operation stays Running for about 15 minutes before failing, cannot
+  be cancelled, and afterwards the cluster stays Degraded: changing the proxy
+  settings back is accepted but not applied, and agent upgrades are blocked.
+  There is no supported way to recover in this release. Before changing proxy
+  count or resources on Dokploy, make sure the nodes have spare capacity for
+  the new proxy tasks. If an update pauses, keep the existing proxies running,
+  do not edit the Swarm service by hand, and upgrade when the fix is released,
+  or open an issue. A fix is planned for the next release.
+
 <a id="mysql-gr-lost-member-cancellation"></a>
 
 - **Cancelling the replacement of a lost MySQL Group Replication member can
