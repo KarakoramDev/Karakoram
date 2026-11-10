@@ -96,6 +96,14 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 					go func() {
 						defer reads.Done()
 						value.service, serviceErr = mysqlReadService(probe, rc, m.Name)
+						if m.Role == "proxy" && value.service != nil {
+							desired := desiredComponent(rc, m)
+							if engine.ProxyRolloutSuperseded(serviceErr, m.Name, desired.Replicas, desired.Resources) {
+								// Retain StatusFailed; a corrected target is
+								// allowed to plan, not to claim serving health.
+								serviceErr = nil
+							}
+						}
 					}()
 					go func() {
 						defer reads.Done()

@@ -51,7 +51,8 @@ func verifyMember(ctx context.Context, rc *engine.Context, m *member) error {
 			continue
 		}
 		service, err := engine.ObserveRetiringService(ctx, rc.Backend, entry.name, *entry.id, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
-		if err != nil {
+		var proxyFailure *infra.ProxyRolloutFailureError
+		if err != nil && !(entry.name == m.Name && m.Role == "proxy" && service != nil && errors.As(err, &proxyFailure)) {
 			return err
 		}
 		if service == nil {
@@ -103,6 +104,11 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 		}
 	}
 	status, err := observeProxyRollout(ctx, rc, q.Op, m)
+	var proxyFailure *infra.ProxyRolloutFailureError
+	if errors.As(err, &proxyFailure) && m.Role == "proxy" && (q.Action == "scale" || q.Action == "resize" || q.Action == "proxy-scale" || q.Action == "proxy-resources") {
+		s.Pending = nil
+		return true, err
+	}
 	if err != nil {
 		return true, err
 	}

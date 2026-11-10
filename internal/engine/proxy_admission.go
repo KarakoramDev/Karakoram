@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -18,6 +19,9 @@ import (
 // running incumbents are never probed, stopped, or made dependent on this loop.
 func ObserveProxyRollout(ctx context.Context, rc *Context, op infra.Op, member string, revision int64, proxy bool) (infra.OpState, error) {
 	status, err := rc.Backend.OpStatus(ctx, op)
+	if err == nil && proxy && status.Failed && !status.Expired && status.Status != "stalled" && status.ProxyRolloutFailure != nil {
+		return status, status.ProxyRolloutFailure
+	}
 	if err != nil || status.Failed || !proxy {
 		return status, err
 	}
@@ -28,6 +32,15 @@ func ObserveProxyRollout(ctx context.Context, rc *Context, op infra.Op, member s
 		return status, nil
 	}
 	return status, AdmitStartingProxies(ctx, rc, member, revision)
+}
+
+// ProxyRolloutSuperseded permits planning a different explicit count/resource
+// target, never accepting incumbents as proof that the failed rollout succeeded.
+// A legacy error without the failed target cannot authorize recovery.
+func ProxyRolloutSuperseded(err error, member string, replicas int, resources infra.Resources) bool {
+	var failure *infra.ProxyRolloutFailureError
+	return errors.As(err, &failure) && failure.Service == member && failure.TargetReplicas > 0 &&
+		(replicas != failure.TargetReplicas || !reflect.DeepEqual(resources, failure.TargetResources))
 }
 
 // ReconcileProxyAdmission admits opted-in task replacements after the original

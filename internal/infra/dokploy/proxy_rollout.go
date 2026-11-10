@@ -143,12 +143,14 @@ func (b *Backend) proxyRolloutStatus(ctx context.Context, o operation, a applica
 		state.Failed = true
 		state.Status = "failed"
 		state.Message = "ProxySQL start-first rollout paused or rolled back; inspect incumbent tasks, replacement health, config pull access, writer readiness and spare capacity before retrying"
+		state = b.terminalProxyRollout(o, a, service, state, service.UpdateStatus.State)
 		return state, nil
 	}
 	if service.Spec.TaskTemplate.ForceUpdate != o.ForceUpdate {
 		state.Failed = true
 		state.Status = "failed"
 		state.Message = "ProxySQL rollout spec changed or rolled back; refusing to commit a stale replacement receipt"
+		state = b.terminalProxyRollout(o, a, service, state, "ForceUpdate mismatch")
 		return state, nil
 	}
 	ready, oldRunning := 0, false
@@ -172,4 +174,27 @@ func (b *Backend) proxyRolloutStatus(ctx context.Context, o operation, a applica
 		state.Message = "ProxySQL start-first rollout timed out; inspect healthcheck/config pull, ONLINE writer and spare capacity; do not switch to stop-first to bypass admission"
 	}
 	return state, nil
+}
+
+func (b *Backend) terminalProxyRollout(o operation, a application, service *swarmService, state infra.OpState, reason string) infra.OpState {
+	m, ok := parseMetadata(a.Description)
+	// A reload reply can precede Swarm applying the expected template. A
+	// predecessor's pause/rollback or lower ForceUpdate does not identify this
+	// receipt. Never turn that propagation gap into a permanent public failure.
+	if service.Spec.TaskTemplate.ForceUpdate < o.ForceUpdate {
+		return state
+	}
+	// The explicit gate is deployed-runtime evidence. Legacy/unmarked images,
+	// deployment failures and stale/nonmatching receipts keep their semantics.
+	if !ok || !o.HealthGated || (o.Action != "scale" && o.Action != "restart") ||
+		!sameOperation(m.Pending, o) || !m.Pending.HealthGated || m.Pending.ForceUpdate != o.ForceUpdate ||
+		m.Kind != infra.KindRuntime || m.Volume != "" || !m.Deployed || !m.ProxyServingProbe || !b.ownsService(a, m, service) {
+		return state
+	}
+	state.ProxyRolloutFailure = &infra.ProxyRolloutFailureError{
+		Service: o.Hostname, Action: o.Action, Issued: o.Issued, ForceUpdate: o.ForceUpdate, Reason: reason,
+		TargetReplicas: m.Max, TargetResources: m.Resources,
+	}
+	state.Message = state.ProxyRolloutFailure.Error()
+	return state
 }

@@ -367,6 +367,20 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 			if m.Pending.Action == "deploy" {
 				return s, nil
 			}
+			if m.Pending.ProxyRolloutFailure != nil && m.Pending.HealthGated && (m.Pending.Action == "scale" || m.Pending.Action == "restart") {
+				return s, m.Pending.ProxyRolloutFailure
+			}
+			// Older control planes recorded Failed without the terminal reason.
+			// Re-observe the exact receipt; never infer authority from Failed alone.
+			if m.Pending.HealthGated && (m.Pending.Action == "scale" || m.Pending.Action == "restart") {
+				state, err := b.pollOperation(ctx, encodeOp(*m.Pending))
+				if err != nil {
+					return s, err
+				}
+				if state.ProxyRolloutFailure != nil {
+					return s, state.ProxyRolloutFailure
+				}
+			}
 			return s, silentFailure("previous lifecycle operation failed; consult Dokploy deployment logs and explicitly retry the operation")
 		}
 		state, err := b.pollOperation(ctx, encodeOp(*m.Pending))
@@ -377,6 +391,9 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 			s.Status = infra.StatusFailed
 			if m.Pending.Action == "deploy" && state.Status != "stalled" {
 				return s, nil
+			}
+			if state.ProxyRolloutFailure != nil {
+				return s, state.ProxyRolloutFailure
 			}
 			return s, silentFailure(state.Message)
 		}

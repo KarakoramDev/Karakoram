@@ -31,7 +31,16 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 	// Recovery's read-only discovery shares Sync/Status's bounded pass. Only
 	// the subsequent destructive replacement proof uses fresh actor reads.
 	readService := func(ctx context.Context, name string) (*infra.Service, error) {
-		return mysqlReadService(ctx, rc, name)
+		service, err := mysqlReadService(ctx, rc, name)
+		if m := s.find(name); m != nil && m.Role == "proxy" && service != nil {
+			desired := desiredComponent(rc, m)
+			if engine.ProxyRolloutSuperseded(err, m.Name, desired.Replicas, desired.Resources) {
+				// Runtime recovery verifies identity only; keep StatusFailed
+				// and let the ordinary rolling plan own serving admission.
+				return service, nil
+			}
+		}
+		return service, err
 	}
 	readStatus := func(ctx context.Context, name string) (agentapi.Status, error) {
 		status, _, err := mysqlAgentStatus(ctx, rc, name)

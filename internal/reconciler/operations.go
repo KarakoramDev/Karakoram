@@ -177,7 +177,8 @@ func (m *Manager) operationFailure(op *domain.Operation, err error) bool {
 	}
 	var field *domain.FieldError
 	var resourceRejected *infra.ResourceUpdateRejectedError
-	permanent := errors.As(err, &field) || errors.As(err, &resourceRejected) || errors.Is(err, engine.ErrInvalid) || errors.Is(err, engine.ErrNotSupported)
+	var proxyRolloutFailure *infra.ProxyRolloutFailureError
+	permanent := errors.As(err, &field) || errors.As(err, &resourceRejected) || errors.As(err, &proxyRolloutFailure) || errors.Is(err, engine.ErrInvalid) || errors.Is(err, engine.ErrNotSupported)
 	expired := m.elapsedOperationTime(op, false) >= m.operationTimeout(op)
 	if !permanent && !expired && op.Failures < m.opts.OperationRetryLimit {
 		return false

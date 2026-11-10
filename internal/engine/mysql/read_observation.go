@@ -322,9 +322,16 @@ func mysqlAgentStatus(ctx context.Context, rc *engine.Context, member string) (a
 }
 
 func mysqlReadService(ctx context.Context, rc *engine.Context, name string) (*infra.Service, error) {
-	service, _, err := mysqlReadValue(ctx, rc, name, "platform-service", func(probe context.Context) (*infra.Service, error) {
+	value, _, err := mysqlReadCachedValue(ctx, rc, mysqlReadKey{member: name, action: "platform-service"}, func(probe context.Context) (any, error) {
 		return rc.Backend.GetService(probe, name)
 	})
+	var terminal *infra.ProxyRolloutFailureError
+	if err != nil && !errors.As(err, &terminal) {
+		return nil, err
+	}
+	// Keep this typed failure's inspected service for identity and changed-
+	// target planning only. Its error and StatusFailed remain authoritative.
+	service, _ := value.(*infra.Service)
 	return service, err
 }
 

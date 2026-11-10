@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
@@ -29,7 +30,20 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 		if tok == nil {
 			return true, engine.ErrNotFound
 		}
-		out, err := engine.ReconcileRuntime(ctx, rc, engine.RuntimeMember{MemberService: engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: m.Resources, Containers: max(1, m.Replicas)}, ServiceID: &m.ServiceID, VolumeID: m.VolumeID, Recovery: &m.RuntimeRecovery})
+		var readService func(context.Context, string) (*infra.Service, error)
+		if m.Role == "proxy" {
+			readService = func(ctx context.Context, name string) (*infra.Service, error) {
+				service, err := rc.Backend.GetService(ctx, name)
+				desired := desiredComponent(rc, m)
+				if name == m.Name && service != nil && engine.ProxyRolloutSuperseded(err, m.Name, desired.Replicas, desired.Resources) {
+					// This hook only verifies retained runtime identity. Keep
+					// StatusFailed; ordinary Sync still owns health and rollout.
+					return service, nil
+				}
+				return service, err
+			}
+		}
+		out, err := engine.ReconcileRuntime(ctx, rc, engine.RuntimeMember{MemberService: engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: m.Resources, Containers: max(1, m.Replicas)}, ServiceID: &m.ServiceID, VolumeID: m.VolumeID, Recovery: &m.RuntimeRecovery, ReadService: readService})
 		if err != nil {
 			return true, err
 		}

@@ -207,6 +207,10 @@ type OpState struct {
 	Expired bool `json:"expired,omitempty"`
 	// ServiceIDs lists the services the operation acted on, when known.
 	ServiceIDs []string `json:"serviceIds,omitempty"`
+	// ProxyRolloutFailure is set only for authoritative failure of an exact
+	// health-gated serving lifecycle receipt. Failed alone is not that proof:
+	// stalled, expired, timeout and transport outcomes remain retryable.
+	ProxyRolloutFailure *ProxyRolloutFailureError `json:"proxyRolloutFailure,omitempty"`
 }
 
 // Backend defines the infrastructure operations required by engine providers.

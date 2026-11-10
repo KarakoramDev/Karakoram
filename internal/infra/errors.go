@@ -72,6 +72,24 @@ func (e *ResourceUpdateRejectedError) Error() string        { return e.Message }
 func (e *ResourceUpdateRejectedError) Is(target error) bool { return target == ErrRejected }
 func (e *ResourceUpdateRejectedError) SafeDetail() string   { return e.Message }
 
+// ProxyRolloutFailureError records authoritative failure of an exact
+// serving-preserving lifecycle receipt, not a timeout or unavailable observer.
+// Ending its public tracker does not release the retained admission fence.
+type ProxyRolloutFailureError struct {
+	Service         string    `json:"service"`
+	Action          string    `json:"action"`
+	Issued          time.Time `json:"issued"`
+	ForceUpdate     uint64    `json:"forceUpdate"`
+	Reason          string    `json:"reason"`
+	TargetReplicas  int       `json:"targetReplicas"`
+	TargetResources Resources `json:"targetResources"`
+}
+
+func (e *ProxyRolloutFailureError) Error() string {
+	return fmt.Sprintf("ProxySQL %s rollout for %s failed (%s; receipt %s, ForceUpdate %d); manual recovery required: inspect the Swarm service, incumbent and replacement health, config pull access, writer readiness and spare capacity; correct the cause and PATCH proxy count/resources to a different corrected target or restore the known-good spec; identical spec reapply is not a retry", e.Action, e.Service, e.Reason, e.Issued.UTC().Format(time.RFC3339Nano), e.ForceUpdate)
+}
+func (e *ProxyRolloutFailureError) SafeDetail() string { return e.Error() }
+
 // PublicPortConflictError reports a refused publication, not an uncertain
 // delivery. The backend has preserved the previously applied service.
 type PublicPortConflictError struct {

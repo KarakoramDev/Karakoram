@@ -32,6 +32,10 @@ type rollingState struct {
 	HandoffTarget string                          `json:"handoffTarget,omitempty"`
 
 	ScaleIn bool `json:"scaleIn,omitempty"`
+
+	// ProxyRecovery freezes the failed provider target. A corrective resource
+	// receipt runs at this replica count before a separately gated count change.
+	ProxyRecovery *domain.ComponentSpec `json:"proxyRecovery,omitempty"`
 }
 
 func rollingOrder(ctx context.Context, rc *engine.Context, s *state) ([]string, error) {
@@ -75,10 +79,13 @@ func proxyCountOnly(m *member, version string, target domain.ComponentSpec, runt
 }
 
 func proxyResourceOnly(m *member, version string, target domain.ComponentSpec, runtimeHash string, backend infra.Backend) bool {
+	return !reflect.DeepEqual(m.Resources, target.Resources) && proxyResourceUpdateAllowed(m, version, target, runtimeHash, backend)
+}
+
+func proxyResourceUpdateAllowed(m *member, version string, target domain.ComponentSpec, runtimeHash string, backend infra.Backend) bool {
 	if !backend.Capabilities().ResourceUpdatePreservesServing || m.Role != "proxy" ||
 		m.Replicas != target.Replicas || m.Version != version ||
-		m.ProxyRuntimeHash == "" || m.ProxyRuntimeHash != runtimeHash ||
-		reflect.DeepEqual(m.Resources, target.Resources) {
+		m.ProxyRuntimeHash == "" || m.ProxyRuntimeHash != runtimeHash {
 		return false
 	}
 	if serving, ok := backend.(infra.ServingResourceUpdate); ok {
@@ -243,9 +250,26 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 	}
 	target := u.Targets[m.Name]
 	if u.Stage == "resource-failed" {
-		// A terminal resource receipt must never enter count recovery or be
-		// resubmitted automatically. A different explicit target can supersede it.
-		if desired := desiredComponent(rc, m); !reflect.DeepEqual(desired.Resources, target.Resources) {
+		// A partial resource rollout needs a resource receipt before changing
+		// count. Only a different explicit full target may supersede it.
+		if desired := desiredComponent(rc, m); desired.Replicas != target.Replicas || !reflect.DeepEqual(desired.Resources, target.Resources) {
+			service, observeErr := rc.Backend.GetService(ctx, m.Name)
+			var terminal *infra.ProxyRolloutFailureError
+			if errors.As(observeErr, &terminal) {
+				if service == nil || !engine.ProxyRolloutSuperseded(observeErr, m.Name, desired.Replicas, desired.Resources) {
+					return true, observeErr
+				}
+				return true, planProxyServingCorrection(s, m, desired, service, terminal)
+			}
+			if observeErr != nil {
+				return true, observeErr
+			}
+			if service == nil || u.ProxyRecovery != nil {
+				return true, engine.ErrUnavailable
+			}
+			// A successfully observed untyped legacy failure retains its
+			// pre-existing explicit disruptive correction semantics. Neither
+			// transport failure nor retained typed authority selects this path.
 			u.Targets[m.Name] = desired
 			m.PendingReplicas = 0
 			u.Op = nil
@@ -327,6 +351,19 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			publishRevision(s)
 		}
 		u.Stage = "handoff"
+	case "scale-recovery":
+		if u.ScaleIn && rc.WaitForWindow().RequeueAfter > 0 {
+			return false, nil
+		}
+		if runtimeChanged || !serving || !rc.Backend.Capabilities().ReplicaScalePreservesServing {
+			return true, engine.Invalid("corrective ProxySQL count update no longer preserves serving")
+		}
+		if ok, err := ready(ctx, rc, m); err != nil || !ok {
+			return true, err
+		}
+		m.PendingReplicas = target.Replicas
+		u.Stage = "scale"
+		return true, nil
 	case "scale":
 		if u.ScaleIn && rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
@@ -356,6 +393,10 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			// checkpoint before attempting any backend-proven recovery.
 			m.PendingReplicas = 0
 			u.Stage = "scale-failed"
+			var terminal *infra.ProxyRolloutFailureError
+			if errors.As(err, &terminal) {
+				return true, err
+			}
 			return true, nil
 		}
 		if err != nil || !status.Done {
@@ -374,6 +415,19 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		u.Op = nil
 		u.Stage = "prepare"
 	case "resource-recovery":
+		// Re-observe old checkpoints before allowing their legacy stop path.
+		// A typed serving failure must use the corrective serving sequence.
+		service, observeErr := rc.Backend.GetService(ctx, m.Name)
+		var terminal *infra.ProxyRolloutFailureError
+		if service != nil && errors.As(observeErr, &terminal) && engine.ProxyRolloutSuperseded(observeErr, m.Name, target.Replicas, target.Resources) {
+			return true, planProxyServingCorrection(s, m, target, service, terminal)
+		}
+		if observeErr != nil {
+			return true, observeErr
+		}
+		if service == nil || u.ProxyRecovery != nil {
+			return true, engine.ErrUnavailable
+		}
 		// A partial failed rollout makes the committed resources insufficient
 		// evidence, even when reverting. Reapply the explicit superseding
 		// target through maintenance instead of assuming backend rollback.
@@ -388,13 +442,51 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		m.Offline = true
 		publishRevision(s)
 		u.Stage = "offline"
-	case "resource-scale":
+	case "resource-scale", "resource-recovery-scale", "resource-recovery-submit":
 		// Unlike count-only scale-up, resource updates retain window gating.
 		if rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
 		}
-		if !serving || !proxyResourceOnly(m, u.To, target, runtimeHash, rc.Backend) {
+		resourceMember := m
+		resourceTarget := target
+		correcting := u.Stage != "resource-scale"
+		if correcting {
+			if u.ProxyRecovery == nil {
+				// A checkpoint written before the intermediate target was
+				// recorded must recover exact proof before any mutation.
+				service, observeErr := rc.Backend.GetService(ctx, m.Name)
+				var terminal *infra.ProxyRolloutFailureError
+				if service == nil || !errors.As(observeErr, &terminal) || !engine.ProxyRolloutSuperseded(observeErr, m.Name, target.Replicas, target.Resources) {
+					if observeErr != nil {
+						return true, observeErr
+					}
+					return true, engine.ErrUnavailable
+				}
+				return true, planProxyServingCorrection(s, m, target, service, terminal)
+			}
+			current := *m
+			current.Resources = u.ProxyRecovery.Resources
+			current.Replicas = u.ProxyRecovery.Replicas
+			resourceMember = &current
+			resourceTarget.Replicas = u.ProxyRecovery.Replicas
+		}
+		var eligible bool
+		if correcting {
+			eligible = proxyResourceUpdateAllowed(resourceMember, u.To, resourceTarget, runtimeHash, rc.Backend)
+		} else {
+			eligible = proxyResourceOnly(resourceMember, u.To, resourceTarget, runtimeHash, rc.Backend)
+		}
+		if !serving || !eligible {
 			return true, engine.Invalid("ProxySQL resource update no longer preserves serving; restore the backend serving guarantee before retrying")
+		}
+		if u.Stage == "resource-recovery-scale" {
+			if ok, err := ready(ctx, rc, m); err != nil || !ok {
+				return true, err
+			}
+			// Persist acknowledged submission intent. A lost reply replays
+			// SetResources to adopt the receipt, not an obsolete fleet gate.
+			u.Stage = "resource-recovery-submit"
+			return true, nil
 		}
 		if err := engine.RequireProxyAdmissionProtocol(ctx, rc, m.Name); err != nil {
 			return true, err
@@ -404,6 +496,9 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			return true, err
 		}
 		u.Op = &op
+		if correcting {
+			m.PendingReplicas = resourceTarget.Replicas
+		}
 		u.Stage = "resource-scaled"
 	case "resource-scaled":
 		if u.Op == nil {
@@ -413,6 +508,11 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if status.Failed {
 			u.Stage = "resource-failed"
 			rc.SyncWait = "ProxySQL resource update failed; restore backend health and supersede the failed resource target"
+			var terminal *infra.ProxyRolloutFailureError
+			if errors.As(err, &terminal) {
+				u.ProxyRecovery = &domain.ComponentSpec{Replicas: terminal.TargetReplicas, Resources: terminal.TargetResources}
+				return true, err
+			}
 			return true, nil
 		}
 		if err != nil || !status.Done {
@@ -425,6 +525,17 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		}
 		m.Resources = target.Resources
 		m.PendingReplicas = 0
+		if u.ProxyRecovery != nil {
+			m.Replicas = u.ProxyRecovery.Replicas
+			u.ProxyRecovery = nil
+			if m.Replicas != target.Replicas {
+				u.Op = nil
+				u.ScaleIn = target.Replicas < m.Replicas
+				u.Stage = "scale-recovery"
+				publishRevision(s)
+				return true, nil
+			}
+		}
 		u.Index++
 		u.Op = nil
 		u.Stage = "prepare"
@@ -656,6 +767,17 @@ func (p *Core) reconcileFailedProxyScale(ctx context.Context, rc *engine.Context
 	if desired.Replicas < 1 {
 		return engine.Invalid("ProxySQL scaling requires at least one serving replica")
 	}
+	service, observeErr := rc.Backend.GetService(ctx, m.Name)
+	var terminal *infra.ProxyRolloutFailureError
+	if errors.As(observeErr, &terminal) {
+		if service == nil || !engine.ProxyRolloutSuperseded(observeErr, m.Name, desired.Replicas, desired.Resources) {
+			return observeErr
+		}
+		return planProxyServingCorrection(s, m, desired, service, terminal)
+	}
+	if observeErr != nil {
+		return observeErr
+	}
 	hash, err := p.desiredProxyRuntimeHash(rc, m)
 	if err != nil {
 		return err
@@ -713,5 +835,25 @@ func (p *Core) reconcileFailedProxyScale(ctx context.Context, rc *engine.Context
 		}
 	}
 	rc.SyncWait = "ProxySQL scale failed; restore backend health or supersede the failed replica count"
+	return nil
+}
+
+func planProxyServingCorrection(s *state, m *member, desired domain.ComponentSpec, service *infra.Service, failure *infra.ProxyRolloutFailureError) error {
+	if service.MaxContainers < 1 {
+		return engine.ErrUnavailable
+	}
+	u := s.Rolling
+	u.Targets[m.Name] = desired
+	m.PendingReplicas = 0
+	u.Op = nil
+	u.ScaleIn = desired.Replicas < max(m.Replicas, service.MaxContainers)
+	if failure.Action == "restart" || !reflect.DeepEqual(service.Resources, desired.Resources) {
+		u.ProxyRecovery = &domain.ComponentSpec{Replicas: service.MaxContainers, Resources: service.Resources}
+		u.Stage = "resource-recovery-scale"
+	} else {
+		u.ProxyRecovery = nil
+		u.Stage = "scale-recovery"
+	}
+	publishRevision(s)
 	return nil
 }

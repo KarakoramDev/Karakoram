@@ -35,6 +35,11 @@ func (p *Core) reconcileRecoveryResources(ctx context.Context, rc *engine.Contex
 			return true, nil
 		}
 		service, err := rc.Backend.GetService(ctx, m.Name)
+		if m.Role == "proxy" && engine.ProxyRolloutSuperseded(err, m.Name, desiredComponent(rc, m).Replicas, desired) {
+			// Serving incumbents still own the old configuration. Correct this
+			// target through the normal surge-publication and window barriers.
+			continue
+		}
 		if err != nil {
 			return true, err
 		}

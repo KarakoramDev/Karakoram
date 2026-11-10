@@ -106,6 +106,14 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 			var probes sync.WaitGroup
 			probes.Go(func() {
 				runtime, runtimeErr = rc.Backend.GetService(ctx, m.Name)
+				if m.Role == "proxy" && runtime != nil {
+					desired := desiredComponent(rc, m)
+					if engine.ProxyRolloutSuperseded(runtimeErr, m.Name, desired.Replicas, desired.Resources) {
+						// A newer explicit target may be planned, but retain
+						// StatusFailed: this is never serving-health evidence.
+						runtimeErr = nil
+					}
+				}
 				if runtimeReady != nil {
 					close(runtimeReady)
 				}

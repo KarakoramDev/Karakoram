@@ -35,27 +35,28 @@ type task struct {
 	Error        string `json:"error"`
 }
 type operation struct {
-	Action              string            `json:"action"`
-	AppID               string            `json:"appId"`
-	AppName             string            `json:"appName"`
-	Hostname            string            `json:"hostname"`
-	PreviousDeployments []string          `json:"deployments,omitempty"`
-	PreviousTasks       []string          `json:"tasks,omitempty"`
-	Issued              time.Time         `json:"issued"`
-	Node                string            `json:"node,omitempty"`
-	Services            map[string]string `json:"services,omitempty"`
-	Failed              bool              `json:"failed,omitempty"`
-	WriterFenced        bool              `json:"writerFenced,omitempty"`
-	Digest              string            `json:"digest,omitempty"`
-	Uncertain           bool              `json:"uncertain,omitempty"`
-	ServiceIdentity     string            `json:"serviceIdentity,omitempty"`
-	RestoreUpdateConfig json.RawMessage   `json:"restoreUpdateConfig,omitempty"`
-	Specification       string            `json:"specification,omitempty"`
-	ProxyServingProbe   bool              `json:"proxyServingProbe,omitempty"`
-	HealthGated         bool              `json:"healthGated,omitempty"`
-	ExpectedReplicas    int               `json:"expectedReplicas,omitempty"`
-	ForceUpdate         uint64            `json:"forceUpdate,omitempty"`
-	RequestID           string            `json:"requestId,omitempty"`
+	Action              string                          `json:"action"`
+	AppID               string                          `json:"appId"`
+	AppName             string                          `json:"appName"`
+	Hostname            string                          `json:"hostname"`
+	PreviousDeployments []string                        `json:"deployments,omitempty"`
+	PreviousTasks       []string                        `json:"tasks,omitempty"`
+	Issued              time.Time                       `json:"issued"`
+	Node                string                          `json:"node,omitempty"`
+	Services            map[string]string               `json:"services,omitempty"`
+	Failed              bool                            `json:"failed,omitempty"`
+	WriterFenced        bool                            `json:"writerFenced,omitempty"`
+	Digest              string                          `json:"digest,omitempty"`
+	Uncertain           bool                            `json:"uncertain,omitempty"`
+	ServiceIdentity     string                          `json:"serviceIdentity,omitempty"`
+	RestoreUpdateConfig json.RawMessage                 `json:"restoreUpdateConfig,omitempty"`
+	Specification       string                          `json:"specification,omitempty"`
+	ProxyServingProbe   bool                            `json:"proxyServingProbe,omitempty"`
+	HealthGated         bool                            `json:"healthGated,omitempty"`
+	ExpectedReplicas    int                             `json:"expectedReplicas,omitempty"`
+	ForceUpdate         uint64                          `json:"forceUpdate,omitempty"`
+	RequestID           string                          `json:"requestId,omitempty"`
+	ProxyRolloutFailure *infra.ProxyRolloutFailureError `json:"proxyRolloutFailure,omitempty"`
 }
 
 // UnmarshalJSON migrates journals and opaque handles written before exact
@@ -415,6 +416,7 @@ func (b *Backend) pollOperation(ctx context.Context, op infra.Op) (infra.OpState
 	}
 	if state.Failed {
 		m.Pending.Failed = true
+		m.Pending.ProxyRolloutFailure = state.ProxyRolloutFailure
 		if o.HealthGated {
 			m.ProxyAdmissionFailure = &proxyAdmissionFailure{Issued: o.Issued, ForceUpdate: o.ForceUpdate}
 		}
@@ -524,6 +526,15 @@ func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	if m, ok := parseMetadata(a.Description); ok && m.Pending != nil && !sameOperation(m.Pending, o) {
 		state.Expired = true
 		state.Status = "expired"
+		return state, nil
+	}
+	if m, ok := parseMetadata(a.Description); ok && sameOperation(m.Pending, o) &&
+		m.Pending.Failed && !m.Pending.Uncertain && m.Pending.ProxyRolloutFailure != nil &&
+		m.Pending.HealthGated && o.HealthGated && m.Pending.ForceUpdate == o.ForceUpdate &&
+		(o.Action == "scale" || o.Action == "restart") {
+		state.Failed, state.Status = true, "failed"
+		state.ProxyRolloutFailure = m.Pending.ProxyRolloutFailure
+		state.Message = state.ProxyRolloutFailure.Error()
 		return state, nil
 	}
 	if m, ok := parseMetadata(a.Description); ok && m.Desired != "" &&

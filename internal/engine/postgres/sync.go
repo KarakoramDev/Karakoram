@@ -72,7 +72,10 @@ func verifyMember(ctx context.Context, rc *engine.Context, m *member) error {
 	observed := []*infra.Service{}
 	for _, item := range services {
 		service, err := rc.Backend.GetService(ctx, item.name)
-		if err != nil {
+		var proxyFailure *infra.ProxyRolloutFailureError
+		// Identity verification is not serving-health authority. A retained
+		// failed proxy receipt must not prevent an explicit corrective rollout.
+		if err != nil && !(item.name == m.Name && m.Role == "proxy" && service != nil && errors.As(err, &proxyFailure)) {
 			if !engine.ConfirmedVolumeLoss(err, m.Volume, m.VolumeID) {
 				return err
 			}
@@ -134,6 +137,16 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 		// The backend refused replacement before stopping the serving
 		// allocation. Release this terminal receipt without applying its
 		// target bounds, so newer desired resources can converge.
+		s.Pending = nil
+		return true, err
+	}
+	var proxyFailure *infra.ProxyRolloutFailureError
+	if errors.As(err, &proxyFailure) && pendingMember != nil && pendingMember.Role == "proxy" && (q.Action == "scale" || q.Action == "resize") {
+		desired := desiredComponent(rc, pendingMember)
+		if engine.ProxyRolloutSuperseded(err, pendingMember.Name, desired.Replicas, desired.Resources) {
+			s.Pending = nil
+			return false, nil
+		}
 		s.Pending = nil
 		return true, err
 	}
@@ -907,10 +920,15 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if e != nil || !st.Running {
 			rc.SyncWait = nativeObservationWait(m.Name, e)
 			service, err := rc.Backend.GetService(ctx, m.Name)
+			desired := desiredComponent(rc, m)
+			if m.Role == "proxy" && service != nil && engine.ProxyRolloutSuperseded(err, m.Name, desired.Replicas, desired.Resources) {
+				// A corrected serving rollout still needs native incumbents and
+				// their latest configuration; never use failed-runtime bypasses.
+				return result, nil
+			}
 			if err != nil {
 				return result, err
 			}
-			desired := desiredComponent(rc, m)
 			// A failed resize can leave the agent unable to start. Only an
 			// authoritative infrastructure failure permits correcting bounds
 			// without live role discovery; an unreachable running member must
@@ -962,12 +980,21 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 		desired := desiredComponent(rc, m)
 		proxyServing := true
+		resourcesChanged := !reflect.DeepEqual(m.Resources, desired.Resources)
+		countChanged := m.Replicas != desired.Replicas
+		proxyCountBeforeRecovery := m.Replicas
 		if m.Role == "proxy" {
 			runtime, err := rc.Backend.GetService(ctx, m.Name)
-			if err != nil {
+			recovering := runtime != nil && engine.ProxyRolloutSuperseded(err, m.Name, desired.Replicas, desired.Resources)
+			if err != nil && !recovering {
 				return result, err
 			}
-			if runtime != nil && runtime.Status == infra.StatusFailed &&
+			if recovering {
+				proxyCountBeforeRecovery = max(proxyCountBeforeRecovery, runtime.MaxContainers)
+				resourcesChanged = resourcesChanged || !reflect.DeepEqual(runtime.Resources, desired.Resources)
+				countChanged = countChanged || runtime.MaxContainers != desired.Replicas
+			}
+			if !recovering && runtime != nil && runtime.Status == infra.StatusFailed &&
 				m.ConfigVersion == s.ConfigVersion && m.Version == rc.Cluster.Spec.Version && reflect.DeepEqual(m.Resources, desired.Resources) &&
 				(m.Replicas == desired.Replicas || runtime.MaxContainers == desired.Replicas) {
 				rc.SyncWait = fmt.Sprintf("recovering failed proxy %s", m.Name)
@@ -993,13 +1020,13 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				defer a.Close()
 				return result, a.Reload(ctx)
 			}
-			if m.Replicas != desired.Replicas || !reflect.DeepEqual(m.Resources, desired.Resources) {
+			if countChanged || resourcesChanged {
 				rc.SyncWait = fmt.Sprintf("waiting for proxy %s configuration before resize", m.Name)
 				applied, e := proxyApplied(ctx, rc, m, s.ConfigVersion, false)
 				if e != nil || !applied {
 					return result, e
 				}
-				if m.Replicas != desired.Replicas {
+				if countChanged {
 					proxyServing, e = proxyRuntimePreservesServing(ctx, rc, m.Name)
 					if e != nil {
 						return result, e
@@ -1007,10 +1034,10 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				}
 			}
 		}
-		changed := m.ConfigVersion != s.ConfigVersion || m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources)
-		if m.Role == "proxy" && m.Replicas != desired.Replicas && !changed {
+		changed := m.ConfigVersion != s.ConfigVersion || m.Version != rc.Cluster.Spec.Version || resourcesChanged
+		if m.Role == "proxy" && countChanged && !changed {
 			rc.SyncWait = fmt.Sprintf("scaling proxy %s", m.Name)
-			if desired.Replicas < m.Replicas || !rc.Backend.Capabilities().ReplicaScalePreservesServing || !proxyServing {
+			if desired.Replicas < proxyCountBeforeRecovery || !rc.Backend.Capabilities().ReplicaScalePreservesServing || !proxyServing {
 				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
 					return wait, nil
 				}
@@ -1043,7 +1070,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if !changed {
 			continue
 		}
-		if needsDisruption(p, rc, m, desired) {
+		if needsDisruption(p, rc, m, desired) || m.Role == "proxy" && resourcesChanged {
 			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
 				return wait, nil
 			}
@@ -1052,7 +1079,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			rc.SyncWait = fmt.Sprintf("switching leadership away from %s", m.Name)
 			return result, switchAwayConfigured(ctx, rc, s, m.Name, true)
 		}
-		if !reflect.DeepEqual(m.Resources, desired.Resources) {
+		if resourcesChanged {
 			rc.SyncWait = fmt.Sprintf("resizing member %s", m.Name)
 			if m.Role == "proxy" {
 				if err := engine.RequireProxyAdmissionProtocol(ctx, rc, m.Name); err != nil {
