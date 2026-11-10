@@ -43,6 +43,7 @@ import (
 // Run opens sealed persistence, initializes PKI/auth, then runs both listeners and controllers.
 // Cancellation gracefully stops HTTP traffic before closing the database.
 func Run(ctx context.Context, c Config, logger *slog.Logger) error {
+	ctx = infra.WithRequestCaller(ctx, infra.CallerController)
 	if err := c.Validate(); err != nil {
 		return err
 	}

@@ -61,6 +61,7 @@ func Backoff(failures int) time.Duration {
 }
 
 func (j *Janitor) Run(ctx context.Context) error {
+	ctx = infra.WithRequestCaller(ctx, infra.CallerOrphanJanitor)
 	ticker := time.NewTicker(PollInterval)
 	defer ticker.Stop()
 	for {

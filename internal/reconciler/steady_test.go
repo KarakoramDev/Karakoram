@@ -30,6 +30,7 @@ type steadyProvider struct {
 	freshSyncViolation       atomic.Bool
 	lifecycleMarkerViolation atomic.Bool
 	renewalMarkerViolation   atomic.Bool
+	callerViolation          atomic.Bool
 	degraded                 atomic.Bool
 	blockClaim               bool
 	requeue                  time.Duration
@@ -38,6 +39,9 @@ type steadyProvider struct {
 }
 
 func (p *steadyProvider) Sync(ctx context.Context, _ *engine.Context) (engine.Result, error) {
+	if infra.RequestCaller(ctx) != infra.CallerReconcile {
+		p.callerViolation.Store(true)
+	}
 	p.syncs.Add(1)
 	if engine.SteadyEligible(ctx) {
 		p.freshSyncViolation.Store(true)
@@ -50,6 +54,13 @@ func (p *steadyProvider) CanClaimOperation(*domain.Cluster) (bool, error) {
 }
 
 func (p *steadyProvider) Status(ctx context.Context, rc *engine.Context) (domain.ClusterStatus, error) {
+	wantCaller := infra.CallerReconcile
+	if rc.AvailabilityOnly {
+		wantCaller = infra.CallerAvailability
+	}
+	if infra.RequestCaller(ctx) != wantCaller {
+		p.callerViolation.Store(true)
+	}
 	if p.snapshot != nil {
 		p.snapshot.Lookup(ctx, "cluster")
 	}
@@ -134,6 +145,11 @@ func TestSteadyHourScheduleAndObservationIsolation(t *testing.T) {
 		m.opts.SteadyResyncInterval = 10 * time.Minute
 		stop := runSteadyManager(t, m)
 		defer stop()
+		defer func() {
+			if p.callerViolation.Load() {
+				t.Error("steady observation or deep reconcile lost its request caller")
+			}
+		}()
 		if p.syncs.Load() != 1 {
 			t.Fatal("startup did not coalesce discovery and timer", p.syncs.Load())
 		}

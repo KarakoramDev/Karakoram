@@ -37,3 +37,12 @@ var StateMetrics = []StateMetricDescriptor{
 	{"karakoram_control_plane_backup_last_failure_timestamp_seconds", "Unix timestamp of the last failed control-plane backup.", "gauge", nil},
 	{"karakoram_notification_deliveries_failed_total", "Total notification deliveries that exhausted retries.", "counter", []string{"channel"}},
 }
+
+// PollingMetrics are installation-wide process counters, requiring settings:read.
+// Provider identifies only the platform type, never a target or cluster.
+var PollingMetrics = []StateMetricDescriptor{
+	{"karakoram_platform_requests_total", "Platform requests started or served from the target snapshot.", "counter", []string{"provider", "caller", "kind", "source"}},
+	{"karakoram_platform_listing_checks_total", "Completed target listing checks by validation result.", "counter", []string{"provider", "result"}},
+	{"karakoram_agent_heartbeats_total", "Agent heartbeat ingestion results; initial token handshakes are token_rejected.", "counter", []string{"result"}},
+	{"karakoram_observation_steady_total", "Steady observation attempts accepted or discarded for fresh fallback.", "counter", []string{"result"}},
+}

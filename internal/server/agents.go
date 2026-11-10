@@ -14,6 +14,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
@@ -107,6 +108,7 @@ func (d *AgentDialer) Close() {
 func (s *Server) InternalHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /internal/agent/v1/config", func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(infra.WithRequestCaller(r.Context(), infra.CallerAgentConfig))
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		token, authenticated := s.authenticateAgent(w, r)

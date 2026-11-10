@@ -16,6 +16,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 )
 
@@ -95,9 +96,11 @@ func TestAgentDialerNamespacesRouteAndCacheIndependently(t *testing.T) {
 type configCapabilityProvider struct {
 	fakeProvider
 	capabilities []string
+	caller       string
 }
 
 func (p *configCapabilityProvider) MemberConfig(ctx context.Context, rc *engine.Context, member string) (agentapi.MemberConfig, error) {
+	p.caller = infra.RequestCaller(ctx)
 	p.capabilities = slices.Clone(rc.AgentConfigCapabilities)
 	return p.fakeProvider.MemberConfig(ctx, rc, member)
 }
@@ -133,6 +136,9 @@ func TestAgentConfigCapabilitiesAreAuthenticatedAndRequestScoped(t *testing.T) {
 		request.Header.Set("Authorization", "Bearer config-member-token")
 		response := httptest.NewRecorder()
 		s.InternalHandler().ServeHTTP(response, request)
+		if p.caller != infra.CallerAgentConfig {
+			t.Fatalf("configuration caller=%q", p.caller)
+		}
 		if response.Code != 200 || !slices.Equal(p.capabilities, tc.want) {
 			t.Fatalf("status=%d capabilities=%v, want %v", response.Code, p.capabilities, tc.want)
 		}

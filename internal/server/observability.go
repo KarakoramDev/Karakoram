@@ -9,12 +9,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/KarakoramDev/Karakoram/internal/agentpush"
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
 	"github.com/KarakoramDev/Karakoram/internal/store"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -174,6 +177,11 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 			if err := monitoring.WriteStatePrometheus(w, snapshot); err != nil {
 				return err
 			}
+			if snapshot.Installation {
+				if err := writePollingPrometheus(w); err != nil {
+					return err
+				}
+			}
 			if s.Monitoring == nil {
 				return nil
 			}
@@ -216,6 +224,76 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		return ok(a)
 	}
 	return fail(500, "internal_error", "Unknown observability operation")
+}
+
+// Polling counters have installation scope, like the other settings:read series.
+func writePollingPrometheus(w io.Writer) error {
+	platform := infra.PlatformCounters()
+	acceptedHeartbeats, rejectedHeartbeats, invalidHeartbeats := agentpush.HeartbeatCounters()
+	acceptedSteady, fallbackSteady := engine.SteadyCounters()
+	escape := strings.NewReplacer("\\", "\\\\", "\n", "\\n", "\"", "\\\"")
+	for _, descriptor := range monitoring.PollingMetrics {
+		if _, err := fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s %s\n", descriptor.Name, descriptor.Help, descriptor.Name, descriptor.Type); err != nil {
+			return err
+		}
+		emit := func(value uint64, labels string) error {
+			_, err := fmt.Fprintf(w, "%s{%s} %d\n", descriptor.Name, labels, value)
+			return err
+		}
+		switch descriptor.Name {
+		case "karakoram_platform_requests_total":
+			for _, c := range platform {
+				for _, requests := range c.Requests {
+					base := `provider="` + escape.Replace(c.Provider) + `",caller="` + requests.Caller + `",`
+					for _, row := range []struct {
+						value  uint64
+						labels string
+					}{
+						{requests.Reads, `kind="read",source="network"`},
+						{requests.Hits, `kind="read",source="snapshot"`},
+						{requests.Mutations, `kind="mutation",source="network"`},
+					} {
+						if err := emit(row.value, base+row.labels); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		case "karakoram_platform_listing_checks_total":
+			for _, c := range platform {
+				base := `provider="` + escape.Replace(c.Provider) + `",`
+				for _, row := range []struct {
+					value  uint64
+					result string
+				}{
+					{c.Unchanged, "unchanged"}, {c.Drift, "drift"}, {c.Errors, "error"},
+				} {
+					if err := emit(row.value, base+`result="`+row.result+`"`); err != nil {
+						return err
+					}
+				}
+			}
+		case "karakoram_agent_heartbeats_total":
+			for _, row := range []struct {
+				value  uint64
+				result string
+			}{
+				{acceptedHeartbeats, "accepted"}, {rejectedHeartbeats, "token_rejected"}, {invalidHeartbeats, "invalid"},
+			} {
+				if err := emit(row.value, `result="`+row.result+`"`); err != nil {
+					return err
+				}
+			}
+		case "karakoram_observation_steady_total":
+			if err := emit(acceptedSteady, `result="accepted"`); err != nil {
+				return err
+			}
+			if err := emit(fallbackSteady, `result="fallback"`); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 func eventCursor(cursor string) (int64, error) {
 	if cursor == "" {

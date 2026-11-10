@@ -11,12 +11,15 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"math/big"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/cpbackup"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/monitoring"
 )
 
 func metricTestCertificate(t *testing.T) []byte {
@@ -43,6 +46,91 @@ func metricReader(t *testing.T, s *Server, name, permissions string) string {
 		t.Fatal(err)
 	}
 	return token
+}
+
+func TestPollingMetricsExposition(t *testing.T) {
+	s, _, admin := testServer(t)
+	snapshot := infra.PlatformSnapshot("dokploy|https://target.invalid|private-target")
+	snapshot.ReadStart(t.Context())
+	snapshot.BeginMutation(t.Context())()
+	w := call(s, "GET", "/metrics", "", admin)
+	if w.Code != 200 || w.Header().Get("Content-Type") != "text/plain; version=0.0.4; charset=utf-8" {
+		t.Fatal(w.Code, w.Header(), w.Body.String())
+	}
+	body := w.Body.String()
+	for _, descriptor := range monitoring.PollingMetrics {
+		help := "# HELP " + descriptor.Name + " " + descriptor.Help + "\n"
+		typ := "# TYPE " + descriptor.Name + " counter\n"
+		if strings.Count(body, help) != 1 || strings.Count(body, typ) != 1 {
+			t.Errorf("missing or duplicate HELP/TYPE for %s", descriptor.Name)
+		}
+		found := 0
+		for _, line := range strings.Split(body, "\n") {
+			if !strings.HasPrefix(line, descriptor.Name+"{") {
+				continue
+			}
+			found++
+			labels, value, ok := strings.Cut(line, "} ")
+			if !ok {
+				t.Fatalf("malformed sample %q", line)
+			}
+			if _, err := strconv.ParseUint(value, 10, 64); err != nil {
+				t.Fatalf("noninteger counter %q: %v", line, err)
+			}
+			for _, label := range descriptor.Labels {
+				if !strings.Contains(labels, label+`="`) {
+					t.Errorf("missing %s in %q", label, line)
+				}
+			}
+		}
+		if found == 0 {
+			t.Errorf("no samples for %s", descriptor.Name)
+		}
+	}
+	for _, sample := range []string{
+		`karakoram_platform_requests_total{provider="dokploy",caller="other",kind="read",source="network"}`,
+		`karakoram_platform_requests_total{provider="dokploy",caller="other",kind="read",source="snapshot"}`,
+		`karakoram_platform_requests_total{provider="dokploy",caller="other",kind="mutation",source="network"}`,
+		`karakoram_platform_listing_checks_total{provider="dokploy",result="unchanged"}`,
+		`karakoram_platform_listing_checks_total{provider="dokploy",result="drift"}`,
+		`karakoram_platform_listing_checks_total{provider="dokploy",result="error"}`,
+		`karakoram_agent_heartbeats_total{result="accepted"}`,
+		`karakoram_agent_heartbeats_total{result="token_rejected"}`,
+		`karakoram_agent_heartbeats_total{result="invalid"}`,
+		`karakoram_observation_steady_total{result="accepted"}`,
+		`karakoram_observation_steady_total{result="fallback"}`,
+	} {
+		if !strings.Contains(body, sample+" ") {
+			t.Errorf("missing %s", sample)
+		}
+	}
+	for _, caller := range []string{"other", "listing", "reconcile", "operation", "availability", "backoff-observe", "dial-authorization", "namespace", "orphan-janitor", "api"} {
+		for _, labels := range []string{`kind="read",source="network"`, `kind="read",source="snapshot"`, `kind="mutation",source="network"`} {
+			if !strings.Contains(body, `karakoram_platform_requests_total{provider="dokploy",caller="`+caller+`",`+labels+`} `) {
+				t.Errorf("missing caller combination %s %s", caller, labels)
+			}
+		}
+	}
+	for _, private := range []string{"target.invalid", "private-target"} {
+		if strings.Contains(body, private) {
+			t.Errorf("target leaked: %s", private)
+		}
+	}
+	reader := metricReader(t, s, "pollingreader", "\np, user:pollingreader, monitoring, read, default/prod, allow\n")
+	for _, tc := range []struct{ path, credential string }{
+		{"/metrics", reader}, {"/metrics?namespace=default", admin},
+	} {
+		response := call(s, "GET", tc.path, "", tc.credential)
+		if response.Code != 200 {
+			t.Fatal(response.Code, response.Body.String())
+		}
+		for _, descriptor := range monitoring.PollingMetrics {
+			if strings.Contains(response.Body.String(), descriptor.Name) {
+				t.Errorf("installation counter leaked to filtered scrape: %s", descriptor.Name)
+			}
+		}
+	}
+	t.Log("4 counter families; 10 bounded callers x 3 request kinds/sources; installation-only authorization; no target labels")
 }
 
 func TestStateMetricsAuthorizationNamespaceAndDisabledMonitoring(t *testing.T) {

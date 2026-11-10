@@ -45,12 +45,16 @@ const (
 	CallerNamespace         = "namespace"
 	CallerOrphanJanitor     = "orphan-janitor"
 	CallerAPI               = "api"
+	CallerAgentConfig       = "agent-config"
+	CallerMonitoring        = "monitoring"
+	CallerController        = "controller"
 )
 
 var requestCallers = [...]string{
 	CallerOther, CallerListing, CallerReconcile, CallerOperation,
 	CallerAvailability, CallerBackoffObserve, CallerDialAuthorization,
 	CallerNamespace, CallerOrphanJanitor, CallerAPI,
+	CallerAgentConfig, CallerMonitoring, CallerController,
 }
 
 // WithRequestCaller tags platform traffic with a bounded caller class. Unknown

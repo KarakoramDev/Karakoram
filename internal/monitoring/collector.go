@@ -19,6 +19,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -236,6 +237,7 @@ func (c *Collector) MemberUsage(cluster domain.ClusterRef, member string) Member
 }
 
 func (c *Collector) scrape(ctx context.Context) error {
+	ctx = infra.WithRequestCaller(ctx, infra.CallerMonitoring)
 	// Retention must still run when discovery or new ingestion fails, especially
 	// when the database has no room for additional metric samples.
 	pruneErr := c.pruneRetention(ctx)
