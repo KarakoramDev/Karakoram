@@ -108,6 +108,8 @@ func (d *AgentDialer) Close() {
 func (s *Server) InternalHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /internal/agent/v1/config", func(w http.ResponseWriter, r *http.Request) {
+		result := agentConfigError
+		defer func() { agentConfigRequests[result].Add(1) }()
 		r = r.WithContext(infra.WithRequestCaller(r.Context(), infra.CallerAgentConfig))
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -125,17 +127,20 @@ func (s *Server) InternalHandler() http.Handler {
 			return
 		}
 		rc.AgentConfigCapabilities = r.URL.Query()["capability"]
-		inputs, eligible := s.memberConfigInputs(r.Context(), rc, token.Member)
+		proof := s.memberConfigInputs(r.Context(), rc, token.Member)
 		key := memberConfigKey(rc, token.Member)
-		revision := s.conditionalConfigRevision(key, inputs, eligible)
-		changeRevision := s.memberConfigChangeRevision(r.Context(), rc, token.Member)
+		certificate := s.conditionalConfigCertificate(key, proof.inputs, proof.eligible)
+		changeRevision, contentRevision := proof.change, proof.content
+		if changeRevision == "" {
+			changeRevision, contentRevision, _ = s.memberConfigNotice(r.Context(), rc, token.Member)
+		}
 		var renderGate *configRenderGate
 		defer func() {
 			if renderGate != nil {
 				s.releaseConfigRender(renderGate)
 			}
 		}()
-		cfg, unchanged, err := engine.PullMemberConfig(r.URL.Query().Get("revision"), revision, func() (agentapi.MemberConfig, error) {
+		cfg, unchanged, err := engine.PullMemberConfig(r.URL.Query().Get("revision"), certificate.revision, func() (agentapi.MemberConfig, error) {
 			gate, acquireErr := s.acquireConfigRender(r.Context(), key)
 			if acquireErr != nil {
 				return agentapi.MemberConfig{}, acquireErr
@@ -150,6 +155,10 @@ func (s *Server) InternalHandler() http.Handler {
 			return agentapi.MemberConfig{}, engine.ErrNotSupported
 		})
 		if unchanged {
+			if certificate.changeAck != "" {
+				w.Header().Set(agentapi.ConfigChangeAckHeader, certificate.changeAck)
+			}
+			result = agentConfigUnchanged
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
@@ -173,18 +182,21 @@ func (s *Server) InternalHandler() http.Handler {
 		}
 		// Certify only unchanged inputs with a current render-end baseline.
 		// The returned token also binds this actual freshly rendered payload.
-		finalInputs, finalEligible := s.memberConfigInputs(r.Context(), rc, token.Member)
-		certifiedInputs := ""
-		if inputs != "" && inputs == finalInputs && finalEligible {
-			certifiedInputs = finalInputs
+		finalProof := s.memberConfigInputs(r.Context(), rc, token.Member)
+		certifiedInputs, certifiedChange := "", ""
+		if proof.inputs != "" && proof.inputs == finalProof.inputs && finalProof.eligible {
+			certifiedInputs, certifiedChange = finalProof.inputs, finalProof.change
+			changeRevision, contentRevision = finalProof.change, finalProof.content
 		}
-		if err := s.issueConfigRevision(key, certifiedInputs, rc.ObservationEpoch, &cfg); err != nil {
+		if err := s.issueConfigRevision(key, certifiedInputs, rc.ObservationEpoch, certifiedChange, &cfg); err != nil {
 			_ = s.failure(err).write(w)
 			return
 		}
 		s.releaseConfigRender(renderGate)
 		renderGate = nil
 		cfg.ChangeRevision = changeRevision
+		cfg.ContentRevision = contentRevision
+		result = agentConfigFull
 		_ = ok(cfg).write(w)
 	})
 	mux.HandleFunc("POST "+agentapi.HeartbeatPath, func(w http.ResponseWriter, r *http.Request) {
@@ -224,12 +236,17 @@ func (s *Server) InternalHandler() http.Handler {
 			return
 		}
 		key := agentpush.MemberKey{Namespace: domain.NormalizedNamespace(token.Namespace), Cluster: token.Cluster, Member: token.Member}
+		if content := r.Header.Get(agentapi.ConfigContentRevisionHeader); len(content) <= 128 {
+			req.ConfigContentRevision = content
+		}
 		response := s.AgentPush.Ingest(key, *req)
 		if req.ConfigRevision != "" {
 			rc, _, err := s.context(r.Context(), domain.ClusterRef{Namespace: token.Namespace, Name: token.Cluster})
-			if err == nil {
-				current := s.memberConfigChangeRevision(r.Context(), rc, token.Member)
-				response.ReloadConfig = current != "" && current != req.ConfigRevision
+			if err == nil && s.providerContext(rc) == nil {
+				current, content, steady := s.memberConfigNotice(r.Context(), rc, token.Member)
+				response.ConfigRevision = current
+				contentChanged := req.ConfigContentRevision == "" || content != req.ConfigContentRevision
+				response.ReloadConfig = current != "" && current != req.ConfigRevision && (steady || contentChanged)
 			}
 		}
 		_ = ok(response).write(w)

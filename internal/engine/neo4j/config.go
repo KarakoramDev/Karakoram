@@ -166,3 +166,8 @@ func (*Provider) RequiresFreshMemberConfig(_ context.Context, rc *engine.Context
 	s, err := load(rc.Cluster)
 	return err != nil || s.ConfigOptions == nil, err
 }
+
+// MemberConfigNoticeContent uses the persisted maintenance configuration only.
+func (p *Provider) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	return engine.StoredConfigNoticeContent(ctx, p, rc, name)
+}

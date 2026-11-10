@@ -589,3 +589,8 @@ func memberIPs(ctx context.Context, rc *engine.Context) ([]net.IP, error) {
 	}
 	return ips, nil
 }
+
+// MemberConfigNoticeContent retains fresh fallback for legacy live RAM discovery.
+func (p *Provider) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	return engine.StoredConfigNoticeContent(ctx, p, rc, name)
+}

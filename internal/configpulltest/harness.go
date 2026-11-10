@@ -38,12 +38,16 @@ import (
 type convergedProvider struct {
 	engine.Provider
 	renders *atomic.Int64
+	healthy *atomic.Bool
 }
 
 func (p convergedProvider) Sync(context.Context, *engine.Context) (engine.Result, error) {
 	return engine.Result{Steady: true}, nil
 }
 func (p convergedProvider) Status(_ context.Context, rc *engine.Context) (domain.ClusterStatus, error) {
+	if p.healthy != nil && !p.healthy.Load() {
+		return domain.ClusterStatus{Phase: domain.PhaseDegraded, Conditions: []domain.Condition{{Type: "Ready", Status: "False"}}}, nil
+	}
 	return domain.ClusterStatus{Phase: domain.PhaseReady, Conditions: []domain.Condition{{Type: "Ready", Status: "True"}}, Members: []domain.MemberStatus{{Name: rc.Cluster.Name + "p0", Health: true, Agent: domain.AgentStatus{Healthy: true, LastSeen: rc.Clock.Now()}}}}, nil
 }
 func (p convergedProvider) MemberConfig(ctx context.Context, rc *engine.Context, member string) (agentapi.MemberConfig, error) {
@@ -56,6 +60,13 @@ func (p convergedProvider) RequiresFreshMemberConfig(ctx context.Context, rc *en
 		return source.RequiresFreshMemberConfig(ctx, rc, member)
 	}
 	return false, nil
+}
+
+func (p convergedProvider) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, member string) (string, error) {
+	if source, ok := p.Provider.(engine.ConfigNoticeContentSource); ok {
+		return source.MemberConfigNoticeContent(ctx, rc, member)
+	}
+	return "", nil
 }
 
 func Run(t *testing.T, p engine.Provider, rc *engine.Context, advance func(time.Duration), total func() int, withdraw func()) {
@@ -110,7 +121,9 @@ func Run(t *testing.T, p engine.Provider, rc *engine.Context, advance func(time.
 		t.Fatal(err)
 	}
 	renderCalls := &atomic.Int64{}
-	registry, err := engine.NewRegistry(convergedProvider{Provider: p, renders: renderCalls})
+	healthy := &atomic.Bool{}
+	healthy.Store(true)
+	registry, err := engine.NewRegistry(convergedProvider{Provider: p, renders: renderCalls, healthy: healthy})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,6 +324,7 @@ func Run(t *testing.T, p engine.Provider, rc *engine.Context, advance func(time.
 	waitSteady()
 	request := httptest.NewRequest("POST", agentapi.HeartbeatPath, strings.NewReader(fmt.Sprintf(`{"session":"phase-offset","instance":{"hostname":"proxy"},"configRevision":%q}`, applied.ChangeRevision)))
 	request.Header.Set("Authorization", "Bearer "+proxy+"-token")
+	request.Header.Set(agentapi.ConfigContentRevisionHeader, applied.ContentRevision)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	var notice agentapi.HeartbeatResponse
@@ -334,4 +348,101 @@ func Run(t *testing.T, p engine.Provider, rc *engine.Context, advance func(time.
 		}
 	}
 	t.Log("forced reconcile invalidation survived steady re-entry; notice and full fresh rendering completed at the next <=7s heartbeat opportunity")
+	if p.Name() == "postgres" {
+		// Exercise the real manager's drift invalidation, single settle and
+		// repeated health cycles independently of the target-only budget.
+		var listingVersion atomic.Int64
+		snapshot.SetListing(func(context.Context) (string, error) {
+			return fmt.Sprint(listingVersion.Load()), nil
+		})
+		advance(time.Minute)
+		if !snapshot.EnsureListing(t.Context()) {
+			t.Fatal("cycle listing unavailable")
+		}
+		manager.Trigger(current.Ref())
+		waitSteady()
+		_, applied = pull(proxy, "")
+		noticePulls := 0
+		cycleHeartbeat := func() bool {
+			request := httptest.NewRequest("POST", agentapi.HeartbeatPath, strings.NewReader(fmt.Sprintf(`{"session":"cycles","configRevision":%q}`, applied.ChangeRevision)))
+			request.Header.Set("Authorization", "Bearer "+proxy+"-token")
+			request.Header.Set(agentapi.ConfigContentRevisionHeader, applied.ContentRevision)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			var notice agentapi.HeartbeatResponse
+			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &notice) != nil {
+				t.Fatal("cycle heartbeat failed", response.Code)
+			}
+			if !notice.ReloadConfig {
+				return false
+			}
+			noticePulls++
+			status, cfg := pull(proxy, applied.PullRevision)
+			if status == 200 {
+				applied = cfg
+				return true
+			}
+			return false
+		}
+		quiet := func() {
+			t.Helper()
+			before := renderCalls.Load()
+			beforePulls := noticePulls
+			for range 20 {
+				cycleHeartbeat()
+			}
+			if renderCalls.Load() != before || noticePulls != beforePulls {
+				t.Fatal("config rendering sustained further requests without an external input")
+			}
+		}
+		const periods = 3
+		cycleStart, triggerStart := renderCalls.Load(), manager.ConfigInvalidationGeneration(current.Ref())
+		for period := range periods {
+			before := renderCalls.Load()
+			listingVersion.Add(1)
+			advance(time.Minute)
+			if !snapshot.EnsureListing(t.Context()) {
+				t.Fatal("cycle drift unavailable")
+			}
+			if !cycleHeartbeat() {
+				t.Fatal("listing change did not cause a successful fresh render")
+			}
+			manager.Trigger(current.Ref())
+			waitSteady()
+			cycleHeartbeat()
+			quiet()
+			if renders := renderCalls.Load() - before; renders < 1 || renders > 2 {
+				t.Fatalf("single-settle listing drift rendered %d times, want1–2", renders)
+			}
+			healthy.Store(false)
+			manager.Trigger(current.Ref())
+			deadline := time.NewTimer(5 * time.Second)
+			tick := time.NewTicker(time.Millisecond)
+			for {
+				c, err := st.GetCluster(t.Context(), current.Ref())
+				if err == nil && c.Status.Phase == domain.PhaseDegraded {
+					break
+				}
+				select {
+				case <-deadline.C:
+					t.Fatal("manager did not observe health failure")
+				case <-tick.C:
+				}
+			}
+			deadline.Stop()
+			tick.Stop()
+			cycleHeartbeat()
+			healthy.Store(true)
+			manager.Trigger(current.Ref())
+			waitSteady()
+			if !cycleHeartbeat() {
+				t.Fatal("health recovery did not cause a successful fresh render")
+			}
+			quiet()
+			if renders := renderCalls.Load() - cycleStart; renders < int64(2*(period+1)) || renders > int64(3*(period+1)) {
+				t.Fatalf("renders did not track drift+health triggers: %d at period %d", renders, period)
+			}
+		}
+		t.Logf("real Manager: periods=%d triggers=%d noticeRenders=%d; quiet heartbeats never sustain renders", periods, manager.ConfigInvalidationGeneration(current.Ref())-triggerStart, renderCalls.Load()-cycleStart)
+	}
 }

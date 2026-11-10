@@ -585,3 +585,8 @@ func providedCertificateCondition(ctx context.Context, rc *engine.Context) (*dom
 }
 
 var _ engine.AgentConfigSource = (*Provider)(nil)
+
+// MemberConfigNoticeContent hashes persisted member inputs, not formation journals.
+func (p *Provider) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	return engine.StoredConfigNoticeContent(ctx, p, rc, name)
+}

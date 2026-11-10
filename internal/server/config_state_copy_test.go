@@ -20,10 +20,10 @@ func TestServerCopiesShareConfigSynchronizationState(t *testing.T) {
 	}
 	key := configPullKey{cluster: domain.ClusterRef{Name: "cluster"}, member: "member"}
 	cfg := agentapi.MemberConfig{Cluster: "cluster", Member: "member"}
-	if err := s.issueConfigRevision(key, "inputs", "process", &cfg); err != nil {
+	if err := s.issueConfigRevision(key, "inputs", "process", "ack", &cfg); err != nil {
 		t.Fatal(err)
 	}
-	if local.conditionalConfigRevision(key, "inputs", true) != cfg.PullRevision {
+	if local.conditionalConfigCertificate(key, "inputs", true).revision != cfg.PullRevision {
 		t.Fatal("request copy lost the shared certificate")
 	}
 	holder, err := s.acquireConfigRender(t.Context(), key)

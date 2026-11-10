@@ -194,3 +194,8 @@ func restartConfig(cfg *agentapi.MemberConfig, token int64) error {
 	cfg.EngineSpec, e = json.Marshal(spec)
 	return e
 }
+
+// MemberConfigNoticeContent hashes the stored activated member configuration.
+func (p *Provider) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	return engine.StoredConfigNoticeContent(ctx, p, rc, name)
+}

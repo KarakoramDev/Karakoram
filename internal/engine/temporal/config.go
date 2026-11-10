@@ -467,3 +467,8 @@ func (p *Provider) runtimeSpec(rc *engine.Context, m *componentMember) (infra.Ru
 	}
 	return runtime.Spec(rc.Backend.Layout()), nil
 }
+
+// MemberConfigNoticeContent hashes the stored activated member configuration.
+func (p *Provider) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	return engine.StoredConfigNoticeContent(ctx, p, rc, name)
+}

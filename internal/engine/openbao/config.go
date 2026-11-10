@@ -164,3 +164,9 @@ func (p *Provider) RequiresFreshMemberConfig(ctx context.Context, rc *engine.Con
 }
 
 var _ engine.AgentConfigSource = (*Provider)(nil)
+
+// MemberConfigNoticeContent excludes independent external bindings via the
+// renderer's fresh-evidence guard before using persisted configuration inputs.
+func (p *Provider) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	return engine.StoredConfigNoticeContent(ctx, p, rc, name)
+}

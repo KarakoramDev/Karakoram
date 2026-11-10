@@ -89,38 +89,45 @@ func Readiness(ctx context.Context, o Options, args []string, engines ...Engine)
 }
 
 type nodeAgent struct {
-	o                    Options
-	client               *agentapi.Client
-	sup                  *supervisor
-	mu                   sync.RWMutex
-	applyMu              controlMutex
-	reloadMu             controlMutex
-	pbmMu                sync.Mutex
-	c                    agentapi.MemberConfig
-	controls             localControls
-	files                map[string][]byte
-	cert                 *tls.Certificate
-	started              time.Time
-	version              string
-	engine               Engine
-	controlsMu           sync.RWMutex
-	proxyAdmitted        atomic.Bool
-	controlsErr          error
-	lastError            string
-	startupErr           error
-	acceptedVersion      int64
-	pullRevision         string
-	changeRevision       string
-	volume               *agentapi.VolumeStatus
-	applyRetry           *agentapi.MemberConfig
-	heartbeatSessionOnce sync.Once
-	heartbeatSession     string
+	o                     Options
+	client                *agentapi.Client
+	sup                   *supervisor
+	mu                    sync.RWMutex
+	applyMu               controlMutex
+	reloadMu              controlMutex
+	pbmMu                 sync.Mutex
+	c                     agentapi.MemberConfig
+	controls              localControls
+	files                 map[string][]byte
+	cert                  *tls.Certificate
+	started               time.Time
+	version               string
+	engine                Engine
+	controlsMu            sync.RWMutex
+	proxyAdmitted         atomic.Bool
+	controlsErr           error
+	lastError             string
+	startupErr            error
+	acceptedVersion       int64
+	pullRevision          string
+	changeRevision        string
+	contentRevision       string
+	configApplyGeneration uint64
+	volume                *agentapi.VolumeStatus
+	applyRetry            *agentapi.MemberConfig
+	heartbeatSessionOnce  sync.Once
+	heartbeatSession      string
 }
 
 func (a *nodeAgent) config() agentapi.MemberConfig { a.mu.RLock(); defer a.mu.RUnlock(); return a.c }
 func (a *nodeAgent) reload(ctx context.Context) ([]string, error) {
+	changes, _, err := a.reloadConfig(ctx)
+	return changes, err
+}
+
+func (a *nodeAgent) reloadConfig(ctx context.Context) ([]string, bool, error) {
 	if err := a.reloadMu.LockContext(ctx); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer a.reloadMu.Unlock()
 	a.mu.RLock()
@@ -128,12 +135,18 @@ func (a *nodeAgent) reload(ctx context.Context) ([]string, error) {
 	a.mu.RUnlock()
 	c, err := a.client.Config(ctx, revision)
 	if errors.Is(err, agentapi.ErrConfigUnchanged) {
-		return nil, nil
+		a.mu.Lock()
+		if c.ChangeRevision != "" && revision != "" && a.pullRevision == revision {
+			a.changeRevision = c.ChangeRevision
+		}
+		a.mu.Unlock()
+		return nil, true, nil
 	}
 	if err == nil {
-		return a.apply(ctx, c)
+		changes, applyErr := a.apply(ctx, c)
+		return changes, false, applyErr
 	}
-	return nil, err
+	return nil, false, err
 }
 func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) (changes []string, applyErr error) {
 	if err := a.applyMu.LockContext(ctx); err != nil {
@@ -151,6 +164,8 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) (changes
 		if applyErr == nil {
 			a.pullRevision = c.PullRevision
 			a.changeRevision = c.ChangeRevision
+			a.contentRevision = c.ContentRevision
+			a.configApplyGeneration++
 		}
 		a.lastError = ""
 		if applyErr != nil {
@@ -419,6 +434,7 @@ func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
 		if err = json.Unmarshal(data, &c); err == nil {
 			c.PullRevision = "" // Cached startup state never certifies a new pull.
 			c.ChangeRevision = ""
+			c.ContentRevision = ""
 			_, err = a.apply(ctx, c)
 		} else {
 			a.setStartupError(err)

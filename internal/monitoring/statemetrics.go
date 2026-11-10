@@ -45,4 +45,5 @@ var PollingMetrics = []StateMetricDescriptor{
 	{"karakoram_platform_listing_checks_total", "Completed target listing checks by validation result.", "counter", []string{"provider", "result"}},
 	{"karakoram_agent_heartbeats_total", "Agent heartbeat ingestion results; initial token handshakes are token_rejected.", "counter", []string{"result"}},
 	{"karakoram_observation_steady_total", "Steady observation attempts accepted or discarded for fresh fallback.", "counter", []string{"result"}},
+	{"karakoram_agent_config_requests_total", "Agent configuration HTTP requests completed by response class.", "counter", []string{"result"}},
 }

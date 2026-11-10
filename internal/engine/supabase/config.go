@@ -503,3 +503,18 @@ func (p *Provider) runtimeSpec(rc *engine.Context, m *componentMember) (infra.Ru
 	}
 	return runtime.Spec(rc.Backend.Layout()), nil
 }
+
+// MemberConfigNoticeContent keeps app payloads storage-only and delegates
+// PostgreSQL members to its notice renderer without live proxy validation.
+func (p *Provider) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	s, err := loadState(rc.Cluster)
+	if err != nil {
+		return "", err
+	}
+	for _, m := range s.Members {
+		if m.Name == name {
+			return engine.StoredConfigNoticeContent(ctx, p, rc, name)
+		}
+	}
+	return p.Core.MemberConfigNoticeContent(ctx, rc, name)
+}

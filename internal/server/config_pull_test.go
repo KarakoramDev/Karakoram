@@ -24,12 +24,17 @@ type configPullBackend struct {
 
 func (b configPullBackend) PlatformSnapshot() *infra.TargetSnapshot { return b.snapshot }
 
-type configBaseline struct{ eligible bool }
+type configBaseline struct {
+	eligible   bool
+	generation uint64
+}
 
 func (*configBaseline) Trigger(domain.ClusterRef) {}
 func (b *configBaseline) SteadyConfigBaseline(context.Context, *domain.Cluster) bool {
 	return b.eligible
 }
+
+func (b *configBaseline) ConfigInvalidationGeneration(domain.ClusterRef) uint64 { return b.generation }
 
 type configPullProvider struct {
 	fakeProvider

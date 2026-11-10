@@ -16,13 +16,13 @@ func TestConfigPayloadCertificateBoundedAndFailClosed(t *testing.T) {
 	for i := range maxConfigPullCertificates + 1 {
 		key := configPullKey{cluster: domain.ClusterRef{Name: fmt.Sprintf("cluster%d", i)}, member: "member"}
 		cfg := agentapi.MemberConfig{Cluster: key.cluster.Name, Member: key.member}
-		if err := s.issueConfigRevision(key, "inputs", "process", &cfg); err != nil {
+		if err := s.issueConfigRevision(key, "inputs", "process", "ack", &cfg); err != nil {
 			t.Fatal(err)
 		}
-		if cfg.PullRevision == "" || s.conditionalConfigRevision(key, "inputs", true) != cfg.PullRevision {
+		if cfg.PullRevision == "" || s.conditionalConfigCertificate(key, "inputs", true).revision != cfg.PullRevision {
 			t.Fatal("fresh payload certificate missing")
 		}
-		if s.conditionalConfigRevision(key, "other-inputs", true) != "" || s.conditionalConfigRevision(key, "inputs", false) != "" {
+		if s.conditionalConfigCertificate(key, "other-inputs", true).revision != "" || s.conditionalConfigCertificate(key, "inputs", false).revision != "" {
 			t.Fatal("certificate authorized uncertain/different inputs")
 		}
 	}
@@ -31,10 +31,10 @@ func TestConfigPayloadCertificateBoundedAndFailClosed(t *testing.T) {
 	}
 	key := configPullKey{cluster: domain.ClusterRef{Name: "uncertain"}, member: "member"}
 	cfg := agentapi.MemberConfig{Cluster: "uncertain", Member: "member"}
-	if err := s.issueConfigRevision(key, "", "process", &cfg); err != nil {
+	if err := s.issueConfigRevision(key, "", "process", "", &cfg); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.PullRevision == "" || s.conditionalConfigRevision(key, "", true) != "" {
+	if cfg.PullRevision == "" || s.conditionalConfigCertificate(key, "", true).revision != "" {
 		t.Fatal("uncertain full response lost payload token or gained a false proof")
 	}
 }

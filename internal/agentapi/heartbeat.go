@@ -41,11 +41,15 @@ type HeartbeatRequest struct {
 	Session string `json:"session"`
 	// Token echoes the last token the control plane issued to this session.
 	// Empty on the first heartbeat of a session.
-	Token          string            `json:"token,omitempty"`
-	Instance       InstanceIdentity  `json:"instance"`
-	Samples        []HeartbeatSample `json:"samples,omitempty"`
-	ConfigRevision string            `json:"configRevision,omitempty"`
+	Token                 string            `json:"token,omitempty"`
+	Instance              InstanceIdentity  `json:"instance"`
+	Samples               []HeartbeatSample `json:"samples,omitempty"`
+	ConfigRevision        string            `json:"configRevision,omitempty"`
+	ConfigContentRevision string            `json:"-"`
 }
+
+// Kept out of the strict heartbeat JSON envelope for older control planes.
+const ConfigContentRevisionHeader = "X-Karakoram-Config-Content-Revision"
 
 // InstanceIdentity describes the runtime the agent runs in. TaskID is the
 // platform task/allocation ID where the platform exposes one to the container
@@ -76,6 +80,7 @@ type HeartbeatResponse struct {
 	IntervalMillis int64             `json:"intervalMillis"`
 	Requests       []HeartbeatAction `json:"requests,omitempty"`
 	ReloadConfig   bool              `json:"reloadConfig,omitempty"`
+	ConfigRevision string            `json:"configRevision,omitempty"`
 }
 
 // HeartbeatAction is one requested observation.

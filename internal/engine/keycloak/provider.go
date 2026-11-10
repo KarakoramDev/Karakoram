@@ -907,3 +907,8 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 func (*Provider) Metrics() []domain.MetricDescriptor {
 	return []domain.MetricDescriptor{{Exposition: "karakoram_keycloak_ready", Name: "keycloakReady", Scale: 1}}
 }
+
+// MemberConfigNoticeContent hashes the stored activated member configuration.
+func (p *Provider) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	return engine.StoredConfigNoticeContent(ctx, p, rc, name)
+}

@@ -241,6 +241,12 @@ func writePollingPrometheus(w io.Writer) error {
 			return err
 		}
 		switch descriptor.Name {
+		case "karakoram_agent_config_requests_total":
+			for i, result := range [...]string{"full", "unchanged", "error"} {
+				if err := emit(agentConfigRequests[i].Load(), `result="`+result+`"`); err != nil {
+					return err
+				}
+			}
 		case "karakoram_platform_requests_total":
 			for _, c := range platform {
 				for _, requests := range c.Requests {

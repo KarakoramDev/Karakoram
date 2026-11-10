@@ -529,3 +529,8 @@ func (p *Provider) RequiresFreshMemberConfig(ctx context.Context, rc *engine.Con
 }
 
 var _ engine.AgentConfigSource = (*Provider)(nil)
+
+// MemberConfigNoticeContent retains fresh fallback for unresolved external storage.
+func (p *Provider) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	return engine.StoredConfigNoticeContent(ctx, p, rc, name)
+}

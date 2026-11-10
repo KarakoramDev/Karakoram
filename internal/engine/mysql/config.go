@@ -312,3 +312,19 @@ func (*Core) RequiresFreshMemberConfig(_ context.Context, rc *engine.Context, na
 	// An initializing GR member chooses a clone donor from live native status.
 	return m == nil || m.Role == "data" && s.Topology == "group" && !m.Initialized, nil
 }
+
+// MemberConfigNoticeContent uses only persisted configuration inputs. Initial
+// GR donor selection needs native evidence and deliberately remains conservative.
+func (p *Core) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	fresh, err := p.RequiresFreshMemberConfig(ctx, rc, name)
+	if err != nil || fresh {
+		return "", err
+	}
+	canonical := *rc
+	canonical.AgentConfigCapabilities = nil
+	cfg, err := p.MemberConfig(ctx, &canonical, name)
+	if err != nil {
+		return "", err
+	}
+	return engine.MemberConfigContentRevision(cfg)
+}

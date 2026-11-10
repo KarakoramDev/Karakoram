@@ -36,6 +36,7 @@ type MemberConfig struct {
 	PullRevision string `json:"pullRevision,omitempty"`
 	// ChangeRevision is used only for authenticated heartbeat reload notices.
 	ChangeRevision        string                 `json:"changeRevision,omitempty"`
+	ContentRevision       string                 `json:"contentRevision,omitempty"`
 	Cluster               string                 `json:"cluster"`
 	Member                string                 `json:"member"`
 	Volume                *VolumeIdentity        `json:"volume,omitempty"`

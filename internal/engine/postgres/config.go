@@ -4,6 +4,8 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -152,6 +154,34 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 
 // MemberConfig renders secret-bearing configuration only for an allocated member.
 func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string) (agentapi.MemberConfig, error) {
+	return p.memberConfig(ctx, rc, name, true)
+}
+
+// MemberConfigNoticeContent keeps local generation/content changes prompt
+// without notifying every proxy for unrelated target mutations. Certificates
+// still bind the mutation epoch; listing drift independently changes notices.
+func (p *Core) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
+	canonical := *rc
+	canonical.AgentConfigCapabilities = nil
+	cfg, err := p.memberConfig(ctx, &canonical, name, false)
+	if err != nil {
+		return "", err
+	}
+	if cfg.Role != "proxy" {
+		return engine.MemberConfigContentRevision(cfg)
+	}
+	raw, err := json.Marshal(struct {
+		Config     *agentapi.MemberConfig
+		Generation int64
+	}{&cfg, rc.Cluster.Generation})
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func (p *Core) memberConfig(ctx context.Context, rc *engine.Context, name string, validatePeers bool) (agentapi.MemberConfig, error) {
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return agentapi.MemberConfig{}, err
@@ -222,12 +252,14 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			if peer.Removing || !joined || peer.ServiceID == "" {
 				continue
 			}
-			runtime, err := rc.Backend.GetService(ctx, peer.Name)
-			if err != nil {
-				return agentapi.MemberConfig{}, err
-			}
-			if runtime == nil || runtime.Status != infra.StatusRunning && runtime.Status != infra.StatusActive {
-				continue
+			if validatePeers {
+				runtime, err := rc.Backend.GetService(ctx, peer.Name)
+				if err != nil {
+					return agentapi.MemberConfig{}, err
+				}
+				if runtime == nil || runtime.Status != infra.StatusRunning && runtime.Status != infra.StatusActive {
+					continue
+				}
 			}
 		}
 		etcd := ""

@@ -73,7 +73,8 @@ func (a *nodeAgent) heartbeatLoop(ctx context.Context, handler http.Handler, wai
 	interval := agentapi.HeartbeatInterval
 	legacyLogged := false
 	var pending <-chan []agentapi.HeartbeatSample
-	var reloading <-chan struct{}
+	var reloading <-chan configNoticeResult
+	var noticeBackoff configNoticeBackoff
 	defer func() {
 		if reloading != nil {
 			<-reloading
@@ -82,10 +83,14 @@ func (a *nodeAgent) heartbeatLoop(ctx context.Context, handler http.Handler, wai
 	for ctx.Err() == nil {
 		a.mu.RLock()
 		request.ConfigRevision = a.changeRevision
+		request.ConfigContentRevision = a.contentRevision
 		a.mu.RUnlock()
 		if reloading != nil {
 			select {
-			case <-reloading:
+			case result := <-reloading:
+				if noticeBackoff.completed(time.Now(), result) && a.o.Logger != nil {
+					a.o.Logger.Warn("repeated unchanged config notices; limiting notified pulls to one per minute")
+				}
 				reloading = nil
 			default:
 			}
@@ -109,17 +114,23 @@ func (a *nodeAgent) heartbeatLoop(ctx context.Context, handler http.Handler, wai
 			}
 			continue
 		}
-		if response.ReloadConfig && reloading == nil {
-			done := make(chan struct{})
+		a.mu.RLock()
+		targetApplied := response.ConfigRevision != "" && response.ConfigRevision == a.changeRevision
+		applied := a.configApplyGeneration
+		a.mu.RUnlock()
+		if response.ReloadConfig && !targetApplied && reloading == nil && noticeBackoff.allowed(time.Now(), response.ConfigRevision, applied) {
+			done := make(chan configNoticeResult, 1)
 			reloading = done
-			go func() {
+			go func(target string) {
 				defer close(done)
 				reloadCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 				defer cancel()
-				if _, err := a.reload(reloadCtx); err != nil && ctx.Err() == nil && a.o.Logger != nil {
+				_, unchanged, err := a.reloadConfig(reloadCtx)
+				done <- configNoticeResult{target: target, unchanged: unchanged, err: err}
+				if err != nil && ctx.Err() == nil && a.o.Logger != nil {
 					a.o.Logger.Warn("notified configuration pull failed", "error", err)
 				}
-			}()
+			}(response.ConfigRevision)
 		}
 		interval = heartbeatInterval(response.IntervalMillis)
 		request.Token = response.Token

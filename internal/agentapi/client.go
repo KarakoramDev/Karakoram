@@ -47,6 +47,7 @@ type Client struct {
 type HTTPError struct {
 	StatusCode              int
 	Method, Action, Message string
+	ConfigChangeAck         string
 }
 
 func (e *HTTPError) Error() string {
@@ -228,6 +229,9 @@ func (c *Client) requestBytes(ctx context.Context, hc *http.Client, method, path
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	if heartbeat, ok := input.(HeartbeatRequest); ok && heartbeat.ConfigContentRevision != "" {
+		req.Header.Set(ConfigContentRevisionHeader, heartbeat.ConfigContentRevision)
+	}
 	if input != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -239,6 +243,13 @@ func (c *Client) requestBytes(ctx context.Context, hc *http.Client, method, path
 		return err
 	}
 	defer res.Body.Close()
+	if res.StatusCode == http.StatusNotModified && parts[0] == "/internal/agent/v1/config" {
+		ack := res.Header.Get(ConfigChangeAckHeader)
+		if len(ack) > 128 {
+			ack = ""
+		}
+		return &HTTPError{StatusCode: res.StatusCode, Method: method, Action: parts[0], ConfigChangeAck: ack}
+	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		var diagnostic ErrorResponse
 		data, readErr := io.ReadAll(io.LimitReader(res.Body, 8<<10))
@@ -287,6 +298,9 @@ func (c *Client) requestBytes(ctx context.Context, hc *http.Client, method, path
 // baseline. It is returned only in response to an explicitly conditional pull.
 var ErrConfigUnchanged = errors.New("member configuration unchanged")
 
+// ConfigChangeAckHeader acknowledges only the payload certificate used for304.
+const ConfigChangeAckHeader = "X-Karakoram-Config-Change-Ack"
+
 // Config pulls the member configuration, optionally naming the last successfully
 // applied revision. Older control planes ignore the additive query parameter.
 func (c *Client) Config(ctx context.Context, revision string) (MemberConfig, error) {
@@ -298,6 +312,7 @@ func (c *Client) Config(ctx context.Context, revision string) (MemberConfig, err
 	err := c.request(ctx, "GET", path, nil, &v)
 	var remote *HTTPError
 	if revision != "" && errors.As(err, &remote) && remote.StatusCode == http.StatusNotModified {
+		v.ChangeRevision = remote.ConfigChangeAck
 		return v, ErrConfigUnchanged
 	}
 	return v, err
