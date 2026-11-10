@@ -27,6 +27,7 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 		return []infra.Container{}, nil
 	}
 	var ts []task
+	serviceMissing := false
 	if infra.FreshTaskInventory(ctx) {
 		// Current tasks and service ownership are independent prerequisites.
 		// Join both before returning any authorized address; sequencing them
@@ -37,7 +38,11 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 				if err != nil {
 					return err
 				}
-				if service == nil || !b.ownsService(*a, m, service) {
+				if service == nil {
+					serviceMissing = true
+					return nil
+				}
+				if !b.ownsService(*a, m, service) {
 					return restoreConflict("cannot authorize tasks without the owned Swarm service")
 				}
 				return nil
@@ -51,6 +56,12 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 	}
 	if err != nil {
 		return nil, err
+	}
+	if serviceMissing {
+		// Import precedes the first deployment, so the owned application may
+		// legitimately have no service yet. Authorize no addresses, including
+		// stale task rows left behind after a service disappears.
+		return []infra.Container{}, nil
 	}
 	out := []infra.Container{}
 	for _, t := range ts {
