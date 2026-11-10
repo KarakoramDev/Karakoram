@@ -127,3 +127,45 @@ func (m *Manager) observeSteadyStatus(ctx context.Context, p engine.Provider, rc
 	}
 	return status, err
 }
+
+// SteadyConfigBaseline permits conditional configuration only while the same
+// converged generation and target listing still underpin a fresh Ready lease.
+// It never performs platform I/O; uncertain evidence requires a full pull.
+func (m *Manager) SteadyConfigBaseline(ctx context.Context, c *domain.Cluster) bool {
+	w := m.workerFor(ctx, c.Ref())
+	if w == nil || w.reconciling.Load() {
+		return false
+	}
+	s := w.steady.Load()
+	now := m.opts.Context.Clock.Now()
+	if s == nil || c.Deleting || c.Generation != s.generation ||
+		c.Status.ObservedGeneration != c.Generation || c.Status.Phase != domain.PhaseReady ||
+		c.Status.ObservationEpoch != m.opts.Context.ObservationEpoch ||
+		c.Status.ObservedAt.IsZero() || now.Before(c.Status.ObservedAt) ||
+		now.Sub(c.Status.ObservedAt) > engine.ReadinessMaxAge ||
+		len(c.Status.DeploymentFailures) != 0 {
+		return false
+	}
+	ops, err := m.opts.Store.ListOperations(ctx, c.Ref(), domain.PhasePending, domain.PhaseRunning)
+	if err != nil || len(ops) != 0 {
+		return false
+	}
+	backend, err := m.opts.Namespaces.Backend(domain.NormalizedNamespace(c.Namespace))
+	if err != nil {
+		return false
+	}
+	target, ok := backend.(infra.PlatformSnapshotter)
+	return ok && target.PlatformSnapshot().DriftGeneration() == s.drift &&
+		w.steady.Load() == s && !w.reconciling.Load()
+}
+
+// ConfigInvalidationGeneration makes even a short force/identity/health trigger
+// observable to the next config heartbeat after the worker is steady again.
+func (m *Manager) ConfigInvalidationGeneration(ref domain.ClusterRef) uint64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if w := m.workers[ref.Key()]; w != nil {
+		return w.triggers.Load()
+	}
+	return 0
+}

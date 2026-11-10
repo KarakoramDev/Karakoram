@@ -97,3 +97,10 @@ type PITRIntervalsProvider interface {
 type AgentConfigSource interface {
 	MemberConfig(ctx context.Context, rc *Context, member string) (agentapi.MemberConfig, error)
 }
+
+// FreshMemberConfigSource identifies configuration inputs that cannot be
+// certified by the local steady revision (for example external SQL bindings).
+// Such configurations retain the full renderer on every pull.
+type FreshMemberConfigSource interface {
+	RequiresFreshMemberConfig(context.Context, *Context, string) (bool, error)
+}

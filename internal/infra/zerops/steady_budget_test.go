@@ -386,6 +386,11 @@ func TestZeropsSteadyRequestBudget(t *testing.T) {
 	for _, interval := range []time.Duration{10 * time.Minute, 15 * time.Minute, engine.SteadyResyncInterval} {
 		totals := make([]int, len(fixtures))
 		listing := 0
+		configRevisions := make([]map[string]string, len(fixtures))
+		configPulls := 0
+		for i, x := range fixtures {
+			configRevisions[i] = x.configPullBaseline(t)
+		}
 		for second := 1; second <= 3600; second++ {
 			advance(time.Second)
 			if second%60 == 0 {
@@ -418,12 +423,16 @@ func TestZeropsSteadyRequestBudget(t *testing.T) {
 				if !x.ready(t, true).Accepted {
 					t.Fatalf("M4 %s interval=%s second=%d steady rejected", x.kind, interval, second)
 				}
+				if second%60 == 0 {
+					configPulls += x.idleConfigPulls(t, configRevisions[i])
+				}
 				m := counts.snapshotRequests()
 				n := m["GET /project/project/service-stack"]
 				listing += n
 				totals[i] += requestTotal(m) - n
 			}
 		}
+		t.Logf("M4 conditional configuration pulls=%d platform requests=0", configPulls)
 		for i, x := range fixtures {
 			rate := (float64(totals[i]) + float64(listing)/3) / 3600
 			t.Logf("M4 %s interval=%s own=%d listing=%d/3 rate=%.6f", x.kind, interval, totals[i], listing, rate)

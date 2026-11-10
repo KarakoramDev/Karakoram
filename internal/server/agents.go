@@ -125,13 +125,20 @@ func (s *Server) InternalHandler() http.Handler {
 			return
 		}
 		rc.AgentConfigCapabilities = r.URL.Query()["capability"]
-		var cfg agentapi.MemberConfig
-		if token.Member == companion.Member(rc.Cluster.Name) {
-			cfg, err = companion.MemberConfig(r.Context(), rc, token.Member)
-		} else if source, yes := p.(engine.AgentConfigSource); yes {
-			cfg, err = source.MemberConfig(r.Context(), rc, token.Member)
-		} else {
-			err = engine.ErrNotSupported
+		revision := s.memberConfigRevision(r.Context(), rc, token.Member)
+		changeRevision := s.memberConfigChangeRevision(r.Context(), rc, token.Member)
+		cfg, unchanged, err := engine.PullMemberConfig(r.URL.Query().Get("revision"), revision, func() (agentapi.MemberConfig, error) {
+			if token.Member == companion.Member(rc.Cluster.Name) {
+				return companion.MemberConfig(r.Context(), rc, token.Member)
+			}
+			if source, yes := p.(engine.AgentConfigSource); yes {
+				return source.MemberConfig(r.Context(), rc, token.Member)
+			}
+			return agentapi.MemberConfig{}, engine.ErrNotSupported
+		})
+		if unchanged {
+			w.WriteHeader(http.StatusNotModified)
+			return
 		}
 		if err != nil {
 			failure := s.failure(err)
@@ -151,6 +158,11 @@ func (s *Server) InternalHandler() http.Handler {
 			_ = failure.write(w)
 			return
 		}
+		// Do not let a response rendered across a mutation establish a baseline.
+		if revision != s.memberConfigRevision(r.Context(), rc, token.Member) {
+			cfg.PullRevision = ""
+		}
+		cfg.ChangeRevision = changeRevision
 		_ = ok(cfg).write(w)
 	})
 	mux.HandleFunc("POST "+agentapi.HeartbeatPath, func(w http.ResponseWriter, r *http.Request) {
@@ -190,7 +202,15 @@ func (s *Server) InternalHandler() http.Handler {
 			return
 		}
 		key := agentpush.MemberKey{Namespace: domain.NormalizedNamespace(token.Namespace), Cluster: token.Cluster, Member: token.Member}
-		_ = ok(s.AgentPush.Ingest(key, *req)).write(w)
+		response := s.AgentPush.Ingest(key, *req)
+		if req.ConfigRevision != "" {
+			rc, _, err := s.context(r.Context(), domain.ClusterRef{Namespace: token.Namespace, Name: token.Cluster})
+			if err == nil {
+				current := s.memberConfigChangeRevision(r.Context(), rc, token.Member)
+				response.ReloadConfig = current != "" && current != req.ConfigRevision
+			}
+		}
+		_ = ok(response).write(w)
 	})
 	return mux
 }

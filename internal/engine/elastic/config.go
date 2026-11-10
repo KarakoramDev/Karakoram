@@ -508,4 +508,24 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	return v, err
 }
 
+func (p *Provider) RequiresFreshMemberConfig(ctx context.Context, rc *engine.Context, _ string) (bool, error) {
+	s, err := load(rc.Cluster)
+	if err != nil {
+		return true, err
+	}
+	for _, ref := range s.Storages {
+		namespace, name := storageRef(rc.Cluster.Ref().Namespace, ref)
+		_, err := rc.Store.GetBackupStorage(ctx, namespace, name)
+		if missing(err) {
+			// Missing-storage handling consults independently mutable backup
+			// and restore references; preserve that fresh check on every pull.
+			return true, nil
+		}
+		if err != nil {
+			return true, err
+		}
+	}
+	return false, nil
+}
+
 var _ engine.AgentConfigSource = (*Provider)(nil)

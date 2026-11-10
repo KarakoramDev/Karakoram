@@ -73,7 +73,23 @@ func (a *nodeAgent) heartbeatLoop(ctx context.Context, handler http.Handler, wai
 	interval := agentapi.HeartbeatInterval
 	legacyLogged := false
 	var pending <-chan []agentapi.HeartbeatSample
+	var reloading <-chan struct{}
+	defer func() {
+		if reloading != nil {
+			<-reloading
+		}
+	}()
 	for ctx.Err() == nil {
+		a.mu.RLock()
+		request.ConfigRevision = a.changeRevision
+		a.mu.RUnlock()
+		if reloading != nil {
+			select {
+			case <-reloading:
+				reloading = nil
+			default:
+			}
+		}
 		response, err := a.client.Heartbeat(ctx, request)
 		request.Samples = nil
 		if ctx.Err() != nil {
@@ -92,6 +108,18 @@ func (a *nodeAgent) heartbeatLoop(ctx context.Context, handler http.Handler, wai
 				return
 			}
 			continue
+		}
+		if response.ReloadConfig && reloading == nil {
+			done := make(chan struct{})
+			reloading = done
+			go func() {
+				defer close(done)
+				reloadCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+				if _, err := a.reload(reloadCtx); err != nil && ctx.Err() == nil && a.o.Logger != nil {
+					a.o.Logger.Warn("notified configuration pull failed", "error", err)
+				}
+			}()
 		}
 		interval = heartbeatInterval(response.IntervalMillis)
 		request.Token = response.Token

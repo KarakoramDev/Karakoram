@@ -64,7 +64,7 @@ func TestPinnedClient(t *testing.T) {
 	if err != nil || status.ConfigVersion != 7 {
 		t.Fatal(status, err)
 	}
-	config, err := client.Config(ctx)
+	config, err := client.Config(ctx, "")
 	if err != nil || config.Role != RoleReplicaSet {
 		t.Fatal(config, err)
 	}
@@ -196,7 +196,7 @@ func TestLargeMemberConfigDoesNotUseActionResponseLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	config, err := client.Config(context.Background())
+	config, err := client.Config(context.Background(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -242,6 +242,9 @@ type Context struct {
 	// Availability embeddings must supply the same nonempty value to both;
 	// timestamps alone cannot distinguish old snapshots after clock steps.
 	ObservationEpoch string
+	// ConfigInvalidationGeneration survives a transient steady-clear/re-entry.
+	// It is request-scoped input to config validators, not persisted state.
+	ConfigInvalidationGeneration uint64
 	// AvailabilityOnly excludes inventory adoption/reconciliation from Status.
 	// An imperative operation may temporarily own a different native backup
 	// destination; probing availability must not reinterpret that inventory.

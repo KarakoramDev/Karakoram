@@ -94,6 +94,7 @@ type nodeAgent struct {
 	sup                  *supervisor
 	mu                   sync.RWMutex
 	applyMu              controlMutex
+	reloadMu             controlMutex
 	pbmMu                sync.Mutex
 	c                    agentapi.MemberConfig
 	controls             localControls
@@ -108,6 +109,8 @@ type nodeAgent struct {
 	lastError            string
 	startupErr           error
 	acceptedVersion      int64
+	pullRevision         string
+	changeRevision       string
 	volume               *agentapi.VolumeStatus
 	applyRetry           *agentapi.MemberConfig
 	heartbeatSessionOnce sync.Once
@@ -116,11 +119,21 @@ type nodeAgent struct {
 
 func (a *nodeAgent) config() agentapi.MemberConfig { a.mu.RLock(); defer a.mu.RUnlock(); return a.c }
 func (a *nodeAgent) reload(ctx context.Context) ([]string, error) {
-	c, err := a.client.Config(ctx)
-	if err != nil {
+	if err := a.reloadMu.LockContext(ctx); err != nil {
 		return nil, err
 	}
-	return a.apply(ctx, c)
+	defer a.reloadMu.Unlock()
+	a.mu.RLock()
+	revision := a.pullRevision
+	a.mu.RUnlock()
+	c, err := a.client.Config(ctx, revision)
+	if errors.Is(err, agentapi.ErrConfigUnchanged) {
+		return nil, nil
+	}
+	if err == nil {
+		return a.apply(ctx, c)
+	}
+	return nil, err
 }
 func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) (changes []string, applyErr error) {
 	if err := a.applyMu.LockContext(ctx); err != nil {
@@ -134,6 +147,11 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) (changes
 			return
 		}
 		a.mu.Lock()
+		a.pullRevision = ""
+		if applyErr == nil {
+			a.pullRevision = c.PullRevision
+			a.changeRevision = c.ChangeRevision
+		}
 		a.lastError = ""
 		if applyErr != nil {
 			a.lastError = applyErr.Error()
@@ -399,6 +417,8 @@ func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
 	if err == nil {
 		var c agentapi.MemberConfig
 		if err = json.Unmarshal(data, &c); err == nil {
+			c.PullRevision = "" // Cached startup state never certifies a new pull.
+			c.ChangeRevision = ""
 			_, err = a.apply(ctx, c)
 		} else {
 			a.setStartupError(err)

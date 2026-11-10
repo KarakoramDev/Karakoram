@@ -372,6 +372,15 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	v.SlowOpThresholdMS = 100
 	return v, nil
 }
+
+func (*Provider) RequiresFreshMemberConfig(_ context.Context, rc *engine.Context, name string) (bool, error) {
+	s, err := load(rc.Cluster)
+	if err != nil {
+		return true, err
+	}
+	m := s.find(name)
+	return m == nil || m.Role != agentapi.RoleRouter && m.Resources.MinRAM <= 0, nil
+}
 func hosts(ms []*member) []string {
 	out := make([]string, 0, len(ms))
 	for _, m := range ms {

@@ -474,6 +474,17 @@ func (s *TargetSnapshot) BeginMutation(ctx context.Context) (done func()) {
 	var once sync.Once
 	return func() { once.Do(func() { s.mu.Lock(); s.epoch++; s.inFlight--; s.mu.Unlock() }) }
 }
+
+// ConfigGeneration exposes a stable target baseline without starting a listing.
+// Conditional pulls must fall back to fresh rendering during mutations or when
+// the last successful drift check is no longer current.
+func (s *TargetSnapshot) ConfigGeneration() (epoch, drift uint64, valid bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := SnapshotNow()
+	return s.epoch, s.drift, s.listingOK && s.inFlight == 0 &&
+		!now.Before(s.checkedAt) && now.Sub(s.checkedAt) < SnapshotListingInterval
+}
 func (s *TargetSnapshot) Invalidate() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

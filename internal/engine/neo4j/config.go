@@ -161,3 +161,8 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	}
 	return agentapi.MemberConfig{Cluster: rc.Cluster.Name, Member: name, Engine: neo4jspec.Engine, EngineSpec: raw, EngineVersion: sp.Version, Role: "single", Port: 7687, ConfigVersion: s.ConfigVersion, DesiredProcesses: desired, Maintenance: maintenance, Volume: volume, AgentTLS: tls}, nil
 }
+
+func (*Provider) RequiresFreshMemberConfig(_ context.Context, rc *engine.Context, _ string) (bool, error) {
+	s, err := load(rc.Cluster)
+	return err != nil || s.ConfigOptions == nil, err
+}

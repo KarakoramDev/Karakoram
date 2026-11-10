@@ -41,9 +41,10 @@ type HeartbeatRequest struct {
 	Session string `json:"session"`
 	// Token echoes the last token the control plane issued to this session.
 	// Empty on the first heartbeat of a session.
-	Token    string            `json:"token,omitempty"`
-	Instance InstanceIdentity  `json:"instance"`
-	Samples  []HeartbeatSample `json:"samples,omitempty"`
+	Token          string            `json:"token,omitempty"`
+	Instance       InstanceIdentity  `json:"instance"`
+	Samples        []HeartbeatSample `json:"samples,omitempty"`
+	ConfigRevision string            `json:"configRevision,omitempty"`
 }
 
 // InstanceIdentity describes the runtime the agent runs in. TaskID is the
@@ -74,6 +75,7 @@ type HeartbeatResponse struct {
 	Token          string            `json:"token"`
 	IntervalMillis int64             `json:"intervalMillis"`
 	Requests       []HeartbeatAction `json:"requests,omitempty"`
+	ReloadConfig   bool              `json:"reloadConfig,omitempty"`
 }
 
 // HeartbeatAction is one requested observation.

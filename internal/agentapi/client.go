@@ -283,10 +283,23 @@ func (c *Client) requestBytes(ctx context.Context, hc *http.Client, method, path
 	return json.NewDecoder(io.LimitReader(res.Body, limit)).Decode(output)
 }
 
-// Config pulls the member configuration from the control plane.
-func (c *Client) Config(ctx context.Context) (MemberConfig, error) {
+// ErrConfigUnchanged means the applied configuration still has a current steady
+// baseline. It is returned only in response to an explicitly conditional pull.
+var ErrConfigUnchanged = errors.New("member configuration unchanged")
+
+// Config pulls the member configuration, optionally naming the last successfully
+// applied revision. Older control planes ignore the additive query parameter.
+func (c *Client) Config(ctx context.Context, revision string) (MemberConfig, error) {
 	var v MemberConfig
-	err := c.request(ctx, "GET", "/internal/agent/v1/config?capability="+ConfigCapabilityGaleraListenHost+"&capability="+ConfigCapabilityMySQLListenHost+"&capability="+ConfigCapabilityTemporalIPv6+"&capability="+ConfigCapabilityPostgresLocalPeer, nil, &v)
+	path := "/internal/agent/v1/config?capability=" + ConfigCapabilityGaleraListenHost + "&capability=" + ConfigCapabilityMySQLListenHost + "&capability=" + ConfigCapabilityTemporalIPv6 + "&capability=" + ConfigCapabilityPostgresLocalPeer
+	if revision != "" {
+		path += "&revision=" + url.QueryEscape(revision)
+	}
+	err := c.request(ctx, "GET", path, nil, &v)
+	var remote *HTTPError
+	if revision != "" && errors.As(err, &remote) && remote.StatusCode == http.StatusNotModified {
+		return v, ErrConfigUnchanged
+	}
 	return v, err
 }
 

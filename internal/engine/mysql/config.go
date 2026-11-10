@@ -302,3 +302,13 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	}
 	return agentapi.MemberConfig{Cluster: rc.Cluster.Name, Member: name, Engine: "mysql", EngineSpec: raw, Role: m.Role, Port: 3306, EngineVersion: version, ConfigVersion: configVersion, DesiredProcesses: desired, Volume: volume, AgentTLS: agentapi.Certificate{CertPEM: agentCert.CertPEM, KeyPEM: agentCert.KeyPEM}}, nil
 }
+
+func (*Core) RequiresFreshMemberConfig(_ context.Context, rc *engine.Context, name string) (bool, error) {
+	s, err := load(rc.Cluster)
+	if err != nil {
+		return true, err
+	}
+	m := s.find(name)
+	// An initializing GR member chooses a clone donor from live native status.
+	return m == nil || m.Role == "data" && s.Topology == "group" && !m.Initialized, nil
+}

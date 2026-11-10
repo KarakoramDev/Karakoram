@@ -419,6 +419,12 @@ func TestNomadSteadyRequestBudget(t *testing.T) {
 		totals := make([]int, len(fixtures))
 		deepCosts, deepRuns := make([]int, len(fixtures)), make([]int, len(fixtures))
 		listing := 0
+		configRevisions := make([]map[string]string, len(fixtures))
+		configPulls := 0
+		for i, x := range fixtures {
+			x.ready(t, true)
+			configRevisions[i] = x.configPullBaseline(t)
+		}
 		for second := 1; second <= 3600; second++ {
 			advance(time.Second)
 			if second%int(agentapi.HeartbeatInterval/time.Second) == 0 {
@@ -439,12 +445,16 @@ func TestNomadSteadyRequestBudget(t *testing.T) {
 				if !x.ready(t, true).Accepted {
 					t.Fatal("M4 steady attempt rejected")
 				}
+				if second%60 == 0 {
+					configPulls += x.idleConfigPulls(t, configRevisions[i])
+				}
 				m := counts.snapshotRequests()
 				shared := m["GET /v1/jobs"] + m["GET /v1/allocations"]
 				listing += shared
 				totals[i] += requestTotal(m) - shared
 			}
 		}
+		t.Logf("M4 conditional configuration pulls=%d platform requests=0", configPulls)
 		for i, x := range fixtures {
 			attributed := float64(totals[i]) + float64(listing)/float64(len(fixtures))
 			rate := attributed / 3600

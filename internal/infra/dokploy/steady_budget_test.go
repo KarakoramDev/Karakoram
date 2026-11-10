@@ -367,6 +367,11 @@ func TestDokploySteadyRequestBudget(t *testing.T) {
 	deepTotals := make([]int, len(fixtures))
 	deepPass := make([]int, len(fixtures))
 	listing := 0
+	configRevisions := make([]map[string]string, len(fixtures))
+	configPulls := 0
+	for i, x := range fixtures {
+		configRevisions[i] = x.configPullBaseline(t)
+	}
 	for second := 1; second <= 3600; second++ {
 		advance(time.Second)
 		if second%int(agentapi.HeartbeatInterval/time.Second) == 0 {
@@ -389,6 +394,9 @@ func TestDokploySteadyRequestBudget(t *testing.T) {
 			if !x.ready(t, true).Accepted {
 				t.Fatalf("M4 %s rejected at second %d", x.kind, second)
 			}
+			if second%60 == 0 {
+				configPulls += x.idleConfigPulls(t, configRevisions[i])
+			}
 			m := counts.snapshotRequests()
 			listing += m["GET environment.one"]
 			totals[i] += requestTotal(m) - m["GET environment.one"]
@@ -409,6 +417,7 @@ func TestDokploySteadyRequestBudget(t *testing.T) {
 		}
 	}
 	t.Logf("M4 shared availability listing requests=%d (deep-pass listings remain charged to their cluster)", listing)
+	t.Logf("M4 conditional configuration pulls=%d platform requests=0", configPulls)
 	// Real non-steady backend operation and fresh observations, then resumed
 	// steady renewals. Restore the original count before continuing safety work.
 	x := fixtures[0]

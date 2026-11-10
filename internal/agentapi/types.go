@@ -32,6 +32,10 @@ const ConfigCapabilityPostgresLocalPeer = "postgres-local-peer"
 
 // MemberConfig is the secret-bearing desired configuration pulled by a node agent.
 type MemberConfig struct {
+	// PullRevision is an opaque conditional-pull token, not an engine version.
+	PullRevision string `json:"pullRevision,omitempty"`
+	// ChangeRevision is used only for authenticated heartbeat reload notices.
+	ChangeRevision        string                 `json:"changeRevision,omitempty"`
 	Cluster               string                 `json:"cluster"`
 	Member                string                 `json:"member"`
 	Volume                *VolumeIdentity        `json:"volume,omitempty"`

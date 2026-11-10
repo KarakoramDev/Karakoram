@@ -41,6 +41,24 @@ func (a *nodeAgent) retainApplyRetry(c agentapi.MemberConfig, err error) {
 	}
 }
 
+// Select the retry only after acquiring the same ordering lock as network pulls.
+// A pending pointer captured before a newer equal-version config is not proof
+// that the old payload still needs applying.
+func (a *nodeAgent) retryApply(ctx context.Context) (bool, error) {
+	if err := a.reloadMu.LockContext(ctx); err != nil {
+		return false, err
+	}
+	defer a.reloadMu.Unlock()
+	a.mu.RLock()
+	pending := a.applyRetry
+	a.mu.RUnlock()
+	if pending == nil {
+		return false, nil
+	}
+	_, err := a.apply(ctx, *pending)
+	return true, err
+}
+
 func (a *nodeAgent) retryApplies(ctx context.Context) {
 	delay := time.Second
 	timer := time.NewTimer(delay)
@@ -51,15 +69,13 @@ func (a *nodeAgent) retryApplies(ctx context.Context) {
 			return
 		case <-timer.C:
 		}
-		a.mu.RLock()
-		pending := a.applyRetry
-		a.mu.RUnlock()
-		if pending == nil {
+		attempted, err := a.retryApply(ctx)
+		if !attempted && err == nil {
 			delay = time.Second
 			timer.Reset(delay)
 			continue
 		}
-		if _, err := a.apply(ctx, *pending); err != nil {
+		if err != nil {
 			if ctx.Err() != nil {
 				return
 			}

@@ -151,4 +151,16 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	return v, err
 }
 
+func (p *Provider) RequiresFreshMemberConfig(ctx context.Context, rc *engine.Context, _ string) (bool, error) {
+	s, err := loadState(rc.Cluster)
+	if err != nil {
+		return true, err
+	}
+	if s.BindingID != "" {
+		return true, nil // Binding resolution includes live native privilege proofs.
+	}
+	connections, err := p.ListDatabaseConnections(ctx, rc)
+	return len(connections) != 0, err // Connected clusters supply independent CA secrets.
+}
+
 var _ engine.AgentConfigSource = (*Provider)(nil)
