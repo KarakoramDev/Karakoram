@@ -9,6 +9,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"strings"
 	"time"
 )
 
@@ -117,25 +118,88 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 	return p.advanceReplacement(ctx, rc, s)
 }
 
-// replacementNeverDeployed recognizes only the untouched allocation checkpoint.
-// Import intent and resource settings are persisted before backend submission;
-// deploy requires the later imported checkpoint. Missing receipts or inventory
-// after a restart therefore cannot turn a possibly submitted deploy into proof.
+// replacementNeverDeployed recognizes an unprovisioned allocation, including a
+// frozen plan whose absence was resolved during cancellation. Desired resource,
+// replica and version settings do not establish provisioning. Durable lifecycle
+// evidence still excludes the shortcut even if process-local receipts are lost.
 func replacementNeverDeployed(s *state, m *member) bool {
 	cp := s.Replacement
 	return cp != nil && cp.Recovery == "rollback" && cp.New == m.Name &&
 		m.Role == "data" && m.Stage == "planned" &&
 		m.ServiceID == "" && m.VolumeID == "" && m.ServerUUID == "" &&
-		m.ImportBatch == nil && m.DeployOp == nil && m.RetirementOp == nil &&
+		m.ImportBatch == nil && m.ImportAmbiguity == "" && m.DeployOp == nil && m.RetirementOp == nil &&
+		m.RetirementFenceID == "" && !m.RetirementFenceComplete &&
 		(s.Pending == nil || s.Pending.Member != m.Name) &&
-		m.Resources == (domain.Resources{}) && m.Replicas == 0 && m.Version == "" &&
 		!m.Initialized && m.NativeReadiness == nil && m.Clone == nil && !m.CloneDone &&
 		!m.CloneReplacesData && m.LastGTIDExecuted == "" && !m.ConfirmedVolumeLost &&
 		m.RuntimeRecovery == (engine.RuntimeRecovery{})
 }
 
+func replacementImportOutcome(ctx context.Context, rc *engine.Context, m *member) (string, error) {
+	value, err := secret(ctx, rc, "mysql/imports/"+m.Name)
+	if missing(err) {
+		return "", nil
+	}
+	return string(value), err
+}
+
+func recordReplacementImportOutcome(ctx context.Context, rc *engine.Context, m *member, outcome string) error {
+	return putSecret(ctx, rc, "mysql/imports/"+m.Name, []byte(outcome))
+}
+
+// Submission intent is sealed durably before the external request. Missing
+// legacy journals and unfinished requests cannot use negative inventory as a
+// terminal outcome. Matching positive reservations can still be adopted.
+func resolveReplacementImport(ctx context.Context, rc *engine.Context, m *member) error {
+	m.ImportAmbiguity = ""
+	outcome, err := replacementImportOutcome(ctx, rc, m)
+	if err != nil {
+		return err
+	}
+	if outcome == "planned" || outcome == "refused" {
+		return nil
+	}
+	var absent []string
+	for _, spec := range m.ImportBatch.Specs {
+		service, err := rc.Backend.GetService(ctx, spec.Hostname)
+		if err != nil {
+			return err
+		}
+		if service == nil {
+			absent = append(absent, spec.Hostname)
+		}
+	}
+	if len(absent) != 0 {
+		m.ImportAmbiguity = "Waiting for ambiguous replacement import outcome; retain cleanup ownership and inspect exact backend resources " + strings.Join(absent, ", ") + "; reservations may still arrive"
+		return fmt.Errorf("%s: %w", m.ImportAmbiguity, engine.ErrUnavailable)
+	}
+	return verifyMember(ctx, rc, m)
+}
+
 func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *state) (engine.OpResult, error) {
 	cp := s.Replacement
+	// Older control planes could cancel after a confirmed-loss join and persist
+	// rollback. Preserve that admitted member until shutdown has been submitted:
+	// the lost predecessor cannot restore the redundancy rollback would remove.
+	// Native leave or a stop receipt is irreversible here; its owner must finish
+	// exact cleanup. Handoff/drain have not submitted either shutdown action.
+	if old, next := s.find(cp.Old), s.find(cp.New); s.Topology == "group" &&
+		cp.Recovery == "rollback" && (cp.Stage == "join" || cp.Stage == "retire") &&
+		old != nil && old.ConfirmedVolumeLost && next != nil && next.Stage == "joined" &&
+		(next.Retirement == "" || next.Retirement == "handoff" || next.Retirement == "drain" || next.Retirement == "runtime-stop") &&
+		next.RetirementOp == nil && next.RetirementFenceID == "" && !next.RetirementFenceComplete {
+		st, err := live(freshMySQLReads(ctx), rc, next.Name)
+		if err != nil {
+			return replacementResult(cp), err
+		}
+		if st.MemberState != "ONLINE" || st.GroupName != s.Formation.GroupName {
+			return replacementResult(cp), engine.ErrUnavailable
+		}
+		next.Removing, next.Offline, next.Retirement = false, false, ""
+		cp.Recovery, cp.Stage = "complete", "join"
+		publishRevision(s)
+		return replacementResult(cp), nil
+	}
 	switch cp.Stage {
 	case "join":
 		next := s.find(cp.New)
@@ -153,6 +217,9 @@ func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *st
 				return replacementResult(cp), err
 			}
 			if next.ImportBatch != nil {
+				if err := resolveReplacementImport(ctx, rc, next); err != nil {
+					return replacementResult(cp), err
+				}
 				op, err := resumePlannedImport(ctx, rc, next)
 				if err != nil {
 					return replacementResult(cp), err
@@ -160,6 +227,12 @@ func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *st
 				if op != nil {
 					p.track(s, next, "import", *op)
 					return replacementResult(cp), nil
+				}
+				// A completed reservation may exist even when its import receipt
+				// was not persisted. Recover exact owned IDs before dropping the
+				// plan, so absent receipts cannot become proof of absent services.
+				if err := verifyMember(ctx, rc, next); err != nil {
+					return replacementResult(cp), err
 				}
 				next.ImportBatch = nil
 			}
@@ -249,7 +322,12 @@ func cancelReplacement(rc *engine.Context, op *domain.Operation) (engine.OpResul
 	}
 	if cp.Recovery == "" {
 		old := s.find(cp.Old)
-		if cp.Stage == "join" || cp.Stage == "retire" && old != nil && old.Retirement == "" {
+		next := s.find(cp.New)
+		if s.Topology == "group" && old != nil && old.ConfirmedVolumeLost && next != nil && next.Stage == "joined" {
+			// Preserve the recovered quorum: the predecessor cannot return,
+			// so cancellation settles forward instead of retiring the joiner.
+			cp.Recovery = "complete"
+		} else if cp.Stage == "join" || cp.Stage == "retire" && old != nil && old.Retirement == "" {
 			cp.Recovery = "rollback"
 		} else {
 			cp.Recovery = "complete"

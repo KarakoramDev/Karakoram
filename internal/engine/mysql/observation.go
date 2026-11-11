@@ -44,6 +44,10 @@ func live(ctx context.Context, rc *engine.Context, name string) (myspec.StatusRe
 func onlinePrimary(st myspec.StatusResponse) bool {
 	return st.WriterEligible(false)
 }
+
+func intentionallyStoppedRetiree(m *member) bool {
+	return m.Removing && (m.Retirement == "stop" || m.Retirement == "delete" || m.Retirement == "credentials")
+}
 func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*member) []memberObservation {
 	out := make([]memberObservation, len(members))
 	var wg sync.WaitGroup
@@ -65,14 +69,28 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 			defer func() { <-limit }()
 			var batch sync.WaitGroup
 			var metadataErr, nativeErr error
+			// These checkpoints intentionally have no serving agent. Probing
+			// their vanished DNS can consume the shared pre-Status/Sync budget
+			// before runtime discovery reads healthy survivors' volumes.
+			// Keep platform observation, and report native/agent unavailability;
+			// retirement still requires fresh receipt and survivor proofs.
+			stoppedRetiree := intentionallyStoppedRetiree(m)
 			batch.Add(3)
 			go func() {
 				defer batch.Done()
+				if stoppedRetiree {
+					metadataErr = engine.ErrUnavailable
+					return
+				}
 				out[i].agent, out[i].agentAt, metadataErr = mysqlAgentStatus(ctx, rc, m.Name)
 				out[i].agentObserved = metadataErr == nil
 			}()
 			go func() {
 				defer batch.Done()
+				if stoppedRetiree {
+					nativeErr = engine.ErrUnavailable
+					return
+				}
 				if m.Role == "proxy" {
 					var healthy bool
 					healthy, nativeErr = proxyApplied(ctx, rc, m)

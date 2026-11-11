@@ -129,6 +129,13 @@ func samplePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state, fre
 	var wg sync.WaitGroup
 	for i, m := range members {
 		classes[i] = "no-observation"
+		// Keep its zero/ineligible entry in the quorum denominator. Read-only
+		// continuity must not dial an intentionally stopped retiree and delay
+		// Sync past the ordinary survivor-inventory deadline. Fresh actor
+		// comparisons retain their independent authoritative observations.
+		if !fresh && intentionallyStoppedRetiree(m) {
+			continue
+		}
 		if ctx.Err() != nil || rc.Agents == nil || m.ServiceID == "" || m.Stage == "planned" || m.Stage == "imported" {
 			continue
 		}

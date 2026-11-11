@@ -108,10 +108,19 @@ func switchAway(ctx context.Context, rc *engine.Context, s *state, old string, c
 	return a.Engine(ctx, "mysql", myspec.ActionSwitchover, myspec.SwitchoverRequest{TargetUUID: target}, nil)
 }
 
+// A confirmed-lost predecessor is not a survivor when cleaning up only its
+// cancelled replacement allocation. Keep its loss fence and member record:
+// subsequent recovery still needs the usual majority and donor admission.
+func lostRollbackPredecessor(s *state, target string, m *member) bool {
+	cp := s.Replacement
+	return s.Topology == "group" && cp != nil && cp.Recovery == "rollback" &&
+		cp.New == target && cp.Old == m.Name && m.ConfirmedVolumeLost
+}
+
 func survivorsOnline(ctx context.Context, rc *engine.Context, s *state, old string) error {
 	writer := false
 	for _, m := range s.data() {
-		if m.Name == old || !pxcRetirementSurvivor(ctx, s, old, m.Name) {
+		if m.Name == old || lostRollbackPredecessor(s, old, m) || !pxcRetirementSurvivor(ctx, s, old, m.Name) {
 			continue
 		}
 		st, err := live(ctx, rc, m.Name)
@@ -126,11 +135,66 @@ func survivorsOnline(ctx context.Context, rc *engine.Context, s *state, old stri
 	return nil
 }
 
+// Older rollback owners may already have erased their import plan. Preserve the
+// released absence policy, but inventory deterministic names before forgetting
+// credentials: visible owned reservations must return to exact cleanup.
+func reconcileLegacyRollbackReservations(ctx context.Context, rc *engine.Context, s *state, m *member) (bool, error) {
+	cp := s.Replacement
+	if cp == nil || cp.Recovery != "rollback" || cp.New != m.Name || cp.IdentityBarrier || m.IdentityBarrier ||
+		m.Stage != "planned" || m.ImportBatch != nil || m.ServerUUID != "" || m.Initialized ||
+		(m.Retirement != "credentials" && m.Retirement != "delete") {
+		return false, nil
+	}
+	outcome, err := replacementImportOutcome(ctx, rc, m)
+	if err != nil || outcome != "" {
+		return false, err
+	}
+	m.ImportAmbiguity = ""
+	visible := false
+	var incomplete []string
+	for _, entry := range [2]struct{ name, id string }{{m.Name, m.ServiceID}, {m.Volume, m.VolumeID}} {
+		if entry.name == "" {
+			continue
+		}
+		service, err := engine.ObserveRetiringService(ctx, rc.Backend, entry.name, entry.id, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
+		if err != nil {
+			m.ImportAmbiguity = "Waiting for legacy replacement reservation inventory: " + entry.name
+			return false, fmt.Errorf("%s: %w", m.ImportAmbiguity, err)
+		}
+		if service != nil {
+			visible = true
+			if service.Importing {
+				incomplete = append(incomplete, entry.name)
+			}
+		}
+	}
+	if visible {
+		if err := verifyMember(ctx, rc, m); err != nil {
+			return false, err
+		}
+	}
+	if len(incomplete) != 0 {
+		m.ImportAmbiguity = "Waiting for incomplete legacy replacement reservations " + strings.Join(incomplete, ", ") + "; allow their platform import to finish or remove these exact owned objects; cleanup retries automatically"
+		return false, fmt.Errorf("%s: %w", m.ImportAmbiguity, engine.ErrUnavailable)
+	}
+	if visible && m.Retirement == "credentials" && (m.ServiceID != "" || m.VolumeID != "") {
+		m.Removing, m.Offline, m.Retirement = true, true, "runtime-stop"
+		return true, nil
+	}
+	return false, nil
+}
+
 func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m *member) (bool, error) {
 	ctx = freshMySQLReads(ctx)
 	invalidateMySQLReadObservation(ctx, rc)
 	defer invalidateMySQLReadObservation(ctx, rc)
+	if m.RetirementOp != nil && m.RetirementFenceID == "" {
+		m.RetirementFenceID = m.ServiceID
+	}
 	if busy, err := p.observePending(ctx, rc, s); busy || err != nil {
+		return false, err
+	}
+	if adopted, err := reconcileLegacyRollbackReservations(ctx, rc, s, m); adopted || err != nil {
 		return false, err
 	}
 	if m.Retirement != "credentials" {
@@ -238,6 +302,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, err
 		}
 		m.RetirementOp = &op
+		m.RetirementFenceID, m.RetirementFenceComplete = runtime.ID, false
 		m.Retirement = "stop"
 	case "leave":
 		ok, err := configApplied(ctx, rc, m)
@@ -252,30 +317,37 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, err
 		}
 		m.RetirementOp = &op
+		m.RetirementFenceID, m.RetirementFenceComplete = m.ServiceID, false
 		m.Retirement = "stop"
 	case "stop":
 		if m.RetirementOp == nil {
 			return false, engine.Invalid("missing retirement stop receipt")
 		}
-		status, err := rc.Backend.OpStatus(ctx, *m.RetirementOp)
-		if err != nil {
-			return false, err
-		}
-		if status.Failed {
-			m.Retirement = "runtime-stop"
-			return false, engine.ErrUnavailable
-		}
-		if !status.Done {
-			return false, nil
+		if !m.RetirementFenceComplete {
+			status, err := rc.Backend.OpStatus(ctx, *m.RetirementOp)
+			if err != nil {
+				return false, err
+			}
+			if status.Failed {
+				m.Retirement = "runtime-stop"
+				return false, engine.ErrUnavailable
+			}
+			if !status.Done {
+				return false, nil
+			}
 		}
 		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 		if err != nil {
 			return false, err
 		}
+		if runtime != nil && runtime.ID != m.RetirementFenceID {
+			return false, fmt.Errorf("retirement runtime identity changed: %w", engine.ErrConflict)
+		}
 		if runtime != nil && runtime.Status != infra.StatusStopped {
 			m.Retirement = "runtime-stop"
 			return false, nil
 		}
+		m.RetirementFenceComplete = true
 		if err = membershipRemoved(ctx, rc, s, m.Name); err != nil {
 			return false, err
 		}
@@ -340,6 +412,9 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 				return false, err
 			}
 		}
+		if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), "mysql/imports/"+m.Name); err != nil && !missing(err) {
+			return false, err
+		}
 		if err := rc.Secrets.DeleteAgentToken(ctx, rc.Cluster.Ref(), m.Name); err != nil && !missing(err) {
 			return false, err
 		}
@@ -401,12 +476,12 @@ func countMembershipRemoved(ctx context.Context, rc *engine.Context, s *state, o
 	}
 	expected := 0
 	for _, m := range s.Members {
-		if m.Role == "data" && m.Name != old && pxcRetirementSurvivor(ctx, s, old, m.Name) {
+		if m.Role == "data" && m.Name != old && !lostRollbackPredecessor(s, old, m) && pxcRetirementSurvivor(ctx, s, old, m.Name) {
 			expected++
 		}
 	}
 	for _, m := range s.data() {
-		if m.Name == old || !pxcRetirementSurvivor(ctx, s, old, m.Name) {
+		if m.Name == old || lostRollbackPredecessor(s, old, m) || !pxcRetirementSurvivor(ctx, s, old, m.Name) {
 			continue
 		}
 		st, err := live(ctx, rc, m.Name)
@@ -435,12 +510,46 @@ func groupMembershipRemoved(ctx context.Context, rc *engine.Context, s *state, o
 	}
 	retiree := s.find(old)
 	neverDeployed := retiree != nil && replacementNeverDeployed(s, retiree)
-	if retiree == nil || !neverDeployed && !myspec.ValidUUID(retiree.ServerUUID) {
+	// An unadmitted rollback allocation can have owned services but no recorded
+	// native UUID. It is not "never deployed": require its exact runtime fence
+	// and a completed Stop receipt, then the full survivor identity-set proof
+	// below must exclude every extra native row, including RECOVERING members.
+	fencedUnadmitted := false
+	if cp := s.Replacement; retiree != nil && cp != nil && cp.Recovery == "rollback" && cp.New == old &&
+		retiree.Stage != "joined" && !retiree.Initialized && !retiree.RuntimeRecovery.Initialized && !retiree.ConfirmedVolumeLost &&
+		retiree.ServerUUID == "" && retiree.RetirementOp != nil {
+		completed := retiree.RetirementFenceComplete
+		if !completed {
+			// Older owners may have deleted the exact runtime after successful
+			// stop/native proof. Fresh absence is checked below; an expired
+			// Stop receipt itself is never converted into success.
+			completed = retiree.ServiceID == "" && (retiree.Retirement == "delete" || retiree.Retirement == "credentials")
+			if !completed {
+				status, err := rc.Backend.OpStatus(ctx, *retiree.RetirementOp)
+				if err != nil {
+					return err
+				}
+				completed = status.Done && !status.Failed
+			}
+		}
+		if completed {
+			runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, retiree.Name, retiree.ServiceID, retiree.Volume, retiree.VolumeID, retiree.ConfirmedVolumeLost)
+			if err != nil {
+				return err
+			}
+			id := retiree.RetirementFenceID
+			if id == "" {
+				id = retiree.ServiceID
+			}
+			fencedUnadmitted = runtime == nil || id != "" && runtime.ID == id && runtime.Status == infra.StatusStopped
+		}
+	}
+	if retiree == nil || !neverDeployed && !fencedUnadmitted && !myspec.ValidUUID(retiree.ServerUUID) {
 		return wait("retiree UUID is unknown in persisted state")
 	}
 	expected := make(map[string]string)
 	for _, m := range s.data() {
-		if m.Name == old || m.Removing || m.Retirement != "" {
+		if m.Name == old || m.Removing || m.Retirement != "" || lostRollbackPredecessor(s, old, m) {
 			continue
 		}
 		id := strings.ToLower(m.ServerUUID)

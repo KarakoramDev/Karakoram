@@ -280,7 +280,7 @@ func (b *Backend) observedService(ctx context.Context, a application, m metadata
 			return s, err
 		}
 	}
-	if m.Kind != infra.KindRuntime || !m.Deployed && m.Pending == nil {
+	if m.Kind != infra.KindRuntime || !m.Deployed && m.Pending == nil && m.Desired != "stopped" {
 		return s, nil
 	}
 	return b.observeRuntimeMode(ctx, a, m, readOnly)

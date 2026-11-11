@@ -871,3 +871,83 @@ func TestLifecycleSupersessionRestoresScaleBackPolicyAndReceipt(t *testing.T) {
 		})
 	}
 }
+
+func TestImportedRuntimeStopFenceSurvivesReconstruction(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	imported := importFake(t, b, runtimeSpec("runtime", ""))
+	if _, err := b.Start(t.Context(), "runtime"); !errors.Is(err, infra.ErrRejected) {
+		t.Fatalf("undeployed Start was admitted: %v", err)
+	}
+	op, err := b.Stop(t.Context(), "runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b = fakeBackend(t, f, nil)
+	awaitFake(t, b, roundTripOp(t, op))
+	service, err := b.GetService(t.Context(), "runtime")
+	if err != nil || service == nil || service.ID != imported.Services["runtime"] || service.Status != infra.StatusStopped {
+		t.Fatalf("durable undeployed fence: %+v %v", service, err)
+	}
+	if fakeCalls(f, "application.stop") != 0 || fakeCalls(f, "application.reload") != 0 {
+		t.Fatal("never-deployed fence issued native stop or start")
+	}
+	if _, err := b.Start(t.Context(), "runtime"); !errors.Is(err, infra.ErrRejected) {
+		t.Fatalf("Stop receipt authorized undeployed Start: %v", err)
+	}
+	deleted, err := b.DeleteServiceByID(t.Context(), "runtime", service.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	awaitFake(t, fakeBackend(t, f, nil), deleted)
+	previous, err := fakeBackend(t, f, nil).OpStatus(t.Context(), op)
+	if err != nil || !previous.Expired || !previous.Failed {
+		t.Fatalf("deleted runtime retained a usable Stop receipt: %+v %v", previous, err)
+	}
+}
+
+func TestImportedRuntimeStopRejectsUnexpectedNativeService(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	imported := importFake(t, b, runtimeSpec("runtime", ""))
+	f.mu.Lock()
+	name := fakeString(f.apps[imported.Services["runtime"]].row, "appName")
+	f.services[name] = map[string]any{"ID": "unexpected-service", "Spec": map[string]any{"Name": name}}
+	f.mu.Unlock()
+	if _, err := b.Stop(t.Context(), "runtime"); err == nil {
+		t.Fatal("undeployed metadata concealed an unexpected native service")
+	}
+	if fakeCalls(f, "application.stop") != 0 {
+		t.Fatal("undeployed fence stopped an unverified native service")
+	}
+}
+
+func TestImportedRuntimeStopFenceRejectsDeployment(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, runtimeSpec("runtime", ""))
+	stopped, err := b.Stop(t.Context(), "runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	awaitFake(t, b, stopped)
+	b = fakeBackend(t, f, nil)
+	for _, action := range []string{"start", "restart"} {
+		if _, err := b.action(t.Context(), "runtime", action); !errors.Is(err, infra.ErrRejected) {
+			t.Fatalf("terminal import fence authorized %s: %v", action, err)
+		}
+	}
+	if _, err := b.Deploy(t.Context(), "runtime", testDeployment(t, "")); !errors.Is(err, infra.ErrRejected) {
+		t.Fatalf("terminal import fence authorized deployment: %v", err)
+	}
+	if fakeCalls(f, "application.dropDeployment") != 0 || fakeCalls(f, "application.deploy") != 0 || fakeCalls(f, "application.reload") != 0 {
+		t.Fatal("terminal import fence submitted deployment or upload")
+	}
+	f.mu.Lock()
+	for _, app := range f.apps {
+		if len(app.deployments) != 0 || len(app.upload) != 0 {
+			t.Error("terminal import fence recorded deployment state")
+		}
+	}
+	f.mu.Unlock()
+}

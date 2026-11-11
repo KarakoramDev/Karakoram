@@ -67,7 +67,15 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	if err != nil {
 		return status, err
 	}
-	defer func() { p.applyMySQLRuntimeRecoveryStatus(&status, s, now(rc)) }()
+	defer func() {
+		p.applyMySQLRuntimeRecoveryStatus(&status, s, now(rc))
+		if cp := s.Replacement; cp != nil {
+			if next := s.find(cp.New); next != nil && next.ImportAmbiguity != "" {
+				status.Message = next.ImportAmbiguity
+				status.Conditions = append(status.Conditions, domain.Condition{Type: "ReplacementWaiting", Status: "True", Reason: "ImportOutcomeUnknown", Message: next.ImportAmbiguity, LastTransitionTime: now(rc)})
+			}
+		}
+	}()
 	status = domain.ClusterStatus{Phase: domain.PhaseCreating, Version: rc.Cluster.Spec.Version, ObservedAt: now(rc), ObservedGeneration: rc.Cluster.Status.ObservedGeneration, Members: []domain.MemberStatus{}, Conditions: []domain.Condition{}, Connection: discovery(rc, s), Placement: domain.Placement{Groups: map[string][]string{}}}
 	if s.Suspended {
 		status.Phase = domain.PhaseSuspended

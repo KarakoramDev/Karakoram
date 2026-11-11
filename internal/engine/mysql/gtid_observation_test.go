@@ -339,3 +339,71 @@ func TestPXCQuorumObservationRetryRetainsEarliestSafeBoundary(t *testing.T) {
 		t.Fatalf("incident lost original sampling boundary: %+v", incident)
 	}
 }
+
+func TestPXCStoppedRetirementSharedObservationPass(t *testing.T) {
+	for _, checkpoint := range []string{"stop", "delete", "credentials"} {
+		t.Run(checkpoint, func(t *testing.T) {
+			p, rc, b := setupPXC(t)
+			converge(t, p, rc, b)
+			s, err := load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			retiree := s.data()[2]
+			receipt, err := b.Stop(t.Context(), retiree.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			retiree.Removing, retiree.Offline = true, true
+			retiree.Retirement, retiree.RetirementOp = checkpoint, &receipt
+			delete(b.native, retiree.Name)
+			delete(b.deployed, retiree.Name)
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			rc.Backend = rollbackContextBackend{Backend: rc.Backend}
+			rc.Agents = stoppedRollbackAgents{AgentDialer: rc.Agents, stopped: retiree.Name}
+			pass := engine.WithObservationPass(t.Context())
+			_, _ = p.Status(pass, rc)
+			if _, err := p.Sync(pass, rc); err != nil {
+				t.Fatalf("quorum pre-observation starved retirement: %v", err)
+			}
+			current, _ := load(rc.Cluster)
+			if m := current.find(retiree.Name); m != nil && m.Retirement == checkpoint && current.Pending == nil {
+				t.Fatal("retirement made no progress")
+			}
+			// Unavailable retirees remain in the comparison's membership, not
+			// an invented eligible sample or a smaller quorum denominator.
+			outcomes := make(map[string]string)
+			mu := gtidObservationMutex(rc)
+			mu.Lock()
+			observations, _ := samplePXCQuorumGTIDs(engine.WithObservationPass(t.Context()), rc, s, false, outcomes)
+			mu.Unlock()
+			if len(observations) != 3 || observations[retiree.Name].Eligible() || outcomes[retiree.Name] != "no-observation" {
+				t.Fatalf("retiree changed quorum semantics: observations=%d eligible=%v outcome=%s", len(observations), observations[retiree.Name].Eligible(), outcomes[retiree.Name])
+			}
+			observations[s.data()[0].Name] = myspec.GaleraStatusResponse{}
+			if err := myspec.CheckGTIDQuorum(observations); err == nil {
+				t.Fatal("unknown retired member reduced the quorum denominator")
+			}
+		})
+	}
+}
+
+func TestPXCStoppedRetirementFreshQuorumReads(t *testing.T) {
+	var calls atomic.Int32
+	rc, s := quorumObservationFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, StateUUID: recoverySID, GTIDExecuted: recoverySID + ":1-10"})
+	})
+	retiree := s.data()[0]
+	retiree.Removing, retiree.Retirement = true, "stop"
+	observations, _ := lockedQuorumSample(t.Context(), rc, s, false)
+	if len(observations) != 3 || observations[retiree.Name].Eligible() || calls.Load() != 2 {
+		t.Fatal("read-only quorum sampling contacted the stopped retiree")
+	}
+	observations, _ = lockedQuorumSample(t.Context(), rc, s, true)
+	if !observations[retiree.Name].Eligible() || calls.Load() != 5 {
+		t.Fatal("read-only skip changed authoritative fresh quorum sampling")
+	}
+}

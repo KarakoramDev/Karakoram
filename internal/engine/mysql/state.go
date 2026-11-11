@@ -109,6 +109,7 @@ type member struct {
 	ServiceID         string               `json:"serviceId,omitempty"`
 	Stage             string               `json:"stage"`
 	ImportBatch       *engine.ImportPlan   `json:"importBatch,omitempty"`
+	ImportAmbiguity   string               `json:"importAmbiguity,omitempty"`
 	DeployOp          *infra.Op            `json:"deployOp,omitempty"`
 	NativeReadiness   *bool                `json:"nativeReadiness,omitempty"`
 	Version           string               `json:"version"`
@@ -126,19 +127,21 @@ type member struct {
 	Retirement        string               `json:"retirement,omitempty"`
 	// IdentityBarrier is set only when new structural work passes capability preflight.
 	// Its absence preserves completion of work started by a legacy control plane.
-	IdentityBarrier        bool                   `json:"identityBarrier,omitempty"`
-	LegacyRetirementWarned bool                   `json:"legacyRetirementWarned,omitempty"`
-	HandoffTarget          string                 `json:"handoffTarget,omitempty"`
-	Removing               bool                   `json:"removing,omitempty"`
-	SlowShutdown           bool                   `json:"slowShutdown,omitempty"`
-	RetirementOp           *infra.Op              `json:"retirementOp,omitempty"`
-	Parameters             map[string]string      `json:"restartParameters,omitempty"`
-	GaleraJoinFence        bool                   `json:"galeraJoinFence,omitempty"`
-	GaleraSSTDonor         string                 `json:"galeraSSTDonor,omitempty"`
-	GaleraHistoryBlocked   bool                   `json:"galeraHistoryBlocked,omitempty"`
-	RuntimeRecovery        engine.RuntimeRecovery `json:"runtimeRecovery,omitempty"`
-	RuntimeRecoveryReason  string                 `json:"runtimeRecoveryReason,omitempty"`
-	LastGTIDExecuted       string                 `json:"lastGTIDExecuted,omitempty"`
+	IdentityBarrier         bool                   `json:"identityBarrier,omitempty"`
+	LegacyRetirementWarned  bool                   `json:"legacyRetirementWarned,omitempty"`
+	HandoffTarget           string                 `json:"handoffTarget,omitempty"`
+	Removing                bool                   `json:"removing,omitempty"`
+	SlowShutdown            bool                   `json:"slowShutdown,omitempty"`
+	RetirementOp            *infra.Op              `json:"retirementOp,omitempty"`
+	RetirementFenceID       string                 `json:"retirementFenceID,omitempty"`
+	RetirementFenceComplete bool                   `json:"retirementFenceComplete,omitempty"`
+	Parameters              map[string]string      `json:"restartParameters,omitempty"`
+	GaleraJoinFence         bool                   `json:"galeraJoinFence,omitempty"`
+	GaleraSSTDonor          string                 `json:"galeraSSTDonor,omitempty"`
+	GaleraHistoryBlocked    bool                   `json:"galeraHistoryBlocked,omitempty"`
+	RuntimeRecovery         engine.RuntimeRecovery `json:"runtimeRecovery,omitempty"`
+	RuntimeRecoveryReason   string                 `json:"runtimeRecoveryReason,omitempty"`
+	LastGTIDExecuted        string                 `json:"lastGTIDExecuted,omitempty"`
 	// ConfirmedVolumeLost is affirmative physical/agent loss evidence, not the
 	// shared journal's broader identity-conflict status flag.
 	ConfirmedVolumeLost bool `json:"confirmedVolumeLost,omitempty"`

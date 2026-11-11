@@ -161,6 +161,12 @@ func (b *Backend) operation(ctx context.Context, a *application, m metadata, act
 	}
 	return o, nil
 }
+func terminalImportFence(m metadata) bool {
+	// Desired-stopped undeployed records also recognize fences written before
+	// the explicit terminal bit existed. Ordinary deployed Stop is reversible.
+	return m.DeploymentFenced || !m.Deployed && m.Desired == "stopped" && (m.Pending == nil || m.Pending.Action == "stop")
+}
+
 func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deployment) (infra.Op, error) {
 	ctx = infra.WithoutObservation(ctx)
 	if err := d.Validate(); err != nil {
@@ -179,6 +185,9 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	}
 	if m.Kind != infra.KindRuntime {
 		return infra.Op{}, reject("cannot deploy to a volume holder")
+	}
+	if terminalImportFence(m) {
+		return infra.Op{}, reject("deployment is permanently fenced for this undeployed application; complete exact cleanup before allocating a new application")
 	}
 	coldEnv, err := proxyAdmissionEnv(a.Env, false)
 	if err != nil {
@@ -322,8 +331,23 @@ func (b *Backend) action(ctx context.Context, hostname, action string) (infra.Op
 	if m.Kind != infra.KindRuntime {
 		return infra.Op{}, reject("volume holders cannot be started or stopped")
 	}
-	if !m.Deployed && m.Pending == nil {
+	if action != "stop" && terminalImportFence(m) {
+		return infra.Op{}, reject("lifecycle start is permanently fenced for this undeployed application")
+	}
+	undeployed := !m.Deployed && (m.Pending == nil || m.Pending.Action == "stop")
+	undeployedStop := undeployed && action == "stop"
+	if undeployed && !undeployedStop {
 		return infra.Op{}, reject("service has not been deployed")
+	}
+	if undeployedStop {
+		service, err := b.inspectService(ctx, a.AppName)
+		if err != nil {
+			return infra.Op{}, err
+		}
+		if service != nil {
+			return infra.Op{}, restoreConflict("undeployed application has an unexpected native service; inspect its deployment before stopping")
+		}
+		m.DeploymentFenced = true
 	}
 	if action == "stop" {
 		m.Desired = "stopped"
@@ -365,6 +389,12 @@ func (b *Backend) action(ctx context.Context, hostname, action string) (infra.Op
 	m.Pending = &o
 	if err = b.update(ctx, a, m, settings); err != nil {
 		return infra.Op{}, err
+	}
+	if undeployedStop {
+		// No deployment was submitted and native service absence was verified.
+		// Persisting stopped intent and its receipt fences future restoration;
+		// polling still requires authoritative absence of running native tasks.
+		return encodeOp(o), nil
 	}
 	if err = b.c.post(ctx, "application."+proc, body, nil); err != nil {
 		return infra.Op{}, err

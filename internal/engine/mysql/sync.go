@@ -454,10 +454,59 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				m.Stage = "imported"
 			} else {
 				m.ImportBatch = engine.NewImportPlan(specs)
+				if s.Replacement != nil && s.Replacement.New == m.Name {
+					if e := recordReplacementImportOutcome(ctx, rc, m, "planned"); e != nil {
+						m.ImportBatch = nil
+						return result, e
+					}
+				}
 			}
 			return result, nil
 		}
+		replacement := s.Replacement != nil && s.Replacement.New == m.Name
+		if replacement {
+			outcome, err := replacementImportOutcome(ctx, rc, m)
+			if err != nil {
+				return result, err
+			}
+			if outcome != "planned" && outcome != "refused" {
+				if err := resolveReplacementImport(ctx, rc, m); err != nil {
+					return result, err
+				}
+				op, err := resumePlannedImport(ctx, rc, m)
+				if err != nil {
+					return result, err
+				}
+				if op != nil {
+					p.track(s, m, "import", *op)
+					return result, nil
+				}
+				if err := verifyMember(ctx, rc, m); err != nil {
+					return result, err
+				}
+				if m.ServiceID == "" || m.Volume != "" && m.VolumeID == "" {
+					return result, engine.ErrUnavailable
+				}
+				m.Stage, m.ImportBatch = "imported", nil
+				return result, nil
+			}
+			if m.ImportBatch.Waiting(now(rc), m.ImportBatch.RetryAt) {
+				return result, &engine.PlatformRetryWait{RetryAt: m.ImportBatch.RetryAt, Message: "Waiting to resume the original import batch"}
+			}
+			if err := recordReplacementImportOutcome(ctx, rc, m, "submitting"); err != nil {
+				return result, err
+			}
+		}
 		op, e := m.ImportBatch.Submit(ctx, rc, m.Name, tok.Token)
+		if replacement && (e == nil || errors.Is(e, infra.ErrPlacementUnsatisfiable)) {
+			outcome := "accepted"
+			if e != nil {
+				outcome = "refused"
+			}
+			if err := recordReplacementImportOutcome(ctx, rc, m, outcome); err != nil {
+				return result, err
+			}
+		}
 		if e != nil {
 			return result, e
 		}

@@ -89,7 +89,7 @@ func (p *Core) reconcileMembership(ctx context.Context, rc *engine.Context, s *s
 				return true, err
 			}
 			if cp.Stage == "join" {
-				return cp.Recovery != "", nil
+				return cp.Recovery == "rollback", nil
 			}
 		}
 		_, err := p.advanceReplacement(ctx, rc, s)

@@ -117,9 +117,14 @@ func TestReplacementCancellationNeverDeployedProof(t *testing.T) {
 		{"not replacement rollback", func(s *state, m *member) { s.Replacement.Recovery = "" }},
 		{"runtime identity", func(s *state, m *member) { m.ServiceID = "runtime" }},
 		{"volume identity", func(s *state, m *member) { m.VolumeID = "volume" }},
-		{"resource settings", func(s *state, m *member) { m.Resources.MinRAM = 1 }},
+		{"planned desired settings", func(s *state, m *member) {
+			m.Resources.MinRAM, m.Replicas, m.Version = 1, 1, "8.4"
+		}},
 		{"import intent", func(s *state, m *member) { m.ImportBatch = &engine.ImportPlan{} }},
 		{"deploy receipt", func(s *state, m *member) { m.DeployOp = &infra.Op{ID: "deploy"} }},
+		{"retirement receipt", func(s *state, m *member) { m.RetirementOp = &infra.Op{ID: "stop"} }},
+		{"confirmed loss", func(s *state, m *member) { m.ConfirmedVolumeLost = true }},
+		{"clone receipt", func(s *state, m *member) { m.CloneDone = true }},
 		{"pending deployment", func(s *state, m *member) { s.Pending = &pending{Member: m.Name, Action: "deploy"} }},
 		{"imported receipt lost", func(s *state, m *member) { m.Stage = "imported" }},
 		{"deploying receipt lost", func(s *state, m *member) { m.Stage = "deploying" }},
@@ -143,13 +148,17 @@ func TestReplacementCancellationNeverDeployedProof(t *testing.T) {
 				tc.change(s, next)
 			}
 			next.Removing, next.Offline, next.Retirement = true, true, "credentials"
-			pristine := tc.change == nil
+			pristine := tc.change == nil || tc.name == "planned desired settings"
 			if got := replacementNeverDeployed(s, next); got != pristine {
 				t.Fatalf("never-deployed proof=%v, want %v", got, pristine)
 			}
 			err = membershipRemoved(t.Context(), rc, s, next.Name)
-			if pristine && err != nil || !pristine && !errors.Is(err, engine.ErrUnavailable) {
-				t.Fatalf("native barrier: %v (untouched=%v)", err, pristine)
+			// A completed Stop receipt is not the never-deployed shortcut, but
+			// an absent runtime plus complete fresh survivor views can prove
+			// removal of an unadmitted rollback identity independently.
+			nativeProof := pristine || tc.name == "retirement receipt"
+			if nativeProof && err != nil || !nativeProof && !errors.Is(err, engine.ErrUnavailable) {
+				t.Fatalf("native barrier: %v (proof expected=%v)", err, nativeProof)
 			}
 		})
 	}
