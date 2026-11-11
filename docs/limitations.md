@@ -98,6 +98,9 @@ workarounds still apply.
 
 ## Known issues in v0.4.7
 
+These descriptions and workarounds are historical v0.4.7 guidance, not current
+v0.4.8 advice. Fixed dispositions identify the required upgrade actions.
+
 - **Zerops API error change** (v0.2.0–v0.4.7 on Zerops; **fixed in v0.4.8**).
   Once Zerops answers missing objects with HTTP 404 instead of HTTP 400, these
   versions read another object's absence, or a gateway 404, as a missing
@@ -115,11 +118,13 @@ workarounds still apply.
   but the operation stays Running for about 15 minutes before failing, cannot
   be cancelled, and afterwards the cluster stays Degraded: changing the proxy
   settings back is accepted but not applied, and agent upgrades are blocked.
-  There is no supported way to recover in this release. Before changing proxy
-  count or resources on Dokploy, make sure the nodes have spare capacity for
-  the new proxy tasks. If an update pauses, keep the existing proxies running,
-  do not edit the Swarm service by hand, and upgrade when the fix is released,
-  or open an issue. A fix is planned for v0.4.9.
+  There is no supported way to recover in v0.4.7. Before changing proxy count or
+  resources, make sure the nodes have spare capacity for the new proxy tasks.
+  If an update pauses, keep the existing proxies running and do not edit the
+  Swarm service by hand.
+  **Fixed in v0.4.8:** paused updates fail promptly; after repairing the cause,
+  submit a different proxy count/resource target to clear the failed receipt.
+  See [proxy recovery](upgrade.md#proxy-count-and-resource-changes).
 
 <a id="mysql-gr-lost-member-cancellation"></a>
 
@@ -132,9 +137,12 @@ workarounds still apply.
   The cluster keeps serving, but new replacements and agent upgrades are
   blocked and there is no supported way to recover in this release. Do not
   cancel these replacements once they have started; let them finish. If a
-  cluster is already stuck, keep it serving, take a full backup and upgrade
-  when the fix is released, or open an issue. A fix is planned for the next
-  release.
+  cluster is already stuck on v0.4.7, keep it serving and take a full backup.
+  **Fixed in v0.4.8:** joined confirmed-loss replacement completes forward on
+  cancellation; unjoined work rolls back its allocation and retains loss for a
+  fresh replacement. Existing rollback owners settle after upgrade. Cancellation
+  acknowledgement is not finished recovery; see
+  [the recovery procedure](upgrade.md#gr-capability-and-legacy-recovery).
 
 <a id="dokploy-neo4j-minimum-memory"></a>
 
@@ -143,7 +151,9 @@ workarounds still apply.
   on Dokploy runs out of memory and CPU while starting: it never reports Ready
   and the create operation fails after about 40 minutes. Workaround: create
   Neo4j clusters on Dokploy with at least 2 GiB of memory. Existing clusters are
-  not affected. A fix is planned for v0.4.9.
+  not affected. **Fixed in v0.4.8:** new clusters/resource edits require 2 GiB
+  on all backends; unchanged legacy shapes are grandfathered, not automatically
+  resized. See [sizing guidance](upgrade.md#neo4j-minimum-memory).
 
 <a id="dokploy-replacement-placement"></a>
 
@@ -157,8 +167,11 @@ workarounds still apply.
   with `karactl clusters members CLUSTER` (the `PLACEMENTGROUP` column shows the
   node). If two data members share a node, there is no reliable way to move one
   in this release: replacing again or draining nodes can make it worse. Keep
-  the cluster as it is, take a fresh full backup, and upgrade when the fix is
-  released. A fix is planned for v0.4.9.
+  the cluster as it is on v0.4.7 and take a fresh full backup.
+  **Fixed in v0.4.8:** new Dokploy/Nomad imports preserve predecessor identity
+  and strictly exclude survivor nodes. Existing co-location needs inspection and
+  repair; healthy GR replacement requires upgraded full-view survivor agents.
+  See [placement repair](upgrade.md#check-database-placement-after-v047-replacements).
 - **Karakoram's status checks cause heavy disk writes on the Dokploy manager**
   (also present in v0.2.0–v0.4.6). Karakoram reads Dokploy's API several times per
   second for each cluster, and Dokploy records every API-key use in its own
@@ -169,8 +182,11 @@ workarounds still apply.
   make clusters briefly report `Degraded`. Your data is not affected.
   Workaround: run the Dokploy manager on fast SSD storage and give it enough
   disk throughput for the number of clusters you manage; avoid co-locating
-  other disk-heavy workloads on the manager. A fix that reduces the number of
-  requests is planned for the next release.
+  other disk-heavy workloads on the manager.
+  **Fixed in v0.4.8:** control-plane-only snapshots and parallel observation reduce
+  request amplification, not Dokploy accounting writes. Infrastructure sizing
+  remains relevant; historical I/O figures are not a fixed-version guarantee.
+  See [observation caveats](upgrade.md#companion-refresh-and-dokploy-observation).
 - **On Dokploy, a ProxySQL rollout whose new proxy instance fails to start can
   take down the existing proxies** (v0.4.7). For proxies using the
   serving-preserving rollout, when changing the proxy count or resources, or
@@ -182,7 +198,11 @@ workarounds still apply.
   change, make sure the Dokploy nodes have enough free CPU and memory for one
   extra proxy instance and that the cluster is healthy; run the change in a
   maintenance window; if a proxy rollout stops or fails, don't resume the Docker
-  Swarm service update by hand. A fix is planned for v0.4.9.
+  Swarm service update by hand.
+  **Fixed in v0.4.8:** fixed agents plus the fixed control plane provide opted-in
+  task/revision-bound admission. Upgrade old marked agents before count/resource
+  changes; surge capacity, no manual resume and daemon/executor-restart caveats
+  remain. See [proxy recovery](upgrade.md#proxysql-admission-startup-and-recovery).
 - **MySQL Group Replication clusters on Dokploy can briefly report Degraded, and
   adding proxy instances can be reported as failed** (also present in
   v0.4.3–v0.4.6). The Dokploy provider reads the state of each member and proxy
@@ -193,8 +213,11 @@ workarounds still apply.
   instances are healthy. Your data and client traffic are not affected.
   Workaround: keep two proxy instances on Dokploy; if a proxy-count change
   fails, check the cluster's status and the Dokploy service before retrying,
-  because the change has usually been applied. A fix is planned for the next
-  release.
+  because the change has usually been applied.
+  **Fixed in v0.4.8:** concurrent bounded observations and snapshots correct the
+  serialized-read mechanism, not all latency/network causes. Two proxies is not
+  a v0.4.8 maximum recommendation. See
+  [observation changes](upgrade.md#companion-refresh-and-dokploy-observation).
 - **MySQL/PXC automatic lost-volume replacement is experimental and off by
   default.** Testing observed Group Replication quorum loss after an automatic
   confirmed-loss replacement; its cause is not yet known. Leave
@@ -269,8 +292,9 @@ workarounds still apply.
   not replace deployed agents. Singleton databases/components have downtime.
   ProxySQL agent rollout preserves serving only on Dokploy with a running,
   deployed, volume-less, serving-probe-marked incumbent and marked incoming build,
-  using serial start-first native admission and spare capacity. Legacy/unmarked
-  first upgrades and cold/stopped deployment retain ordinary deployment.
+  using serial start-first authenticated control-plane/task/revision admission
+  for opted-in fixed agents, with spare capacity. Legacy/unmarked first upgrades
+  retain old behavior; cold/stopped deployments do not wait for CP admission.
   Zerops new-build deployment and Nomad's TCP-gated canary/destructive rollout
   do not inherit count/resource serving guarantees and can interrupt the whole
   endpoint even with replicas. PostgreSQL/Supabase proxy deployments share the
@@ -295,11 +319,15 @@ workarounds still apply.
   incumbent replacement fails with `INCUMBENTS_REPLACED`. Observed terminal
   failures release the submission fence; unresolved submissions still block
   supersession and Stop. A caller crash before checkpointing a returned failure
-  can permit one resubmission. Dokploy count/resource updates require a deployed
-  serving-probe marker and serial start-first replacement with spare capacity.
-  Native readiness gates initial task/container admission. A provenance-bound
-  marker in container `/tmp` (never the engine volume) survives agent-only
-  restart/re-exec; new task/container identities need fresh native admission.
+  can permit one resubmission. Dokploy count/resource updates require fixed-agent
+  capability preflight, a deployed serving-probe marker and serial start-first
+  replacement with spare capacity. Opted-in tasks require authenticated
+  control-plane admission bound to the exact task and applied configuration
+  revision, after native readiness. The authenticated task/revision-bound marker
+  in container `/tmp` (never the engine volume) survives agent-only restart/re-exec;
+  new task/container identities need fresh admission. Persistent failure fences
+  cannot be cleared merely by losing an engine receipt; see
+  [Dokploy admission and recovery](dokploy.md#proxysql-count-and-resource-updates).
   Later Swarm checks use lock-free agent/supervisor liveness only; dependency
   failures and intentional holds remain engine-managed, avoiding replacement
   cascades. Unmarked legacy proxies retain their

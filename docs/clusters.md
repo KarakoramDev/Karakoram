@@ -76,8 +76,13 @@ ProxySQL, hands the writer to an up-to-date ONLINE secondary when necessary,
 leaves Group Replication, and confirms the stopped runtime before deleting the
 ID-fenced runtime and volume. Rejected volume deletion is handed to orphan-volume
 inventory. Replacement joins a new identity before retiring its predecessor;
-cancellation before retirement rolls back the new identity, while cancellation
-after retirement begins completes the cutover under reconciliation ownership.
+for healthy replacement, cancellation before retirement rolls back the new
+identity, while cancellation after retirement begins completes the cutover under
+reconciliation ownership. Confirmed-loss GR replacement is an exception: once
+the joiner has joined, cancellation completes forward even before retirement.
+Before join, rollback retains the lost member and affirmative loss for a fresh
+replacement after cleanup. Cancellation acknowledgement does not mean native
+recovery is finished; see [GR retirement and legacy recovery](mysql/operations.md#gr-retirement-and-legacy-recovery).
 
 Single→group retains the existing seed volume and uses a new group identity and
 bootstrap epoch; group→single is rejected. Group topology requires ProxySQL.
@@ -166,16 +171,65 @@ restore) remains terminal even when returned with an error; it must not be
 replaced by the formerly serving phase. If no historical member inventory exists,
 identities from the partial observation remain visible with health withdrawn.
 
-Formed clusters request health observation at most five seconds after the
-preceding reconciliation. Health is observed before recovery `Sync`; withdrawn
-readiness is persisted by the existing serialized cluster worker before platform
-repair can block. Read-only member probes allow four seconds for cold namespace/TLS
-connection setup and the native response (separate from restart/restore/backup
-action deadlines), and each complete health sweep has a
-five-second deadline. One immediate fresh sweep retry is the entire transient
-failure tolerance: a single failed probe can be absorbed by a successful retry
-without publishing a degraded intermediate result. Failed/stale samples are never
-reused as ready across cycles.
+A cluster becomes **steady** after its provider and any reconciled Data MCP
+companion report fully converged synchronization, without pending journals,
+receipts, acknowledgements, rolling steps or maintenance waits. Reconciliation
+must finish without errors, with its generation acknowledged, phase Ready, no
+pending/running operation or deployment failure, and no deleting, suspended or
+restoring intent. Steady clusters reconcile every 30 minutes (or at a genuine
+earlier timed provider wake-up), not every five seconds. The 30-second discovery
+sweep skips unchanged steady
+clusters without operations. Spec changes, operations, a non-Ready availability
+result, detected platform-listing drift and new agent sessions/identities wake
+reconciliation immediately. Non-steady clusters retain the normal fresh-read
+cadence, including observation at most five seconds after a formed cluster's
+preceding reconciliation, subject to platform retry deadlines.
+
+Availability is still evaluated every five seconds, with additional wakeups for
+failed heartbeat samples, changed sessions/identities and stale heartbeat
+samples. v0.4.8 agents push generic status and subscribed read-only native
+observations every three seconds over their authenticated control-plane channel.
+Only allowlisted native reads can be subscribed, for ten minutes, renewed on
+each read or pushed hit. The control plane timestamps samples using the issue
+time of its echoed reply token: a conservative lower bound unaffected by agent
+clock skew or network buffering.
+Pushed samples are usable for seven seconds. Pinned instance reads additionally
+require matching runtime identity; ambiguous logical-member sessions use live pulls.
+
+Only independent renewal of a steady cluster makes a steady attempt: it uses
+usable pushed samples and the per-target platform snapshot. Platform misses and
+reads from members that have never pushed go to the network; a member known to
+push but lacking a usable sample rejects the attempt immediately. A complete
+positive result is accepted only if its target mutation epoch remains valid.
+A negative, partial or failed result, or an epoch change, is discarded before
+the normal two-attempt fresh observation. Reconcile observations
+before and after `Sync` always stay fresh, as do lifecycle safety gates and pinned
+dial authorization. Legacy agents continue serving pulls.
+
+Platform snapshots have a separate freshness class: a successful batched listing
+check within 60 seconds and entries no older than 40 minutes. Listing changes
+invalidate the whole target snapshot; listing failure prevents serving it.
+Out-of-band changes invisible to agents are bounded by the listing cadence, or
+the 30-minute deep reconciliation when absent from listing fields. See the
+[platform read budget](providers.md#platform-read-budget) and
+[out-of-band platform changes and forcing a reconcile](operations.md#out-of-band-platform-changes-and-forcing-a-reconcile).
+
+Health is observed before recovery `Sync`; withdrawn readiness is persisted by
+the serialized cluster worker before repair can block. Fresh read-only member
+probes allow four seconds for connection setup and native response, with a
+five-second deadline per complete sweep. One immediate fresh sweep retry is the
+transient-failure tolerance: a successful retry can absorb a failed probe without
+publishing a degraded intermediate result. Failed/stale samples never renew Ready.
+
+The [ADR 0070 detection bounds](adr/0070-agent-heartbeats-and-platform-read-budget.md)
+are at most eight seconds for a native failure with a live agent. After
+heartbeats stop, token-anchored samples become unusable about four seconds after
+the last heartbeat arrived; the staleness watcher wakes evaluation within about
+one second. The steady attempt rejects that stale pusher without a probe, then
+the fresh two-attempt observation decides: about six seconds after the last
+heartbeat for a refused connection, or about 14 seconds for a black-holed member
+exhausting two four-second probes. Independently, the API withdraws Ready no
+later than 15 seconds after the oldest evidence of the last positive observation.
 
 [MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/) and [Elasticsearch](https://www.elastic.co/elasticsearch) collect project/service inventory once per
 sweep and overlap per-member platform reads, with at most eight provider method
@@ -188,9 +242,9 @@ successes, and additional worker waves still consume the same bounded budget.
 
 Provider inventory also bounds its own read traversal rather than hiding a
 serial per-runtime HTTP chain inside a single platform call. [Dokploy](https://dokploy.com/) overlaps
-read-only runtime observations while retaining its target lock; pending
-operation completion, legacy adoption and restoration decisions still execute
-serially under that lock. A real-provider regression with three persistent
+read-only runtime observations without target mutation exclusion. Pending
+operation completion, legacy adoption and restoration acquire that exclusion
+and reload/revalidate the relevant state before mutation. A real-provider regression with three persistent
 members and 600-millisecond platform HTTP responses completes a fresh sweep
 within five seconds. Concurrent instance diagnostics reduce in inventory order,
 and MongoDB FCV observations use bounded set probes with sorted successful
@@ -245,14 +299,15 @@ Reconciliation stages emit sanitized monotonic durations at DEBUG, or WARN when
 a stage exceeds the 15-second lease; fields contain cluster identity, stage and
 duration, not credentials, request bodies or private observation provenance.
 
-Persisted health has a **15-second maximum sample age**: five seconds between
-cycles plus at most two five-second sweeps. Cluster/status/member API projections
-withdraw positive availability after that bound even if recovery, an operation,
-or a provider call blocks further publication. Sample age uses the start of the
-successful sweep, not condition transition times; missing/future timestamps are
-unknown. Legacy snapshots therefore require one successful health observation
-before they can report Ready. This is a bounded observation guarantee, not an
-instantaneous failure detector or a writable-transaction guarantee.
+Persisted health has a **15-second maximum evidence age**. Cluster/status/member
+API projections withdraw positive availability after that bound even if recovery,
+an operation or a provider call blocks publication. A fresh sweep uses its start
+time; steady renewal anchors `ObservedAt` to the oldest health evidence used and
+each member's `Agent.LastSeen` to that member's oldest pushed sample. Republishing
+does not extend the evidence's lease. Condition transition times are not sample
+times; missing/future timestamps are unknown. Legacy snapshots require one
+successful observation before reporting Ready. Platform snapshot ages do not
+extend this health lease. It is not a writable-transaction guarantee.
 After a CP restart, status reads Degraded/Unknown until the first post-start observation.
 Successful sweeps carry private provenance of the current control-plane process,
 independent of wall-clock timestamps. Old-process snapshots cannot replay Ready

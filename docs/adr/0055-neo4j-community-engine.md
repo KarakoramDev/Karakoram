@@ -18,7 +18,7 @@ The agent supervises the server JVM directly. It derives the exact server comman
 
 ### Memory
 
-The engine driver derives JVM heap and page cache from the engine component's minimum RAM: heap 40 % and page cache 25 % of the minimum, rounded down to 64 MiB, with heap between 256 MiB and 31 GiB (compressed object pointers) and page cache at least 64 MiB. The remainder serves [Lucene](https://lucene.apache.org), [Netty](https://netty.io), native JVM memory, the operating system and the agent. `engineOptions.heapMB` and `engineOptions.pageCacheMB` override the defaults when their sum stays within 80 % of the minimum RAM. The minimum is 1 GiB; 2 GiB is the default. Changes take effect through a restart, which is a full outage.
+The engine driver derives JVM heap and page cache from the engine component's minimum RAM: heap 40 % and page cache 25 % of the minimum, rounded down to 64 MiB, with heap between 256 MiB and 31 GiB (compressed object pointers) and page cache at least 64 MiB. The remainder serves [Lucene](https://lucene.apache.org), [Netty](https://netty.io), native JVM memory, the operating system and the agent. `engineOptions.heapMB` and `engineOptions.pageCacheMB` override the defaults when their sum stays within 80 % of the minimum RAM. From v0.4.8, the minimum and default are both 2 GiB on every backend; unchanged existing 1 GiB members retain rendering and update compatibility. Any resource edit must meet the new minimum. Credential recovery uses the same memory sizing while the normal server is stopped. Changes take effect through a restart, which is a full outage.
 
 ### Transport security and hardening
 

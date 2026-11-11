@@ -35,7 +35,53 @@ readiness client authenticates its local server using kernel peer credentials
 for the same effective UID. Setup or bind failure preserves agent startup for
 diagnostics but fails serving admission closed.
 
+New serving deployments additionally opt into control-plane admission with
+`KARAKORAM_PROXY_SERVING_ADMISSION=1` and a Swarm-expanded
+`KARAKORAM_TASK_ID={{.Task.ID}}`. Before Docker health can succeed, the control
+plane discovers the exact starting task, freshly authorizes its instance
+transport, reads its authenticated native-serving proof, and explicitly admits
+that exact task and applied configuration revision. A local health invocation
+cannot issue this authorization. The agent rechecks the current revision and
+native readiness before accepting it; stale task/revision requests fail closed.
+An unavailable control plane stalls only new admission, not an admitted proxy's
+liveness. A never-admitted marked task exits nonzero even on graceful termination,
+preventing Swarm's initial-unhealthy shutdown from treating a clean exit as a
+successful start.
+
+The opt-in admission latch extends the existing safe writable-layer record with
+an HMAC keyed by the pinned member credential over the exact task identity,
+container provenance and admitted revision. Unsigned, modified or cross-task
+records cannot authorize admission. Its in-memory health hot path remains
+liveness-only, including during configuration changes or control-plane loss.
+Agent-only restart validates and restores the authenticated container latch;
+container/task replacement must earn authorization again. The distinct opt-in
+preserves fixed-agent compatibility with older control planes, which do not
+request this protocol. Cold deployment and unmarked runtimes keep their existing
+bootstrap path; old agents do not gain the stronger CP-observed guarantee merely
+by being managed by a newer control plane.
+A fixed control plane refuses count/resource rollouts of marked agents that lack
+the protocol before submitting a platform mutation, with explicit agent-upgrade
+guidance. Agent upgrades remain allowed so the replacement can install the new
+protocol. A fixed agent launched by an older control plane exposes the read-only
+proof endpoint for this capability preflight without enabling CP-gated health;
+only the new task's explicit template opt-in enables that gate.
+
 A durable receipt binds completion to the exact expected `ForceUpdate`, the requested new Running tasks, retirement of all previous Running tasks and completed Swarm update state. Paused, rolled-back, superseded and timed-out updates fail rather than commit; lost reload replies adopt the original operation. Cold deployment clears this serving healthcheck so bootstrap discovery is not deadlocked on unformed dependencies. See [Dokploy proxy updates](../dokploy.md#proxysql-count-and-resource-updates).
+
+Ordinary health-gated count/resource receipts carry a typed terminal failure only
+after authoritative Swarm pause/rollback on its expected `ForceUpdate`, or a newer
+`ForceUpdate` superseding that receipt. Both receipt polling and retained service
+observation preserve this authority and recovery diagnostic; public update tracking fails on its first
+consuming reconcile. Failed/expired/stalled status alone, transport errors and
+unmarked runtimes do not acquire this classification. The receipt and failed-task
+admission authority remain retained independently of the public tracker.
+Lower `ForceUpdate` values may precede asynchronous reload application; an old
+pause/rollback alone cannot permanently fail the new receipt.
+A different explicit count/resource target may supersede that failed receipt
+through the ordinary ownership, configuration-publication, maintenance and
+serving-admission barriers. An identical spec apply does not authorize replay or
+advance generation. No engine generation fence is introduced.
+
 
 ### Nomad: retain count-only scaling, not resource preservation
 

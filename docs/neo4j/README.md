@@ -12,11 +12,11 @@ Karakoram operates a native [Neo4j](https://neo4j.com/) Community server with on
 | Versions | 2026.09.0; 2026.10.0; **2026.10.1** (default) |
 | Topology | `single`, exactly one engine replica; no additional components |
 | Runtime | Official Neo4j Unix tarball and Eclipse Temurin 21 JRE 21.0.13+9, shared by all offered versions |
-| Resources | Default shared 1 CPU, 2 GiB RAM, 10 GB disk; minimum 1 GiB RAM, 1 GB disk |
+| Resources | Default shared 1 CPU, 2 GiB RAM, 10 GB disk; minimum 1 whole CPU, 2 GiB RAM, 1 GB disk |
 | TLS | Required; cluster CA, `selfSigned` by default or `userProvided` |
 | Recovery | Offline `dump` of `system` and `neo4j`; every backup is an outage |
 
-**Known issue in v0.4.7:** on Dokploy, create Neo4j clusters with at least 2 GiB RAM rather than the 1 GiB minimum; see [the startup failure and workaround](../limitations.md#dokploy-neo4j-minimum-memory).
+**Fixed in v0.4.8:** new clusters and resource changes require 2 GiB minimum RAM on all backends; unchanged legacy shapes are grandfathered, not automatically resized. See [upgrade sizing guidance](../upgrade.md#neo4j-minimum-memory).
 
 Inspect `karactl providers get neo4j -o json` for the running catalog. Native downloads have exact sizes, SHA-256 hashes and upstream provenance in the [artifact lock](../../internal/engine/nativeartifacts/lock.json). An operator mirror takes precedence but must serve identical bytes; see [native artifacts](../native-artifacts.md). The member supervises the server JVM directly rather than retaining the launcher's additional JVM.
 
@@ -61,6 +61,15 @@ Wait timeouts do not cancel server work. Observe the existing operation rather t
 ## Memory and options
 
 Heap defaults to 40% and page cache to 25% of **minimum** engine RAM, each rounded down to 64 MiB. Heap is bounded to 256–31744 MiB (31 GiB); page cache is at least 64 MiB. At the default 2 GiB RAM these are 768 MiB and 512 MiB. Remaining memory is needed by the JVM's native allocations, Lucene, Netty, the operating system and member agent; these are not workload sizing recommendations.
+
+The 2 GiB minimum applies on Zerops, Dokploy and Nomad to new clusters and
+resource changes. At 1 GiB the defaults reserve 384 MiB heap and 256 MiB page
+cache, leaving only 384 MiB for everything else; credential recovery can time
+out under memory pressure. At 2 GiB the remaining budget is 768 MiB. Recovery
+uses the same sizing in an isolated JVM while the normal server is stopped,
+not two concurrent server heaps. These budgets do not guarantee workload capacity.
+Existing smaller clusters keep working with unchanged resources; see the
+[upgrade guidance](../upgrade.md#neo4j-minimum-memory).
 
 `engineOptions` accepts only:
 

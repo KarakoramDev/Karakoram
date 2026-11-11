@@ -64,6 +64,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0067](0067-mysql-lost-volume-replacement.md) | MySQL and PXC lost-volume replacement |
 | [0068](0068-temporal-zerops.md) | Temporal on Zerops private IPv6 |
 | [0069](0069-proxysql-serving-scale-and-resource-changes.md) | ProxySQL serving-preserving replica and resource changes |
+| [0070](0070-agent-heartbeats-and-platform-read-budget.md) | Agent heartbeats and a platform read budget |
 
 ## References and verification
 

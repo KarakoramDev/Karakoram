@@ -350,28 +350,28 @@ Admission requires 1 / 1 / 5 per `single` data member and **1 / 2 / 5 per Group 
 
 ### Neo4j Community
 
-**Singleton only: no HA tier.** Admission requires exactly one member, 1 whole CPU / 1 GiB RAM / 1 GB persistent disk; created defaults are 1 / 2 / 10. Zerops bills its 5-GB minimum volume plus the 1-GB runtime disk at the admission floor. Production remains one larger member. Offline dumps interrupt the database; enable scheduled-backup downtime consent when scheduling them. See [Neo4j](neo4j/README.md).
+**Singleton only: no HA tier.** Admission requires exactly one member, 1 whole CPU / 2 GiB RAM / 1 GB persistent disk; created defaults are 1 / 2 / 10. Zerops bills its 5-GB minimum volume plus the 1-GB runtime disk at the admission floor. Production remains one larger member. Offline dumps interrupt the database; enable scheduled-backup downtime consent when scheduling them. See [Neo4j](neo4j/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
-| MINIMAL | 1 × 1 / 1 / 1 persistent disk |
+| MINIMAL | 1 × 1 / 2 / 1 persistent disk |
 | PRODUCTION-SHAPED | 1 × 4 / 8 / 100; offline dumps to S3 |
 
 | Worker placement | Minimal | Production-shaped |
 | --- | --- | --- |
 | **Zerops** | 1 × managed runtime | 1 × managed runtime |
 | Hetzner | 1 × CX23 | 1 × CX43 |
-| AWS | 1 × t3.small | 1 × m6i.xlarge |
-| DigitalOcean | 1 × Basic 2-GiB | 1 × Basic 16-GiB |
-| OVHcloud | 1 × d2-2 | 1 × b2-15 |
+| AWS | 1 × t3.medium | 1 × m6i.xlarge |
+| DigitalOcean | 1 × Basic 4-GiB | 1 × Basic 16-GiB |
+| OVHcloud | 1 × d2-4 | 1 × b2-15 |
 
 | Monthly total | Minimal | Production-shaped |
 | --- | ---: | ---: |
-| **Zerops (USD)** | $8.8 | $67 |
+| **Zerops (USD)** | $12 | $67 |
 | Hetzner (EUR) | €24 | €35 |
-| AWS (USD) | $77 | $248 |
-| DigitalOcean (USD) | $54 | $153 |
-| OVHcloud (EUR) | €32 | €134 |
+| AWS (USD) | $94 | $248 |
+| DigitalOcean (USD) | $66 | $153 |
+| OVHcloud (EUR) | €40 | €134 |
 
 ### Weaviate
 

@@ -271,6 +271,12 @@ OFF-to-ON writer gap cannot distinguish intentional denial from rollout downtime
 |`exec`, `metrics`|no|Nomad has native allocation exec/stats APIs, but Karakoram does not expose or consume them under the provider contract ([ADR 0030](adr/0030-backend-neutral-infrastructure-contract.md)).|
 |`envChangeRestarts`|no|Variable changes apply on the next restart, not immediately.|
 
+For failure-domain checks and replacement exclusions, Karakoram resolves node-name
+and node-ID aliases from one node-inventory snapshot to the immutable Nomad node
+ID. The public `placementGroup` projection above is unchanged. Known ineligible
+incumbents still occupy domains; an unknown or ambiguous alias reports placement
+unknown instead of certifying separation or admitting an unsafe replacement.
+
 ## Requirements
 
 - [Linux](https://www.kernel.org/) amd64 clients, [Ubuntu](https://ubuntu.com/) **24.04** runtime rootfs, [Nomad](https://developer.hashicorp.com/nomad) `exec` driver and cgroups. Nomad **1.10 or newer** is the feature floor for dynamic host volumes; **2.0.7 is the only tested version**, not a promise of compatibility with all versions between 1.10 and 2.0.7 or with later releases. Validate other versions before use.
@@ -761,6 +767,46 @@ sending `SIGTERM` to the task's own processes and then `SIGKILL` to that
 allocation's executor process only let the stop complete without touching other
 allocations. Do this only after confirming the stalled allocation is the one being
 stopped.
+
+### Observation and platform reads
+
+Steady availability renewal uses agent heartbeats and a platform snapshot shared
+below the HTTP client by API origin + namespace + region. The shared drift check
+reads `GET /v1/jobs?meta=true` and `GET /v1/allocations`, fingerprints stable job,
+ownership and allocation state, and must succeed within 60 seconds before entries
+can be served. Entries expire after 40 minutes; a changed listing or mutation
+invalidates the target snapshot.
+
+Healthy, converged clusters reconcile every 30 minutes while availability is
+evaluated every five seconds. Agent samples are usable for seven seconds and
+instance-bound samples match runtime identity, including `NOMAD_ALLOC_ID`.
+Unavailable push evidence falls back to fresh observation; older agents continue
+serving pulls. Placement and runtime-stop diagnostics inside a steady renewal
+can use the same platform snapshot, but observations inside reconciliation,
+operation polling, placement admission, stop/retirement proofs and pinned dial
+authorization remain fresh. A cached diagnostic cannot authorize a mutation.
+See [cluster observation](clusters.md#operations-and-status),
+[platform read budget](providers.md#platform-read-budget),
+[out-of-band platform changes and forcing a reconcile](operations.md#out-of-band-platform-changes-and-forcing-a-reconcile)
+and [monitoring](monitoring.md).
+
+**Conditional proxy configuration corner.** A listing-visible job stop flag,
+job ownership/metadata change or allocation desired-state change can precede
+the incumbent allocation's database/agent becoming unhealthy. Updated PostgreSQL
+proxies can therefore retain the previous config until **≤60 s job/allocation
+listing detection + ≤7 s heartbeat reload notice + fresh render/apply time**.
+The notice bound is heartbeat scheduling delay only (the 3 s scheduled wait and
+up to 4 s bounded sampling); it excludes transport/server time and retries after
+a failed heartbeat.
+This corner is approximately **7 s worse** than v0.4.7's ≤60 s fresh config
+pull, plus the same render/apply work; ordinary stopped allocations use the
+shorter pushed-health detection path.
+
+`karactl -n NS clusters reconcile CLUSTER` forces the fresh pass immediately when
+admitted rather than waiting for the listing or deep resync. Its persistent
+config invalidation generation survives a fast return to steady and forces the
+next heartbeat to request full fresh configuration. The command does not wait
+for application; repeated requests retain the existing 30 s coalescing rule.
 
 ### Lifecycle and provider limits
 

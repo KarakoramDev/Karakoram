@@ -139,6 +139,53 @@ settings and resource bounds remain frozen during that renewal.
 An already-admitted retirement finishes before a new native-leaf rolling journal
 is installed; independent transport-certificate renewal can still proceed.
 
+## Repairing shared database failure domains
+
+On Dokploy and Nomad, MySQL GR/PXC and PostgreSQL HA (including Supabase's
+database core) report `FailureDomainsSeparated=False/SharedNode` and a warning
+event when voting data members share a node and occupied domains plus eligible
+unused nodes can restore separation. Running incumbents still occupy domains
+even on nodes no longer eligible for new volumes. Inspect `karactl -n NS clusters members CLUSTER`:
+`PLACEMENTGROUP` is the exact table column, `placementGroup` the JSON field.
+Proxies and PostgreSQL learners do not count as voting data members.
+`Unknown/InsufficientEligibleNodes` means add/reactivate eligible nodes first;
+`Unknown/PlacementUnknown` means restore authoritative placement observation.
+The warning is recorded atomically with the persisted condition transition, not
+by individual probes. Concurrent reconciliation and availability observations,
+including the first observations after a control-plane restart, emit one warning
+for the same condition. A persisted clear followed by recurring shared placement
+emits a new warning; discarded observations do not emit warnings.
+
+Take a fresh full backup and verify native quorum, replication and temporary
+extra-member capacity. For healthy GR replacement, first complete the surviving
+data-agent executable rollout with full `GroupView` capability; see the
+[v0.4.8 ordering and supported legacy in-flight recovery](upgrade.md#gr-capability-and-legacy-recovery).
+PXC and PostgreSQL HA have no GR-view prerequisite. Then, one operation at a time:
+
+```sh
+karactl -n NS clusters replace-member CLUSTER COLOCATED_MEMBER --wait
+karactl -n NS clusters members CLUSTER
+```
+
+Choose **one of the co-located members**, not an already separated member.
+Replacement persists exclusion of all surviving data-member nodes before import,
+independently of retained volume-holder counts or unrelated workloads. It refuses
+admission when no eligible unoccupied node exists; it never intentionally repairs
+one shared pair by creating another. Explicit relocation still adds its original
+node exclusion. Nomad refuses imports without eligible CPU/memory headroom;
+Dokploy can leave the pinned replacement task pending on its free node until
+Swarm reservations fit. Keep observing the same operation, provide capacity, and
+do not retire the predecessor manually. After completion require distinct
+`PLACEMENTGROUP` values and `FailureDomainsSeparated=True`.
+An import frozen before upgrade retains its immutable original request; do not
+edit it to steer placement. Let the existing recovery settle, then inspect/repair.
+
+This does not add MySQL/PXC `members move` support and does not provide host
+placement guarantees on Zerops. Do not drain occupied database nodes to steer a
+replacement. Existing placements are not automatically changed by upgrade; see
+[v0.4.8 upgrade checks](upgrade.md#upgrading-to-v048) and
+[Dokploy placement recovery](dokploy.md#detecting-and-repairing-placement).
+
 ## Moving a member
 
 ```sh
@@ -220,8 +267,19 @@ enabled application component, with per-instance restart evidence and readiness;
 allocation IDs need not change. For component artifact rolls after an upgrade,
 see [Supabase restart and member software](supabase/operations.md#cluster-restart-and-member-software).
 
-Agent connectivity records a successful agent response, not native database
-readiness. [Elasticsearch](https://www.elastic.co/elasticsearch) observes each native endpoint independently with a
+Agent connectivity records a successful authenticated agent response, including
+usable heartbeat evidence, not native database readiness. v0.4.8 agents send
+heartbeats every **three seconds** over the same agent-to-control-plane HTTPS
+channel as configuration pulls (through the existing agent stream in relayed
+namespaces). Samples are usable for **seven seconds** and retain their
+conservative control-plane token-issue timestamp; republishing them does not
+extend the **15-second** evidence lease. A member known to push but lacking a
+usable sample rejects the steady attempt and falls back to fresh observation.
+Older agents still serve live pulls. See [cluster observation](clusters.md#operations-and-status)
+and [monitoring](monitoring.md).
+
+
+[Elasticsearch](https://www.elastic.co/elasticsearch) observes each native endpoint independently with a
 two-second budget and uses `/_nodes/_local` for that member's identity, so a
 stopped JVM cannot consume every peer's observation budget. A missing response
 produces `NativeObservation/<member>` = `Unknown` with JVM/port guidance; missing
@@ -299,6 +357,31 @@ hyphens, underscores, dots and colons separate tokens. Generated initial-restore
 IDs, 24-character operation IDs and hexadecimal product digests/checksums remain
 intact. Real execution checkpoints, payloads and cluster internal state remain
 excluded from resource-record sanitization; public event copies are not exempt.
+
+### Out-of-band platform changes and forcing a reconcile
+
+Heartbeats detect serving failures independently of platform polling. Shared
+listings detect platform drift visible in their fields; a full deep reconcile
+revalidates everything else.
+
+| Out-of-band change by someone else | Noticed |
+|---|---|
+| Member container/task killed, restarted, replaced; agent or database down | Heartbeats: seconds (see [detection bounds](adr/0070-agent-heartbeats-and-platform-read-budget.md#health-is-pushed-by-agents)) |
+| Dokploy application deleted, created, renamed, stopped/started (`applicationStatus`), moved to another server, ownership description edited | Listing: ≤ 60 s |
+| Zerops service deleted, created, renamed, stopped/started, mode/version/base changed, ports or subdomain access edited, autoscaling (resources, container counts) edited | Listing: ≤ 60 s |
+| Nomad job deleted, stopped, re-registered (new version/modify index) or its `karakoram.*` meta edited; allocation added, replaced, rescheduled to another node or status changed | Listing: ≤ 60 s |
+| Dokploy environment variables, mounts, resources, replicas, domains, ports, image or deploy settings edited without a redeploy; Zerops environment variables, domains or settings outside the service listing; Nomad changes not reflected in job version/status or allocations | Deep reconcile: ≤ 30 min |
+
+To make Karakoram re-read everything now, run `karactl clusters reconcile CLUSTER`
+(`POST /api/v1/clusters/{cluster}/reconcile`); repeated requests are coalesced
+(at most one forced reconcile per cluster every 30 s). Any spec change or
+operation also reconciles immediately; a control-plane restart reconciles every
+cluster.
+
+Namespace relay liveness comes from its hub session. While settled (connected,
+current executable, no pending operation, secret rotation or certificate renewal,
+last check successful), its platform service is checked every 60 seconds rather
+than on each 15-second namespace tick. Unsettled relays are checked every tick.
 
 ### Platform request recovery
 
@@ -424,7 +507,9 @@ the replacement passes native readiness; bootstrap does not wait on undeployed
 dependencies.
 
 Karakoram's engine-level observations still gate cluster **Ready**, native health,
-configuration acknowledgement, quorum and replication catch-up. Day-2 rolling
+configuration acknowledgement, quorum and replication catch-up. Steady availability
+renewal can use heartbeats; startup probes, configuration refresh and the fresh
+observations used by lifecycle safety gates are unchanged. Day-2 rolling
 operations still wait for the current replacement's native convergence before
 disrupting another member; platform deployment completion alone cannot advance
 that safety gate. `karakoram agent readiness` without `--startup` retains its
@@ -526,6 +611,18 @@ For `reason: ClusterSpecChangeRequested`, the message summarizes up to the first
 ## Node-agent semantics
 
 Agents pin the internal CA, authenticate with a per-member token and pull only their assigned configuration. They apply usable cached configuration at startup, retry first configuration every **five seconds**, and normally refresh every **60 seconds**. Cached members can keep running during control-plane unavailability; uncached startup cannot. Stateless caches do not survive runtime replacement.
+
+Separately, v0.4.8 agents push heartbeats to `POST /v1/agent/heartbeat` on that
+authenticated channel every **three seconds**, carrying generic status and
+subscribed read-only native observations. Configuration remains pull-based:
+the initial five-second retry and normal 60-second refresh remain, with an
+additional coalesced reload when a heartbeat reports a changed applied-config
+stamp. That notice's heartbeat scheduling delay can be **up to seven seconds**,
+including up to four seconds of sampling after the three-second wait, excluding
+transport/server time and retries after a failed heartbeat. Heartbeat samples are usable
+for seven seconds; missing or stale
+push evidence cannot renew availability. An older control plane's HTTP 404
+causes a harmless ten-minute heartbeat backoff without interrupting pulls.
 
 Accepted configuration and maintenance/stopped-process holds are atomically persisted as owner-only **0600** files. Configuration contains locally required secrets. The supervisor owns child processes, restart backoff and SIGTERM forwarding; do not start competing supervisors. Maintenance holds suppress automatic restarts. Explicit stop holds survive config pulls and agent restarts until explicitly released by the controller. Do not edit safety files to force recovery. Engine-specific files and recovery holds belong in the engine operations guides above; private agent commands are not arbitrary remote exec.
 

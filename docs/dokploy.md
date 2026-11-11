@@ -15,7 +15,7 @@ The `dokploy` provider runs Karakoram clusters on a [Dokploy](https://dokploy.co
 |Member DNS name|A network alias equal to the member hostname on the target's IPv4 overlay network; private services use DNSRR task addresses so peer certificate source-address verification sees matching DNS|
 |Persistent volume|A Docker named volume on one node, owned by a "volume holder" application that is never started and gives the volume its own ID|
 |Deployment|Karakoram uploads a build archive (Dockerfile + the release `karakoram` archive); Dokploy builds the image on the manager and pushes it to your registry; workers pull it|
-|Anti-affinity|Volumes of one replica set (MongoDB) or cluster (RabbitMQ, Elasticsearch) are pinned to distinct Swarm nodes while enough nodes exist; runtimes follow their volume|
+|Anti-affinity|Volume spread groups include MongoDB replica sets/config servers, RabbitMQ clusters, Elasticsearch data/master groups, MySQL Group Replication/PXC clusters, PostgreSQL clusters (HA/Citus and the Supabase database core), OpenBao, Weaviate and Neo4j. Placement balances same-group holders across eligible Swarm nodes; runtimes follow their volume. This is best-effort spreading, not a hard no-co-location rule or engine acceptance claim.|
 |Public TCP|Swarm ingress-published ports (routing mesh); exposed services switch to VIP endpoint mode, returning to DNSRR after port removal|
 |Public HTTPS (Kibana, RabbitMQ management)|Dokploy domains served by Dokploy's Traefik|
 
@@ -97,12 +97,36 @@ change: these are rolling replacements, not an in-place replica-count mutation.
 For newly deployed MySQL/PXC and PostgreSQL/Supabase ProxySQL runtimes carrying
 the serving-probe marker, count-only and resource-only updates keep the service
 running with **start-first, parallelism one, and a native serving healthcheck**.
-The local agent must have successfully applied its latest accepted nonzero
-configuration revision, have a running ProxySQL process without maintenance or
-stop holds, and report an ONLINE writer before Swarm admits the replacement to
-service DNS/VIP and retires its predecessor. Fresh agents pull configuration
-themselves; this does not depend on reconciliation pushing configuration while
-the platform operation is in progress.
+For opted-in tasks, the control plane discovers Starting replacements from fresh,
+ownership-verified platform inventory and uses an individually pinned,
+fresh-authorized connection to the task's inspected private overlay IP, retaining
+the logical member's TLS identity. Startup admission never depends on task-name
+DNS, which Swarm publishes only after initial health succeeds.
+An imported application has no Swarm service until its first deployment. Fresh
+task authorization treats an absent service as pending and returns no task
+addresses, including any stale task rows. An existing service must still pass
+the ownership checks; foreign services and unverified startup tasks fail closed.
+This also permits cleanup to drain a never-deployed proxy's import receipt. If a
+delete exhausted its retry budget on this error, upgrade the control plane and
+reissue the normal cluster delete; an already-running delete can continue with
+its durable receipt.
+
+It reads native serving proof from
+`GET /v1/proxy-serving`, checks the exact platform task ID, logical member and
+current desired configuration revision, then admits that pair with
+`POST /v1/proxy-serving`. The agent rechecks native serving readiness before
+latching admission. A task that never proves readiness is never admitted; the
+existing rollout receipt and startup timeout retain/pause the roll rather than
+retiring healthy incumbents. Fresh agents pull configuration themselves.
+Native proof requires an applied nonzero configuration revision, a running
+ProxySQL process without maintenance or stop holds, and an ONLINE writer.
+An authenticated task can expose TLS before its first engine configuration applies.
+An exact-task/member proof that is not natively ready remains a scheduled startup
+wait, even while its applied revision is still zero; it never authorizes a POST.
+Once ready, the exact desired revision is still mandatory. MySQL agents retain
+configuration after a local ProxySQL admin connection refusal and retry it with
+one-second initial delay and backoff capped at five seconds, rather than waiting
+for the ordinary sixty-second configuration pull.
 
 Successful native admission is **latched for that Swarm task/container lifetime**.
 An atomic admission record lives in an agent-owned, mode-0700 directory in the
@@ -112,17 +136,49 @@ records fail closed without blocking or unbounded reads. Provenance binds it to 
 PID 1 start identity, kernel boot ID and hostname. Agent-only restart/re-exec
 preserves established admission; a new task or container restart must earn
 admission again, even if an old marker was copied into its filesystem.
+The control-plane admission record is authenticated with the agent credential and
+also binds the exact Swarm task ID and admitted configuration revision.
 Only agents launched with `KARAKORAM_PROXY_SERVING_PROBE=1` initialize this
 admission state and its local readiness listener. The readiness client verifies
 the listener's kernel-reported peer credentials against its effective UID.
 State/listener setup failures leave startup running but fail serving admission
 closed with diagnostics; they never certify the task as ready.
+A marked agent that stops before earning container-local serving admission exits
+with an error, even on a graceful termination request. This prevents Swarm's
+initial-healthcheck shutdown path from mistaking a clean process exit for a
+successfully started replacement. Already admitted proxies retain normal graceful
+shutdown, including after an agent-only restart.
+The fixed control plane opts in only marked, running proxy rollouts by injecting
+`KARAKORAM_TASK_ID={{.Task.ID}}` and `KARAKORAM_PROXY_SERVING_ADMISSION=1`
+into the Swarm service template, not the image. Cold deployments clear both.
+A fixed agent deployed by an older control plane using a template that has never
+opted into control-plane serving admission retains native self-admission. This
+is not a downgrade guarantee: templates already opted in by a newer control
+plane keep requiring that protocol for new tasks. See the
+[v0.4.8 rollback warning](upgrade.md#compatibility-and-rollback).
+For an older marked agent under the fixed control plane, count/resource changes
+are rejected before submission with guidance to run `clusters upgrade-agents`
+first. The upgrade itself remains available because its replacement runs the
+fixed agent and earns control-plane admission. A recovered in-flight receipt
+whose agent lacks the endpoint (404) retains legacy observation rather than
+being re-submitted or spuriously admitted; it does not gain the stronger
+protection. Other authentication, transport and proof errors never authorize
+admission. Once admitted, proxies need neither this watcher nor a reachable
+control plane to remain healthy.
 The persistent Swarm healthcheck then checks only agent/supervisor liveness,
 using a lock-free shutdown flag rather than a process-management mutex.
 Writer failover/loss, intentional maintenance or stop holds, and later
 configuration-apply failures do not turn every admitted proxy unhealthy or
 trigger a fleet-wide Swarm restart. Ongoing native readiness remains the engine's
 responsibility, including its every-instance check before committing an update.
+
+Do not restart Docker daemons or Swarm agents while a marked rollout is in
+flight. Docker executor re-entry can treat an already-started container as
+started before repeating its initial health wait; daemon/executor restart
+bypassing this admission barrier is a residual, unverified risk. Schedule host
+maintenance only after the rollout has settled, or after inspecting and
+resolving a terminal rollout. The admission protocol does not claim protection
+against that separate executor-recovery path.
 
 The backend completes only after exactly the requested number of new healthy
 tasks is Running, no previous task is still Running, the expected Swarm
@@ -132,20 +188,41 @@ readiness again before committing. Scale-in remains maintenance-window gated.
 Version, startup/runtime and combined count/resource changes retain the
 engine's disruptive deployment path.
 
+Admission also runs during ordinary reconciliation, including configuration
+publication and deployed-to-ready waits, independently of a rollout receipt.
+A successful platform receipt still awaiting native readiness does not disable
+admission; a failed receipt remains authoritative and cannot authorize it.
+Failed serving-roll admission is also fenced durably in Dokploy application
+metadata, independently of engine receipt cleanup or control-plane restart.
+A new request alone does not release that fence: a distinct accepted serving
+retry must publish its expected Swarm generation, and retained predecessor tasks
+are never admitted by that retry. The fence is retired only after that distinct
+serving rollout succeeds. Swarm paused/rollback state also blocks new admission.
+A subsequent Swarm replacement after a crash or node loss must earn its own
+task-bound admission before startup health succeeds; the completed rollout does
+not authorize future tasks. Only individually inspected, opted-in Starting
+tasks are considered. Already Running/admitted incumbents are not re-probed by
+the admission watcher.
+
 Agent-only proxy deployments also use this serving-preserving rollout when both
 the running, deployed, volume-less incumbent and the incoming build carry
 `KARAKORAM_PROXY_SERVING_PROBE=1`. This applies to MySQL/PXC and the shared backend
-deploy path used by PostgreSQL/Supabase. MySQL/PXC checkpoint this policy before
-submission and preserve it when recovering a lost receipt, including same-build
-`--include-current` refreshes. A legacy unmarked proxy's first agent upgrade keeps
+deploy path used by PostgreSQL/Supabase. These engines checkpoint this policy
+before submission and preserve it when recovering a lost receipt, including
+same-build `--include-current` refreshes. A legacy unmarked proxy's first agent upgrade keeps
 ordinary whole-service deployment: the incumbent must support the probe before
 its policy is installed. Once that marked upgrade succeeds, later deployments
 qualify. Cold/stopped deployment still clears the serving barrier for bootstrap.
 All agent-upgrade maintenance, exact-build, configuration and writer-health
 acknowledgements remain required.
 
-Cancelling an ambiguous MySQL/PXC serving-preserving proxy deployment looks up
-the persisted deployment request identity without submitting another deployment.
+Serving-preserving replacement keeps a ready proxy available for new
+connections. It does not drain or move sessions on the retired task: existing
+sessions and in-flight requests on that task can fail and need application
+reconnect and retry, including during a same-build `--include-current` rollout.
+
+Cancelling an ambiguous MySQL/PXC or PostgreSQL/Supabase serving-preserving proxy
+deployment looks up the persisted deployment request identity without submitting another deployment.
 A matching receipt is adopted and polled to terminal backend status before
 native readiness is settled. A paused or rolled-back update fails with manual
 recovery guidance; it is not reported as successfully cancelled merely because
@@ -157,17 +234,69 @@ An unidentified health-gated receipt is not treated as legacy and fails closed.
 Admission or supervisor-liveness failure **pauses** the rollout, retaining the
 remaining incumbents. The healthcheck runs every five seconds, with a ten-second
 timeout, a sixty-second start period and three retries; Swarm monitors updates
-for thirty seconds with zero tolerated failures. If spare capacity or native
-readiness never arrives, the operation reports failure after fifteen minutes
-without switching to stop-first.
+for thirty seconds with zero tolerated failures. An authoritative Swarm pause or
+rollback on the exact expected `ForceUpdate`, or a newer `ForceUpdate` superseding
+the health-gated count/resource receipt, fails the public update operation on its
+first consuming reconcile, without generic operation retries. This covers ordinary PostgreSQL/Supabase and
+MySQL/PXC proxy count/resource changes as well as their agent-only serving
+rollouts. Transport failures, in-progress updates, stalled builds and expired or
+unknown receipts do not gain this terminal classification. If spare capacity
+or native readiness never arrives, the backend reports failure after fifteen
+minutes without switching to stop-first; this timeout is not authoritative
+Swarm pause/rollback evidence.
+A lower `ForceUpdate` or a predecessor's paused state cannot identify the submitted
+attempt and remains retryable unless its terminal failure was already recorded.
+An operator-initiated rollback first observed only after that lower value is not
+prompt-failed without retained terminal proof. Inspect and settle the original
+attempt before submitting a different corrected target; an unknown outcome is
+not permission to replay.
 
-**Known issue in v0.4.7:** an ordinary proxy count/resource update paused by
-Swarm can remain Running for about fifteen minutes before failing, cannot be
-cancelled, and can leave the cluster Degraded with a retained failed receipt;
-see [the paused-update warning and containment guidance](limitations.md#dokploy-proxy-paused-update).
+**Known issue in v0.4.7 (fixed in v0.4.8):** an ordinary proxy count/resource
+update paused by Swarm can remain Running for about fifteen minutes before
+failing, cannot be cancelled, and can leave the cluster Degraded with a retained
+failed receipt; see [the historical warning and v0.4.8 recovery guidance](limitations.md#dokploy-proxy-paused-update).
 
-Inspect task health, config-pull connectivity, writer availability and surge
-capacity before retrying. A single extra replacement slot is required in addition
+Inspect the Swarm service, incumbent and replacement health, config-pull
+connectivity, writer availability and surge capacity before recovery.
+The failed receipt and task-admission fence are retained; observation never
+resubmits the rollout or acknowledges the desired generation.
+After a control-plane upgrade, older retained failed receipts are re-inspected
+for the same authoritative evidence; they are not automatically replayed.
+For ordinary count/resource failures, PATCH the proxy count/resources to a
+different corrected target, including restoring the known-good specification.
+The corrected target still waits for ownership checks, the latest configuration
+acknowledgements, maintenance admission and a healthy start-first replacement;
+surviving incumbents alone never settle the failed receipt.
+This also applies to ordinary clusters left Running/Degraded by a paused
+v0.4.7 update: first upgrade the control plane, inspect and repair the fault,
+then change `spec.components.extra.proxy.replicas` and/or
+`spec.components.extra.proxy.resources` to values that fit your capacity.
+For example, if three replicas failed and two are known-good, save this merge
+patch as `proxy-recovery.json`:
+
+```json
+{"spec":{"components":{"extra":{"proxy":{"replicas":2}}}}}
+```
+
+```sh
+karactl -n NS clusters patch CLUSTER -f proxy-recovery.json --wait
+```
+
+Use a genuinely different target; the example is not appropriate when the failed
+target already requested two replicas. For a resource or combined correction,
+include the corresponding `resources` object in the same proxy patch.
+MySQL/PXC settle the corrective resource receipt at its recorded count before
+publishing/acknowledging configuration and admitting a separate count change.
+See [v0.4.7 ordinary-update recovery](upgrade.md#ordinary-proxy-update-recovery-from-v047)
+for a resource-patch example and the distinct agent-only recovery procedure.
+
+For failed agent-only rollouts, explicitly re-run `upgrade-agents --include-current`
+even if the retained incumbent already reports the current build. An identical
+spec apply does not advance the generation or authorize replay, and
+`clusters reconcile` requests fresh observation, not a rollout retry.
+Pending, stalled or otherwise uncertain receipts are adopted rather than replayed.
+Cancellation's read-only request lookup never re-arms a receipt.
+A single extra replacement slot is required in addition
 to the larger of the old and desired fleet; insufficient capacity can leave the
 update pending. Lost reload replies reuse the persisted exact operation rather
 than starting another replacement.
@@ -381,9 +510,79 @@ the recorded built image when it is present on the manager; otherwise it request
 one rebuild from the retained Drop Dockerfile source. Application identity,
 mounts, node placement, environment and configured replica count are retained.
 
+Service, list and task-inventory observations run concurrently without the
+target-wide mutation lock, regardless of caller observation markers, engine or
+service kind (including relays, volumes and undeployed members). Read-only HTTP
+admission remains bounded to eight requests per API origin. If observation
+finds recovery or lifecycle work, it reloads the application under the shared
+mutation lock before proceeding; concurrent observers cannot submit duplicate
+restorations. The reloaded application name, environment and ownership metadata
+must still match the requested service and target before any write is authorized.
+Legacy metadata may omit its environment, but an explicit different environment
+is rejected. Within one read-only status attempt, environment/application
+ownership, Swarm service/node inventory, service inspections, deployment lists
+and discovery task snapshots are single-flighted.
+MySQL also shares these facts within its invalidatable reconcile read pass.
+MySQL discards its pass-local snapshots after an engine mutation or identity
+change; status-sweep memos never escape into the surrounding mutation context.
+Fresh passes retain the fresh-observation per-pass request bounds. Separately, v0.4.8 shares a
+platform snapshot below the HTTP client across passes and clusters of the same
+API origin + environment, solely for independent steady availability renewal.
+It checks `environment.one` within 60 seconds before serving entries and limits
+entry age to 40 minutes. A changed listing or target mutation invalidates it.
+See [out-of-band platform changes and forcing a reconcile](operations.md#out-of-band-platform-changes-and-forcing-a-reconcile)
+for drift bounds and an immediate fresh pass.
+Lifecycle/recovery transactions bypass both snapshot-serving paths and revalidate
+authoritative application ownership before writing.
+Every public lifecycle mutation drops inherited snapshots before prerequisite
+reads, including when its caller passes an observation context. Canceling a
+shared-read initiator does not fail an independently live waiter: that waiter
+may retry within its original deadline. Parallel infrastructure failures are
+joined, so budget deferral cannot hide a genuine task-inventory failure.
+MySQL overlaps each member's service/storage validation and task inventory;
+read-only service inspection also overlaps task enumeration with its other
+prerequisites. Both results remain required for positive infrastructure health.
+Every pinned proxy transport that actually dials separately re-reads current
+tasks, concurrently with ownership inspection and the other transports, while
+using the pass's immutable ownership facts. Both current tasks and owned-service inspection
+must succeed before any task address is returned for authorization.
+A disappearing/replaced task therefore cannot remain authorized from discovery
+inventory. An out-of-band application ownership move during an existing pass is
+reflected by the next pass, not a second ownership lookup on each transport;
+cached ownership never grants lifecycle mutation authority.
+Task-bound pushed samples avoid those dials only for an identity-matched instance;
+Dokploy proxies need serving admission (`KARAKORAM_TASK_ID`) to identify their
+task. Legacy unmarked proxies keep using live pulls. The four-second MySQL pass
+read budget, five-second fresh sweep and [15-second evidence-anchored health
+lease](clusters.md#operations-and-status) are unchanged. See the
+[platform read budget](providers.md#platform-read-budget) and
+[monitoring](monitoring.md) for steady traffic versus fresh-read bursts.
+
+**Conditional proxy configuration corner.** Updated PostgreSQL proxy agents can
+receive an unchanged response while their certified steady inputs remain valid.
+A manual, listing-visible application-record change (desired peer withdrawal,
+status, ownership/description or server assignment) can precede any change in
+the incumbent database/agent's native health. In that platform-only corner,
+allow **≤60 s for the environment listing + ≤7 s for the heartbeat reload
+notice + fresh render/apply time**. The notice bound is heartbeat scheduling
+delay only (the normal 3 s wait and up to 4 s bounded sample collection); it
+excludes transport/server time and retries after a failed heartbeat. This is
+approximately **7 s worse**
+than v0.4.7's ≤60 s fresh config pull, plus the same rendering/application work;
+ordinary stopped agents follow the shorter pushed-health path.
+
+Use `karactl -n NS clusters reconcile CLUSTER` to force the fresh pass immediately
+when admitted instead of waiting for the next listing. A persistent config
+invalidation generation ensures the next heartbeat requests a full fresh config
+even if the pass has already re-entered steady. The command does not wait for
+agent application; repeated requests retain the 30 s force-coalescing rule.
+Conflicting ownership or unavailable infrastructure still fails closed rather
+than publishing an unsafe proxy configuration.
+
 The application description durably records desired state and the current
-lifecycle operation. A target-wide lock serializes provider instances within the
-control-plane process. Restoration submissions have a ten-second request deadline;
+lifecycle operation. A target-wide lock serializes mutation transactions across
+provider instances within the control-plane process, not ordinary inventory
+reads. Restoration submissions have a ten-second request deadline;
 an ambiguous response retains a one-minute delivery fence. Stop/Delete record
 their intent before waiting on that fence. A queued/running build must complete
 before another build, Stop or Delete is submitted: an accepted build can create
@@ -418,6 +617,19 @@ journal survives before stop delivery (or after a refused stop), cleanup recover
 the stop against the exact owned service without replacing the receipt. An
 explicitly observed native zero confirms older receipts without resending Stop.
 Missing or null replica counts are unknown, never proof of zero.
+
+Stopping an imported runtime before its first deployment now records durable
+stopped intent and a terminal receipt after checking that no unexpected native
+service exists. It does not issue a native start/stop against a nonexistent
+service. That exact application is permanently fenced against Deploy, Start and
+Restart, even after receipt completion and backend reconstruction; exact cleanup
+must finish before allocating a new application. Ordinary deployed Stop/Start
+semantics remain unchanged. Polling still requires absence of running tasks.
+MySQL replacement cleanup preserves its confirmed exact-runtime fence before
+deleting the application, so expiry of the old Stop receipt after deletion does
+not strand the remaining volume/credential cleanup. See
+[GR retirement and legacy recovery](mysql/operations.md#gr-retirement-and-legacy-recovery)
+for ambiguous import and cancellation behavior.
 
 Resolve the original queue/build and obtain a terminal deployment receipt before
 retrying; never clear the receipt merely to force a second build. Failed terminal
@@ -562,8 +774,7 @@ check atomically.
 
 
 - **Node loss = member loss.** A member is pinned to the node that holds its volume. If the node fails, the member stays pending until the node returns; replace the member through Karakoram to rebuild it elsewhere from its replica set or cluster peers.
-- **Member replacement needs headroom.** Karakoram replaces a member by adding the new one before removing the old one. When the cluster already uses every eligible node, the new member is placed on the node of the member it replaces, so that node must have free CPU and memory (Swarm reservations) for one extra member during the replacement; otherwise the new task stays pending until capacity is available. Add a node or free capacity first.
-  **Known issue in v0.4.7:** replacement can instead co-locate MySQL GR/PXC or PostgreSQL HA/Supabase data members; see [replacement placement and safe containment](limitations.md#dokploy-replacement-placement).
+- **Member replacement needs headroom.** Karakoram adds the new member before removing the old one. MySQL GR/PXC and PostgreSQL HA/Supabase replacements durably record the predecessor volume identity **and exclude nodes occupied by surviving data members** before freezing their import. Retained predecessor/unrelated holders and lexical ties cannot override that exclusion. With no eligible unoccupied node, replacement admission fails explicitly instead of co-locating. With insufficient CPU/memory on the selected free node, Swarm keeps the pinned task pending: provide headroom or another eligible node; Karakoram does not fall back to an occupied node. Down/drained nodes and explicit relocation exclusions remain authoritative. Legacy allocations not yet frozen recover the predecessor identity only from its persisted volume record; missing identity blocks import. Already frozen imports retain their original request across upgrade/restart and must be checked after completion; see [detecting and repairing placement](#detecting-and-repairing-placement).
 - **Changing public ports restarts the member** (Dokploy applies ports with a service update). Endpoint-mode/port cutovers use temporary `stop-first` with `Parallelism=0` (all replicas in one batch), rather than serial per-slot replacement, to avoid old/new endpoint overlap. This deliberately interrupts the whole service during cutover, including multi-replica proxies. The exact previous update policy is journaled and restored after completion or lifecycle supersession; ordinary updates retain their existing rolling policy. Public addresses still use the configured Swarm-node address and routing mesh.
 - **Published PostgreSQL proxy endpoint recovery.** If every proxy task is natively healthy but the logical private endpoint fails, reconciliation can force a journaled stop-first update even when the public-port rows already match. Recovery is limited to three attempts per incident, at least five minutes apart; a successful logical endpoint probe acknowledges recovery and resets that budget. Task convergence alone never acknowledges recovery. A repair that was journaled but never delivered can consume the next bounded attempt after its startup deadline; queued or uncertain deployments are never superseded. Ownership and lifecycle delivery fences still apply. If the logical endpoint remains broken after the final completed attempt, the tracking operation fails with `PublishedEndpointRepairExhausted` and an actionable condition instead of remaining Running. Automatic repair stays stopped across control-plane restarts; inspect and repair the Swarm private DNS alias/VIP and overlay connectivity, or disable public exposure. A later successful logical probe resets the incident budget. Public addresses and ports are not changed by this repair.
 - **Deleting a volume** wipes its contents with a one-shot task on its node and removes the holder application. Dokploy can remove Docker volume objects only on the manager; an empty volume object can remain on workers (`docker volume prune` on that node removes it).
@@ -571,6 +782,92 @@ check atomically.
 - Images are rebuilt by Dokploy for each deployment; the layer cache makes later members fast, but the first build of an engine version takes about one to two minutes. Use Dokploy's cleanup settings for old images.
 - Variable changes are stored immediately and applied at the next restart (`envChangeRestarts: false`).
 - Elasticsearch's S3 client trusts only public CAs; use a publicly trusted S3 endpoint for snapshots.
+
+### Detecting and repairing placement
+
+After upgrading from v0.4.7, inspect existing MySQL GR/PXC and PostgreSQL HA
+(including Supabase's PostgreSQL core) clusters:
+
+```sh
+karactl -n NS clusters status CLUSTER -o json
+karactl -n NS clusters members CLUSTER
+```
+
+The members table's exact column is `PLACEMENTGROUP` (JSON: `placementGroup`),
+the authoritative Swarm node hostname. Ordinary status observation, including
+after replacement completion, reports `FailureDomainsSeparated=False`,
+reason `SharedNode`, and a warning event when voting data members share a node
+and occupied domains plus eligible unused nodes can restore separation. The message names
+the members/node and supplies the repair command. Proxies and PostgreSQL etcd
+learners are excluded; missing member placement reports `Unknown/PlacementUnknown`.
+Incumbents on nodes no longer eligible for new volumes still count as occupied
+domains. When those domains plus eligible free nodes are insufficient, the condition
+is instead `Unknown/InsufficientEligibleNodes`; adding/reactivating nodes is a prerequisite,
+not proof that repeat replacement will help.
+
+Take a fresh full backup and verify native quorum, replication and extra-member
+capacity. For healthy GR replacement, complete the full-view-capable survivor
+agent rollout **before** replacement; follow the
+[v0.4.8 procedure and legacy in-flight recovery](upgrade.md#gr-capability-and-legacy-recovery).
+PXC and PostgreSQL HA do not require GR views. Then replace **one of the
+co-located data members**, one operation at a time:
+
+```sh
+karactl -n NS clusters replace-member CLUSTER COLOCATED_MEMBER --wait
+karactl -n NS clusters members CLUSTER
+```
+
+The repaired replacement excludes every surviving data member's node, so even
+retained old holders, unrelated volumes or lexical ties cannot send it to an
+occupied node. Insufficient eligible nodes cause an explicit refusal before
+allocation; missing survivor placement must be restored before retrying.
+Insufficient Swarm reservations leave the new task pending on its selected free
+node without retiring its predecessor. Free capacity or add/reactivate an eligible
+node, and observe the existing operation rather than blindly repeating it.
+After completion require distinct `PLACEMENTGROUP` values and
+`FailureDomainsSeparated=True`. Do not drain running database nodes to steer
+placement: that can stop multiple voters and lose quorum. MySQL/PXC still do not
+support `members move`.
+
+This safety check and strict replacement exclusion also use Nomad's authoritative
+eligible-node inventory; Nomad refuses an import if its eligible spread tier has
+no CPU/memory headroom. Zerops does not expose this inventory and retains
+best-effort placement without a host-separation guarantee. Other engines retain
+their documented placement behavior. This is a control-plane correction; it does
+not automatically relocate already running members or rewrite already frozen
+imports. See [upgrade guidance](upgrade.md#upgrading-to-v048).
+
+### Dokploy API-key accounting load
+
+Dokploy v0.30.8 authenticates each REST API request twice: once in the
+[REST precheck](https://github.com/Dokploy/dokploy/blob/v0.30.8/apps/dokploy/pages/api/%5B...trpc%5D.ts#L11-L52)
+and again when constructing the
+[tRPC context](https://github.com/Dokploy/dokploy/blob/v0.30.8/apps/dokploy/server/api/trpc.ts#L76-L102).
+Its pinned better-auth API-key plugin normally updates usage/last-request state
+and `updatedAt` on every successful verification, so an unlimited-quota key
+can cause four `apikey` row updates per REST request even for a GET
+([verification source](https://github.com/better-auth/better-auth/blob/v1.6.23/packages/api-key/src/routes/verify-api-key.ts#L184-L375)).
+Reducing redundant reads therefore reduces Dokploy database writes as well as
+HTTP traffic. v0.4.8's shared environment snapshot, heartbeat-backed availability
+renewal and 30-minute steady resync make that amplification apply to far fewer
+requests; they do not change Dokploy authentication accounting. Fresh operation
+passes retain the fresh-observation request bounds, and every actual pinned relay dial still requires
+fresh task authorization. See [platform read budget](providers.md#platform-read-budget)
+and [monitoring](monitoring.md) when comparing idle and operation traffic.
+
+Disabling a key's `rateLimitEnabled` does **not** remove those writes: it
+disables rate enforcement, but still updates `lastRequest`
+([rate-limit source](https://github.com/better-auth/better-auth/blob/v1.6.23/packages/api-key/src/rate-limit.ts#L47-L97)).
+An unlimited total-use quota (`remaining=null`, the blank total-limit field)
+avoids an additional quota decrement/refill update per verification; a finite
+quota consumes two uses per successful REST request because verification runs
+twice. These are quota/security choices, not a supported zero-write mode.
+Do not disable limits merely to reduce polling load. Dokploy's
+[key form](https://github.com/Dokploy/dokploy/blob/v0.30.8/apps/dokploy/components/dashboard/settings/api/add-api-key.tsx#L103-L137)
+and [creation service](https://github.com/Dokploy/dokploy/blob/v0.30.8/packages/server/src/services/user.ts#L528-L567)
+expose rate/quota/refill controls, not a switch to disable authentication
+accounting. Karakoram does not change these settings.
+
 
 ## Dokploy terms and licence
 

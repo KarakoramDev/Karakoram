@@ -165,6 +165,91 @@ records or rotating drill-report retention can remove old evidence. Conditions
 are ternary and condition-specific: `True` can mean a fault, so inspect `type`
 and `reason` rather than treating every true condition as healthy.
 
+### Polling and request-budget counters
+
+Installation-wide `/metrics` scrapes (requiring `settings:read` on `*`, without
+a namespace filter) also expose these process-lifetime counters. They reset on
+control-plane restart and aggregate all clusters and targets. `provider` is
+only the target-key prefix (`dokploy`, `zerops`, `nomad`); target IDs, URLs,
+namespaces and cluster names are never labels.
+
+| Counter | Labels | Meaning |
+| --- | --- | --- |
+| `karakoram_platform_requests_total` | `provider`, `caller`, `kind`, `source` | `read/network` counts real GET starts, including listing requests and failed requests; `read/snapshot` counts successful snapshot hits; `mutation/network` counts non-GET starts once, not again on completion. |
+| `karakoram_platform_listing_checks_total` | `provider`, `result` | Completed listing validations: `unchanged` includes the initial successful baseline, `drift` means a changed fingerprint invalidated the snapshot, and `error` means the check could not establish a valid listing (including cancellation or a concurrent mutation). |
+| `karakoram_agent_heartbeats_total` | `result` | `accepted` means a recognized echoed token allowed sample ingestion (not that every sample was healthy); `token_rejected` means no token was recognized, including the initial handshake; `invalid` means the envelope was rejected or token issuance failed. |
+| `karakoram_agent_config_requests_total` | `result` | Config HTTP requests: `full` means a full response, `unchanged` means HTTP 304, and `error` includes authentication and rendering failures. No identity labels. This exposes HTTP reload loops even when they cause zero platform GETs. |
+| `karakoram_observation_steady_total` | `result` | Provider steady attempts: `accepted` means the provider's steady attempt passed all evidence checks; `fallback` means it was discarded for the fresh observation path. A Data MCP companion sample that is rejected after an accepted provider attempt is re-observed fresh without changing this counter. Noneligible observations do not increment either result. |
+
+`caller` is a fixed attribution class: `listing`, `reconcile` (including deep
+resynchronization), `operation`, `availability` (including steady observations),
+`backoff-observe`, `dial-authorization`, `namespace`, `orphan-janitor`, `api`,
+`agent-config` (member configuration pulls), `monitoring`, or `controller`
+(startup and background controllers). `other` is reserved for unknown or
+untagged integrations, not normal control-plane traffic. The innermost tag wins:
+listing checks and pinned dial authorization override their outer caller's tag.
+It never contains a request path, member name or target identity.
+
+Agent configuration pulls are independent of steady observation and heartbeat
+traffic. Updated agents send the revision of their successfully applied config
+every minute; a matching payload certificate and current steady baseline return
+HTTP 304 without per-member rendering. An expired target proof first runs one
+shared listing refresh, counted as `listing`, not `agent-config`. Changed or
+uncertain baselines take the full fresh path. PostgreSQL proxy full pulls validate each joined data peer
+once per proxy instance, attributed to `agent-config`, not `reconcile`. Older
+agents do not send revisions, so those reads remain periodic until agents are
+upgraded. Heartbeat ingestion and bearer-token authentication read persisted
+control-plane state and do not themselves issue platform requests.
+Heartbeat replies notify updated agents when their applied stamp differs from
+current inputs. For unchanged tracked content, pure force/steady notices wait
+until the baseline settles. Actual content changes still notify immediately.
+Agents recheck the target before starting a reload, and a certificate-bound 304
+acknowledgement advances the applied stamp without reapplying the payload.
+After two consecutive notified 304s for the same target, further notices for
+that target are limited to 60 s with a single warning. A distinct nonempty
+target reloads immediately; any successful full apply, including a periodic
+pull, resets obsolete backoff. Older CP replies without a target remain bounded.
+PostgreSQL proxy notices omit shared target mutation epochs; certificates
+retain them for minute-pull validation. Own generation/content and listing
+drift still notify. See [provider request costs and degraded-path bounds](providers.md#platform-read-budget).
+Untracked independently mutable dependencies still require fresh rendering,
+attributed to `agent-config`.
+
+Break down traffic and avoided reads by caller and source:
+
+```promql
+sum by (caller, source) (rate(karakoram_platform_requests_total[5m]))
+```
+
+For a caller-only breakdown of both network requests and snapshot hits:
+
+```promql
+sum by (caller) (rate(karakoram_platform_requests_total[5m]))
+```
+
+Compute actual platform GET/s, excluding snapshot hits, with:
+
+```promql
+sum by (provider) (
+  rate(karakoram_platform_requests_total{kind="read",source="network"}[5m])
+)
+```
+
+For total network request/s, including mutations, select `source="network"`
+without a `kind` filter. Snapshot hits are avoided requests, not platform
+traffic; listing check counts are validations, not GET counts (a validation
+can require multiple GETs). These counters replace guesswork when checking the
+[ADR 0070 request budget](adr/0070-agent-heartbeats-and-platform-read-budget.md).
+They are provider-wide totals, so compare a quiet, known cluster population
+over a window that includes the minute listing checks and 30-minute deep
+reconciles; do not mistake an all-target rate for a per-cluster rate. Expect
+idle network traffic of **≤ 0.1 req/s per cluster** with heartbeat-capable agents.
+Separately, settled namespace relays cost about **1/60 req/s per namespace**,
+and shared listings cost **1–2/60 req/s per target** (more for paginated Zerops
+targets). Compare with the fixture rates in the
+[platform read budget](providers.md#platform-read-budget).
+
+
 ## Grafana dashboards and Prometheus alerts
 
 Import the supplied JSON dashboards from

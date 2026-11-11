@@ -6,6 +6,339 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 
 ## Upgrading to v0.4.8
 
+### Neo4j minimum memory
+
+New Neo4j Community clusters and resource changes now require **at least 2 GiB
+minimum engine RAM** on Zerops, Dokploy and Nomad. The default remains 1 CPU /
+2 GiB; the CPU floor remains one whole CPU. The former 1 GiB admission floor
+could exhaust native-memory headroom during credential recovery and fail creation.
+This is a control-plane admission correction; no agent rollout is required.
+
+Existing smaller clusters are not automatically resized or rejected:
+reconciliation, agent upgrades and unrelated spec updates retain admission when
+engine resources are unchanged, including full replacements that preserve those
+values. Any engine resource edit must raise minimum RAM to at least 2 GiB.
+This includes reverting an unapplied disk-size increase: the comparison uses
+persisted requested resources, not corrected observations of the actual volume.
+Plan a singleton outage, preserve a backup, and resize through the normal API:
+
+```sh
+printf '%s\n' '{"spec":{"components":{"engine":{"resources":{"minRam":2,"maxRam":2}}}}}' | karactl -n NS clusters patch CLUSTER -f - --wait
+```
+
+If the current maximum exceeds 2 GiB, preserve that higher maximum in the patch.
+Verify the update operation succeeds and the cluster and member return Ready
+before resuming application traffic. A larger maximum alone does not supply
+guaranteed headroom: heap and page cache derive from minimum RAM.
+
+### Check database placement after v0.4.7 replacements
+
+This control-plane correction makes MySQL GR/PXC and PostgreSQL HA/Supabase
+replacement imports preserve the predecessor identity and exclude nodes occupied
+by surviving data members on Dokploy and Nomad. An already completed v0.4.7
+replacement may have left voting members co-located even when an unused eligible
+node existed. Upgrading does **not** move those members automatically.
+
+After the control-plane upgrade, run:
+
+```sh
+karactl -n NS clusters status CLUSTER -o json
+karactl -n NS clusters members CLUSTER
+```
+
+Compare `PLACEMENTGROUP` values (JSON: `placementGroup`) for voting data members.
+`FailureDomainsSeparated=False`, reason `SharedNode`, plus its warning event
+identify repairable shared placement and name a repair command. Take a fresh full
+backup and verify quorum, replication and extra-member capacity. For healthy GR
+replacement, first complete the surviving data-agent rollout described under
+[GR capability and legacy recovery](#gr-capability-and-legacy-recovery), then use
+`karactl -n NS clusters replace-member CLUSTER COLOCATED_MEMBER --wait`.
+After completion require distinct placements and `FailureDomainsSeparated=True`.
+`Unknown/InsufficientEligibleNodes` calls for more eligible nodes rather than
+blind repeat replacement; missing placement is `Unknown/PlacementUnknown`.
+Running voters on nodes no longer eligible for new allocations still count as
+occupied domains; their presence does not hide a repair onto an eligible free
+node. Nomad keeps its public name/ID placement labels while normalizing aliases
+internally to physical node IDs; unresolved aliases report placement unknown.
+See [the complete recovery procedure](operations.md#repairing-shared-database-failure-domains).
+
+A replacement allocated by the old control plane but **not yet frozen** recovers
+its hint from the durable predecessor volume record before import planning;
+missing predecessor identity blocks import rather than guessing from a name.
+An import **already frozen before upgrade** keeps its exact original request:
+do not edit its internal state to change placement. Let native safety gates
+settle it, then inspect and repair the surviving placement as above.
+Insufficient eligible nodes explicitly refuse new replacement admission.
+Nomad also refuses insufficient eligible CPU/memory capacity; Dokploy can leave
+the new task pending on its pinned unoccupied node until reservations fit,
+without retiring the old member or falling back to an occupied node.
+Do not drain running database nodes to force placement, and do not repeatedly
+submit replacement after a timeout: observe the existing operation.
+Zerops remains best-effort and has no authoritative eligible-node inventory.
+Detection and placement planning are control-plane-only corrections. Healthy GR
+replacement retirement additionally requires full-view-capable survivor agents;
+PXC and PostgreSQL HA do not acquire a GR capability requirement.
+
+### Agent heartbeats and the platform read budget
+
+Upgrading the control plane immediately enables shared platform snapshots and
+steady-cluster scheduling. Healthy, converged clusters reconcile every 30
+minutes while availability is evaluated every five seconds. Non-steady clusters
+and lifecycle safety decisions retain fresh reads. Existing v0.4.7 agents keep
+serving live pulls; pinned proxy connections through a relay still authorize
+each dial against fresh task inventory. The control-plane upgrade itself changes
+no member runtime specification or deployed hash and redeploys no member.
+
+Run `karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m`, or use the
+opt-in automatic agent rollout, to install heartbeat-capable agents. Native
+process restart alone does not replace the agent binary. Heartbeats use the
+existing authenticated agent-to-control-plane HTTPS channel, including its
+relay stream where applicable: every three seconds agents send generic status
+and subscribed read-only native observations. Pushed samples are usable for
+seven seconds; the 15-second health lease remains anchored to the oldest health
+evidence, not the time it was republished. Normal config pulls remain every
+60 seconds; updated agents also act on coalesced config-invalidating heartbeat
+notices within **≤7 s** of heartbeat scheduling delay (3 s wait plus up to 4 s
+bounded sampling; transport/server time and failed-heartbeat retries excluded), then perform
+the fresh render/apply work. See the provider guide for the listing-only corner
+and `karactl clusters reconcile` for an immediate admitted fresh pass.
+Agents must be upgraded for heartbeat-based health renewal; old agents continue
+using live pulls rather than acquiring this capability from a control-plane restart.
+
+Dokploy proxies need proxy serving admission, which supplies
+`KARAKORAM_TASK_ID`, for task-bound heartbeat samples. Pinned reads of older,
+unmarked proxies continue to use live pulls.
+
+- Idle clusters now reconcile every **30 minutes**, rather than about every
+  **five seconds**. Platform drift outside the shared listing is repaired at
+  the next deep reconcile; `karactl clusters reconcile CLUSTER` forces a fresh
+  pass now. See [drift bounds and forced reconciliation](operations.md#out-of-band-platform-changes-and-forcing-a-reconcile).
+  Settled namespace relays check their platform service every **60 seconds**;
+  unsettled relays retain the **15-second** namespace tick cadence.
+
+### Upgrade procedure
+
+1. Take the [consistent pre-upgrade state backup](#consistent-pre-upgrade-state-backup)
+   and preserve the master key, installation settings and previous executable.
+2. Upgrade the control plane using the procedure for your provider. Check
+   control-plane health, cluster availability and observed generations.
+3. Explicitly install member executables with
+   `karactl -n NS clusters upgrade-agents CLUSTER --wait`, respecting native safety
+   gates and maintenance windows. Use `--include-current` for explicit same-build
+   recovery. A control-plane upgrade does not replace member agents. Settle the
+   legacy recovery cases below before rollout if structural work or confirmed
+   loss already exists; upgrade healthy GR survivors before new replacement,
+   scale-in or placement repair. Upgrade old marked proxies before count/resource
+   changes. The [heartbeat and platform-read redesign](#agent-heartbeats-and-the-platform-read-budget)
+   requires upgraded agents for heartbeat-based renewal.
+4. Use the [monitoring metrics](monitoring.md) to check heartbeat ingestion,
+   accepted steady observations versus fresh fallbacks, snapshot hits and platform
+   reads by caller. Compare idle traffic after convergence, not during an
+   operation or while old agents still require pinned relay dials. Listing checks
+   remain shared per target; periodic deep reconciles still generate fresh reads.
+
+### GR capability and legacy recovery
+
+New healthy GR replacement and scale-in require all surviving agents to expose
+full `GroupView` capability before allocation or native leave. Refusal is:
+
+```text
+GR structural work refused: members MEMBERS lack full GroupView capability; run karactl -n NS clusters upgrade-agents CLUSTER --wait before retrying
+```
+
+Unknown or unreachable capability is not evidence of legacy capability:
+
+```text
+GR structural work refused: full GroupView capability is unknown or unreachable for members MEMBERS; restore agent reachability, then run karactl -n NS clusters upgrade-agents CLUSTER --wait before retrying
+```
+
+If an unapplied scale-in count blocks executable rollout, restore that unapplied
+desired count, upgrade agents, then reapply scale-in. Full-capability work uses
+the exact survivor UUID-set barrier, with no count-based or timeout bypass.
+Unknown persisted UUIDs require recovery, not state editing.
+
+There are two explicit weaker legacy exceptions:
+
+- Structural work already in flight before the control-plane upgrade can finish
+  using the released pre-upgrade ONLINE/count proof, **not** full UUID identity
+  convergence. It emits a Warning event, `LegacyGRRetirement`:
+  “Completing legacy in-flight GR structural work using the pre-upgrade ONLINE/count proof, not the full UUID identity barrier; upgrade surviving agents before starting new structural work”.
+  Observe the existing operation through native cleanup, then roll agents before
+  starting healthy structural work; do not submit another replacement over it.
+- Explicit or automatic **confirmed-loss** replacement is admitted when reachable
+  survivors are positively known to lack full capability, using the released
+  ONLINE/count proof after the existing majority, same-group, GTID and donor
+  checks. Admission emits Warning `LegacyGRRetirement`:
+  “Admitting confirmed-loss GR replacement using the released ONLINE/count proof because surviving agents lack full GroupView capability; upgrade agents after recovery with karactl -n NS clusters upgrade-agents CLUSTER --wait”.
+  Complete recovery first, then upgrade agents. Unknown/unreachable capability
+  still refuses admission; already strict work never falls back to legacy proof.
+
+Cancelling confirmed-loss GR replacement after the joiner has joined completes
+forward rather than attempting to restore the lost predecessor. Before join,
+cancel rolls back the new allocation, retaining the lost member and its loss
+fence for a fresh `replace-member` after cleanup. Existing rollback owners resume
+under these rules. Cancellation acknowledgement or a Cancelled queue result is
+**not** proof that native recovery has finished: observe membership, cleanup,
+cluster health and operation ownership before retrying or upgrading agents.
+See [GR retirement and recovery](mysql/operations.md#gr-retirement-and-legacy-recovery).
+Automatic confirmed-loss replacement remains experimental and off by default;
+the discovery-withdrawal boundary is unchanged.
+
+### ProxySQL admission, startup and recovery
+
+The stronger Dokploy serving path requires both the fixed control plane and
+fixed MySQL/PXC or PostgreSQL/Supabase proxy executables. Upgrade old marked
+proxies before count/resource changes: capability preflight refuses those
+changes before submission. Legacy/unmarked first upgrades retain the disruptive
+path; cold deployments do not wait for control-plane admission. Old deployment
+receipts retain legacy observation and do not acquire the new guarantees.
+
+Exact-task/member startup with an unapplied or unready configuration stays
+pending without admission; Ready agents reporting a stale revision remain
+rejected. Fixed MySQL proxy agents retry only local ProxySQL admin connection
+refusal, not arbitrary startup errors.
+
+#### Ordinary proxy update recovery from v0.4.7
+
+An ordinary Dokploy ProxySQL count/resource update can already be paused with
+healthy incumbents while its v0.4.7 public operation remains Running/Degraded
+until the generic retry budget expires. Upgrade the control plane to v0.4.8:
+the fixed observer re-inspects retained old-format receipts and fails an
+authoritatively paused/rolled-back attempt promptly, without replaying it.
+Inspect the Swarm service, incumbent and replacement health, configuration pull,
+ONLINE writer readiness and spare capacity; fix the underlying cause first.
+
+Then explicitly PATCH `spec.components.extra.proxy.replicas` and/or
+`spec.components.extra.proxy.resources` to a **different**, valid target that
+fits the available capacity, including a known-good previous specification.
+For example, if the failed target requested three replicas and two fit, save:
+
+```json
+{"spec":{"components":{"extra":{"proxy":{"replicas":2}}}}}
+```
+
+as `proxy-recovery.json`, then run:
+
+```sh
+karactl -n NS clusters patch CLUSTER -f proxy-recovery.json --wait
+```
+
+For a resource correction, the same file/command can instead contain, for example:
+
+```json
+{"spec":{"components":{"extra":{"proxy":{"resources":{"minRam":1,"maxRam":1}}}}}}
+```
+
+RAM values are GiB. Use bounds proven suitable for your workload and provider,
+not these example values blindly; if they equal the failed target, choose a
+genuinely different corrected count/resource target. Both fields may be patched
+together. MySQL/PXC repair the resource receipt before a separately gated count
+change; configuration acknowledgement, maintenance and serving admission still
+apply. Do not manually increment generations or edit operation checkpoints.
+
+If you already patched the cluster to a different target on v0.4.7 and that
+patch was accepted but never rolled out, no further patch is needed: after the
+control-plane upgrade, Karakoram rolls the proxies forward to the stored target
+through the same gated start-first replacement. Wait for the cluster to become
+Ready (`karactl -n NS clusters get CLUSTER`).
+
+An identical apply or `karactl -n NS clusters reconcile CLUSTER` only observes:
+neither re-arms the failed receipt nor authorizes another rollout. Pending,
+stalled, expired or transport-ambiguous attempts must be inspected and settled,
+not replayed. A CLI wait failure does not cancel accepted work: inspect the
+returned operation ID and use `operations wait ID` rather than resubmitting.
+See [Dokploy count/resource recovery](dokploy.md#proxysql-count-and-resource-updates)
+for retained receipt and conservative lower-ForceUpdate rollback boundaries.
+
+#### Agent-only proxy rollout recovery
+
+A terminal paused/rollback **agent-upgrade** receipt fails on its first
+authoritative observation; expired/stalled receipts or transport ambiguity are
+not proof of failure. Inspect tasks, configuration pulls, writer readiness and
+surge capacity, resolve the cause, then explicitly rerun:
+
+```sh
+karactl -n NS clusters upgrade-agents CLUSTER --include-current --wait
+```
+
+This agent-only action is not a universal substitute for correcting an ordinary
+count/resource target while a MySQL/PXC rolling checkpoint owns recovery.
+
+PostgreSQL/Supabase cancellation now shares MySQL/PXC's request-bound lost-reply
+settlement: it observes accepted serving work without another upload. Terminal
+failure can require manual recovery. A cancellation request does not establish
+that the original rollout never committed. Do not manually resume failed Swarm
+updates or restart Docker daemons/Swarm agents during marked rollouts; executor
+re-entry remains a residual risk. See [Dokploy proxy updates](dokploy.md#proxysql-count-and-resource-updates).
+
+### Companion refresh and Dokploy observation
+
+A changed deployed agent archive refreshes enabled MongoDB/PostgreSQL/Supabase
+Data MCP companions once, even if upstream URLs are unchanged. Maintenance
+windows gate the rollout and companion access can be interrupted. Ordinary
+same-build control-plane restarts do not refresh them. This is not a data-member
+upgrade; see [Data MCP](data-mcp.md) and [maintenance windows](operations.md#maintenance-windows).
+
+Control-plane-only parallel read-only observations and pass-local snapshots
+reduce Dokploy request amplification; per-dial authorization remains fresh.
+Timers and freshness leases are not extended by these optimizations; the
+[heartbeat scheduling changes](#agent-heartbeats-and-the-platform-read-budget)
+are described separately above. Slow/unreachable reads still fail closed.
+Karakoram does not eliminate Dokploy API-key accounting writes or promise a
+disk-I/O SLA. See the [platform read budget](providers.md#platform-read-budget)
+and [Dokploy accounting caveats](dokploy.md#dokploy-api-key-accounting-load);
+the observation allowance is not an aggregate read-plus-mutation limit.
+
+Platform request metrics now attribute internal member configuration pulls to
+`caller="agent-config"`, monitoring to `monitoring`, and startup/background work
+to `controller` on Dokploy, Zerops and Nomad. Existing `availability`, `reconcile`,
+`namespace` and `listing` labels are unchanged. Updated agents send their applied
+configuration revision on minute pulls. A matching payload certificate and
+current steady baseline return unchanged without per-member reads. If the
+target proof has expired, the pull shares a listing refresh instead of rendering
+every peer; successful full responses already carry their fresh payload token.
+Changed or uncertain baselines retain fresh peer validation. **Upgrade member
+agents** to enable this optimization:
+older agents continue receiving complete configurations, including periodic
+PostgreSQL proxy peer checks. See [metric labels](monitoring.md).
+Updated agents also acknowledge certificate-bound unchanged replies and recheck
+heartbeat target stamps before reloading. Pure force notices with unchanged
+tracked content wait for a settled baseline; changed content still notifies
+immediately. Two consecutive notified unchanged replies for one target limit
+further notices for that target to 60 s and produce one warning. A different
+nonempty target bypasses the bound, and ordinary successful full pulls reset
+it. PostgreSQL proxy notices ignore unrelated target mutation epochs while
+certificates retain that evidence; own generation/content and listing drift
+still notify. Working heartbeats provide prompt listing-driven refresh;
+failing v0.4.8 heartbeats can require listing plus the next minute pull
+(approximately 125 s before rendering). v0.4.7 agents keep unconditional
+60 s full pulls. See [provider bounds and residual cost](providers.md#platform-read-budget).
+The optional content stamp travels in an HTTP header so older strict heartbeat
+decoders remain compatible.
+`karakoram_agent_config_requests_total{result="full|unchanged|error"}` exposes
+config HTTP traffic separately from provider GETs.
+
+
+### Compatibility and rollback
+
+A v0.4.8 agent talking to an older control plane receives HTTP 404 for the
+heartbeat endpoint, waits ten minutes before retrying and continues serving
+ordinary pulls. This heartbeat compatibility alone is **not a downgrade guarantee**.
+Heartbeat samples, subscriptions and platform snapshots are process-local.
+
+There is no SQLite schema migration in this patch, but additive JSON decoding
+does not make new protocol/state intent safely reversible: older typed writers
+can discard unknown fields. In particular, Swarm templates already opted into
+control-plane serving admission keep requiring that protocol for new tasks
+after a downgrade; an older control plane cannot admit them. Existing admitted
+containers continuing to serve does not prove replacement tasks will work.
+Do not downgrade a control plane managing opted-in templates or active new-protocol
+work. Retain or restore the fixed control plane and settle active work for
+recovery; do not hand-edit metadata or remove admission variables as a workaround.
+The general [rollback procedure](#rollback) does not override these restrictions.
+
+## Upgrading to v0.4.8
+
 v0.4.8 is a hotfix of v0.4.7 with one change: the Zerops provider classifies
 Zerops API errors by their error code instead of their HTTP status. It does
 not include the features planned for the next feature release, v0.4.9.
@@ -395,7 +728,9 @@ fixes; a native process restart still does not replace its agent.
   destructive replacements with TCP-only admission. Those ordinary paths can
   interrupt the whole proxy endpoint even with replicas. MySQL/PXC persist the
   chosen policy before submission and retain it on receipt-missing replay,
-  including `--include-current`. MySQL single has database downtime.
+  including `--include-current`. MySQL single has database downtime. A planned
+  GR primary handoff can fail in-flight or new statements while routing
+  converges; see [MySQL agent rollout](mysql/operations.md#agent-rollout).
   If runtime recovery or confirmed loss appears mid-rollout, the serialized
   operation settles its current member/routing drain without a new deployment,
   then retires with a recovery diagnostic so lost-volume replacement can proceed.
@@ -671,6 +1006,9 @@ marker deletion is not a general readiness or lost-password workaround.
 
 ### Known issues in v0.4.7
 
+These descriptions and workarounds are historical v0.4.7 guidance. The fixed
+dispositions below describe v0.4.8 rather than changing the historical failures.
+
 - **On Dokploy, a ProxySQL count or resource change can leave a cluster stuck**
   (v0.4.7 only; ProxySQL in front of MySQL, PXC, PostgreSQL and Supabase). If the
   new proxy task does not become healthy (for example, the node lacks CPU or
@@ -678,11 +1016,14 @@ marker deletion is not a general readiness or lost-password workaround.
   but the operation stays Running for about 15 minutes before failing, cannot
   be cancelled, and afterwards the cluster stays Degraded: changing the proxy
   settings back is accepted but not applied, and agent upgrades are blocked.
-  There is no supported way to recover in this release. Before changing proxy
-  count or resources on Dokploy, make sure the nodes have spare capacity for
-  the new proxy tasks. If an update pauses, keep the existing proxies running,
-  do not edit the Swarm service by hand, and upgrade when the fix is released,
-  or open an issue. A fix is planned for the next release.
+  There is no supported way to recover in v0.4.7. Before changing proxy count or
+  resources, make sure the nodes have spare capacity for the new proxy tasks.
+  If an update pauses, keep the existing proxies running and do not edit the
+  Swarm service by hand.
+  **Fixed in v0.4.8:** paused updates fail promptly; after repairing the cause,
+  submit a different proxy count/resource target to clear the failed receipt.
+  See [proxy recovery](#proxy-count-and-resource-changes).
+
 - **Cancelling the replacement of a lost MySQL Group Replication member can
   leave the cluster stuck** (also present in v0.4.0–v0.4.6). When replacing a
   member whose volume is lost (the member and its data are gone), cancelling
@@ -692,15 +1033,20 @@ marker deletion is not a general readiness or lost-password workaround.
   The cluster keeps serving, but new replacements and agent upgrades are
   blocked and there is no supported way to recover in this release. Do not
   cancel these replacements once they have started; let them finish. If a
-  cluster is already stuck, keep it serving, take a full backup and upgrade
-  when the fix is released, or open an issue. A fix is planned for the next
-  release.
+  cluster is already stuck on v0.4.7, keep it serving and take a full backup.
+  **Fixed in v0.4.8:** joined confirmed-loss replacement completes forward on
+  cancellation; unjoined work rolls back its allocation and retains loss for a
+  fresh replacement. Existing rollback owners settle after upgrade; cancellation
+  acknowledgement does not mean recovery is finished. See
+  [GR capability and legacy recovery](#gr-capability-and-legacy-recovery).
 - **On Dokploy, a Neo4j cluster created with 1 GiB of memory never becomes ready**
   (v0.4.7). At the documented minimum of 1 GiB, a new single-member Neo4j cluster
   on Dokploy runs out of memory and CPU while starting: it never reports Ready
   and the create operation fails after about 40 minutes. Workaround: create
   Neo4j clusters on Dokploy with at least 2 GiB of memory. Existing clusters are
-  not affected. A fix is planned for the next release.
+  not affected. **Fixed in v0.4.8:** new clusters/resource edits require 2 GiB
+  on all backends; unchanged legacy shapes are grandfathered, not automatically
+  resized. See [Neo4j sizing guidance](#neo4j-minimum-memory).
 - **On Dokploy, replacing a data member can put two members on the same node**
   (MySQL Group Replication and PXC also in v0.4.0–v0.4.6; PostgreSQL HA and
   Supabase also in v0.2.0–v0.4.6). After `karactl clusters replace-member` — for
@@ -711,8 +1057,11 @@ marker deletion is not a general readiness or lost-password workaround.
   with `karactl clusters members CLUSTER` (the `PLACEMENTGROUP` column shows the
   node). If two data members share a node, there is no reliable way to move one
   in this release: replacing again or draining nodes can make it worse. Keep
-  the cluster as it is, take a fresh full backup, and upgrade when the fix is
-  released. A fix is planned for the next release.
+  the cluster as it is on v0.4.7 and take a fresh full backup.
+  **Fixed in v0.4.8:** new Dokploy/Nomad imports preserve predecessor identity and
+  strictly exclude survivor nodes; existing co-location needs inspection and
+  repair. Healthy GR replacement requires upgraded full-view survivor agents.
+  See [placement repair](#check-database-placement-after-v047-replacements).
 - **Karakoram's status checks cause heavy disk writes on the Dokploy manager**
   (also present in v0.2.0–v0.4.6). Karakoram reads Dokploy's API several times per
   second for each cluster, and Dokploy records every API-key use in its own
@@ -723,8 +1072,11 @@ marker deletion is not a general readiness or lost-password workaround.
   make clusters briefly report `Degraded`. Your data is not affected.
   Workaround: run the Dokploy manager on fast SSD storage and give it enough
   disk throughput for the number of clusters you manage; avoid co-locating
-  other disk-heavy workloads on the manager. A fix that reduces the number of
-  requests is planned for the next release.
+  other disk-heavy workloads on the manager.
+  **Fixed in v0.4.8:** control-plane snapshots and parallel observation reduce
+  request amplification, not Dokploy accounting writes. Infrastructure sizing
+  remains relevant; historical I/O figures are not a fixed-version guarantee.
+  See [observation caveats](#companion-refresh-and-dokploy-observation).
 - **On Dokploy, a ProxySQL rollout whose new proxy instance fails to start can
   take down the existing proxies** (v0.4.7). For proxies using the
   serving-preserving rollout, when changing the proxy count or resources, or
@@ -736,7 +1088,11 @@ marker deletion is not a general readiness or lost-password workaround.
   change, make sure the Dokploy nodes have enough free CPU and memory for one
   extra proxy instance and that the cluster is healthy; run the change in a
   maintenance window; if a proxy rollout stops or fails, don't resume the Docker
-  Swarm service update by hand. A fix is planned for the next release.
+  Swarm service update by hand.
+  **Fixed in v0.4.8:** fixed agents plus the fixed control plane provide opted-in
+  task/revision-bound admission. Upgrade old marked proxies before count/resource
+  changes; surge capacity, no manual resume and daemon/executor-restart caveats
+  remain. See [proxy recovery](#proxysql-admission-startup-and-recovery).
 - **MySQL Group Replication clusters on Dokploy can briefly report Degraded, and
   adding proxy instances can be reported as failed** (also present in
   v0.4.3–v0.4.6). The Dokploy provider reads the state of each member and proxy
@@ -747,8 +1103,11 @@ marker deletion is not a general readiness or lost-password workaround.
   instances are healthy. Your data and client traffic are not affected.
   Workaround: keep two proxy instances on Dokploy; if a proxy-count change
   fails, check the cluster's status and the Dokploy service before retrying,
-  because the change has usually been applied. A fix is planned for the next
-  release.
+  because the change has usually been applied.
+  **Fixed in v0.4.8:** concurrent bounded observations and snapshots correct the
+  serialized-read mechanism, not all latency/network causes. The two-proxy
+  workaround is not current v0.4.8 advice. See
+  [observation changes](#companion-refresh-and-dokploy-observation).
 
 ## Upgrading to v0.4.6
 

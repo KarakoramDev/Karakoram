@@ -49,6 +49,13 @@ Engine driver persistence replaces each owned state value, not just its nonempty
 
 Neither HTTP acceptance nor a successful infrastructure configuration process proves engine health. There is no distributed exactly-once transaction across SQLite, infrastructure providers and engine/storage APIs: durable identifiers and observation constrain replay, while ambiguous outcomes require investigation. [Clusters and operations](clusters.md#operations-and-status) defines generations, operation phases, health, cancellation and wait behavior.
 
+Independent availability renewal for steady clusters can use authenticated agent
+heartbeats and a shared per-target platform snapshot; health leases remain
+anchored to their oldest evidence. Lifecycle reconciliation and safety decisions
+keep fresh reads, with 30-minute deep resynchronization for steady clusters.
+[ADR 0070](adr/0070-agent-heartbeats-and-platform-read-budget.md) defines the
+freshness classes, mutation epochs and fallback to live observation.
+
 ## Node-local durability
 
 Agents cache assigned configuration on the data volume with owner-only permissions. Existing data-bearing members can start from that cache during control-plane downtime; first startup without a cache cannot. Stateless runtimes lose cached configuration when replaced.

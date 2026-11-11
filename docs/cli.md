@@ -81,7 +81,7 @@ array alongside the unchanged legacy latest-ending `start`/`end` summary.
 | `backends` | Registered infrastructure kinds and capabilities | list | All |
 | `backups` | Backup inventory and creation/deletion | create, list, get, delete, pitr-window | All; pitr-window for engine drivers advertising PITR |
 | `backup-drills` | [Disposable restore verification and reports](backup-drills.md) | list, get, run | All; RabbitMQ definitions only |
-| `clusters` | Cluster lifecycle/observation | create, list, get, status, members, placement, connection, ca, logs, metrics, edit, patch, scale, upgrade, upgrade-agents, restart, retry-deployments, replace-member, resume, rotate-tls, delete, wait, balancer, raise-fcv | All; balancer/raise-fcv MongoDB only |
+| `clusters` | Cluster lifecycle/observation | create, list, get, status, members, placement, connection, ca, logs, metrics, edit, patch, scale, upgrade, upgrade-agents, restart, reconcile, retry-deployments, replace-member, resume, rotate-tls, delete, wait, balancer, raise-fcv | All; balancer/raise-fcv MongoDB only |
 | `completion` | Generate shell scripts | bash, zsh, fish, powershell | Local |
 | `config` | Save connection contexts | set-context | Local |
 | `control-plane` | [Coordinator state backups and recovery](control-plane-backup.md) | backup-policy get/set, backups list/run | Installation-wide |
@@ -121,6 +121,8 @@ array alongside the unchanged legacy latest-ending `start`/`end` summary.
 | `whoami` | Authenticated identity | — | All |
 
 `karactl clusters retry-deployments NAME [--namespace NS] [-o json]` explicitly [re-arms exhausted platform deployments](clusters.md#retry-exhausted-platform-deployments) after fixing the underlying platform failure; it requires `clusters/update` and returns a conflict if no deployment is exhausted.
+
+`karactl clusters reconcile NAME [--namespace NS] [-o json]` requests fresh reconciliation and requires `clusters/update`. Repeated requests coalesce with at least 30 seconds between forced triggers. It does not grant deployment retries or resume suspended clusters. There is no `--wait`: this action creates no operation and does not advance the desired generation, so operation/generation-based waiting cannot identify its completion. Inspect `clusters status` and events instead.
 
 `karactl clusters upgrade-agents NAME [--include-current] [--ignore-maintenance-window] [--wait] [--timeout 30m]` rolls out the current agent build without changing engine versions. `clusters get` shows `status.agents` target/outdated/unknown details; member output includes agent version/build. Current agents return HTTP 409 `AgentsCurrent` unless included explicitly. See [rolling out member agents](upgrade.md#rolling-out-member-agents).
 

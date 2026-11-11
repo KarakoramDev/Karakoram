@@ -64,6 +64,55 @@ that configuration on proxies, stop and observe its exact runtime, then prove
 native survivor membership no longer contains it before deleting resources.
 The old identity is never deployed or initialized on fresh storage.
 
+Full-capability GR retirement uses the complete native UUID/state/role/host/port
+membership view, not the count of ONLINE members. Every non-retiring survivor, including the new
+member, must be locally ONLINE under its persisted UUID in the configured group
+and report the same exact ONLINE survivor set with a PRIMARY and no retiree UUID
+in any state. View identifiers agree when available from every observer. Unknown
+persisted UUIDs require recovery. New healthy replacement and scale-in refuse
+missing full `GroupView` capability before disruption; upgrade surviving agents
+first. Unknown/unreachable capability also refuses admission.
+The proof is refreshed before service/volume deletion and before credential and
+member-record cleanup. Healthy retirement also requires it before backend Stop.
+GR peers/seeds retain the predecessor until member-record cleanup, so their
+removal is gated by the same proof.
+
+Two explicit exceptions retain the weaker released ONLINE/count proof, not exact
+UUID-set convergence: structural work already in flight before the control-plane
+upgrade, and explicit/automatic confirmed-loss replacement with positively known
+legacy survivors. Confirmed-loss admission still requires the existing majority,
+same-group, GTID and donor checks. Both emit Warning `LegacyGRRetirement`; the
+in-flight warning identifies pre-upgrade ONLINE/count completion, while the
+confirmed-loss warning is emitted at admission and directs agent rollout after
+recovery. See [the exact warning/refusal messages and recovery order](../upgrade.md#gr-capability-and-legacy-recovery).
+Unknown/unreachable capability never selects legacy mode, and already strict work
+does not downgrade its proof. Finish recovery before agent rollout, then require
+full capability for new healthy structural work.
+
+Cancellation immediately after replacement allocation can remove the untouched
+member record without inventing a native UUID. This exception requires persisted
+`planned` state with no resource settings, import intent, deploy receipt, runtime
+recovery, initialization, or UUID. Import intent is persisted before submission;
+the later `imported` checkpoint permits deployment. Missing receipts after a
+control-plane restart do not establish that deployment never happened. Record
+cleanup still requires the membership proof selected for that work, including
+the explicit legacy exceptions above.
+
+Cancelling confirmed-loss GR replacement after its joiner has joined completes
+forward. Before join it rolls back the allocation, retaining the lost predecessor
+and loss fence for a fresh replacement after cleanup. Existing rollback owners
+settle with these scoped rules; they do not require the physically lost member
+to return ONLINE. Cancelled queue state acknowledges cancellation, not completed
+native recovery. Observe recovery ownership, native membership and cleanup before
+retrying replacement or upgrading agents.
+
+The confirmed-loss backend Stop ordering is unchanged: it fences rescheduling
+before membership proof, and can withdraw provider discovery at that point.
+Separating runtime fencing from discovery withdrawal is deferred pending native
+incident analysis; the identity barrier alone does not establish that provider
+discovery remains available during replacement. PXC's analogous path uses eligible
+Galera component/cluster-size observations; GR UUID rows are not Galera membership IDs.
+
 Agent rollout and replacement are serialized, not mutually preempting workflows.
 If loss/recovery appears during rollout, settle its current member and routing
 withdrawal without another deployment, then retire the rollout so replacement can

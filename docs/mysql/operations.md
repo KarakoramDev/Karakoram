@@ -482,6 +482,33 @@ serving proxy, elects it, and waits for that new primary in writer HG10.
 `RECOVERING` is not completion: the member must return `ONLINE` with the exact
 target build and be readmitted by every serving proxy.
 
+A planned Group Replication primary handoff is not free of client errors. The
+native election and ProxySQL's hostgroup monitoring converge separately. For a
+short window after the former primary turns `super_read_only` and before each
+proxy routes writes to the new primary, a write sent through that proxy fails
+with MySQL error 1290 (SQLSTATE `HY000`, "running with the
+--super-read-only option"). The window usually lasts less than a second and is
+bounded by ProxySQL's writer health check on each proxy (1-second interval,
+800 ms timeout). A statement or transaction rejected with 1290 was not
+committed: roll the transaction back and retry it. The rollout deploys the
+former primary only after every serving proxy has admitted the new primary as
+writer; that barrier does not mean no request failed during the election.
+
+Replacing a proxy task closes the client sessions attached to it, which clients
+see as error 2013 ("Lost connection to MySQL server during query") or a closed
+connection. Reconnect and retry reads. If the connection drops during `COMMIT`,
+the outcome is unknown: check whether the write landed before replaying it.
+Use bounded, idempotent application retry for both errors.
+
+Member replacement can also make commits slow. While a replacement member
+joins, and for several minutes after the replaced member is retired, a Group
+Replication `COMMIT` can occasionally take several seconds. A client whose read
+timeout expires during `COMMIT` sees error 2013 ("Lost connection to MySQL
+server during query"), usually without a SQLSTATE, and does not learn the
+outcome. In testing, every commit that timed out this way had been applied.
+Treat a timed-out commit as possibly applied: check whether the write landed
+before retrying it, or use unique request keys so a retry cannot apply it twice.
+
 PXC requires safe GTID-history observations with no latched divergence, and a
 full-size Primary component whose members are all Synced, ready and connected.
 Before restarting its routed writer, the rollout selects a caught-up,
@@ -549,6 +576,129 @@ or proxy evidence is never permission to advance.
 - Replacement introduces a new member identity before retiring the old one. Use the managed replace action; do not copy data identity or a stale bootstrap flag into another member. Disk shrink is not supported.
 - Suspension with retained volumes preserves the dataset and identities. Resume after all members stop uses the full-outage recovery rules below; it is not an unconditional restart into a writable cluster.
 - Resume and runtime recovery restore the previously admitted public TCP policy even while the maintenance window is closed. A pending exposure or allowlist/IP-family change remains deferred and its generation is not acknowledged until the window opens or the generation receives a maintenance override. Admission survives control-plane restarts separately from runtime route receipts. Legacy state migrates acknowledged policy or a matching retained exposure hash; if neither identifies the old policy, recovery stays private until admission.
+
+### GR retirement and legacy recovery
+
+Full-capability Group Replication retirement waits for **identity-set convergence**,
+not an ONLINE-member count. Every non-retiring data member (including the replacement)
+must report its own persisted UUID ONLINE in the configured group, and the same
+complete native membership: exactly the surviving UUIDs, all ONLINE, at least
+one PRIMARY, and no predecessor UUID in **any** state. When all observers expose
+native view identifiers, those must agree too. UUIDs are recorded when members
+join/are observed; an unknown persisted predecessor UUID blocks retirement.
+Healthy retirement checks this after native leave and before backend stop.
+Confirmed-loss retirement still fences/stops the old runtime first, then checks
+before service/volume deletion, credential cleanup and completion.
+
+An operation waiting on this proof reports `waiting for GR retirement identity
+convergence`. A predecessor still listed UNREACHABLE or a RECOVERING survivor
+keeps it pending; native GR must expel the predecessor and converge. There is no
+timeout that overrides the proof. New healthy replacement and scale-in are
+refused before disruption when surviving agents lack full `GroupView` capability;
+complete `karactl -n NS clusters upgrade-agents CLUSTER --wait` **before**
+starting them or healthy placement repair. If an unapplied scale-in desired
+count blocks rollout, restore that unapplied count, upgrade, then reapply scale-in.
+Unknown/unreachable capability also refuses admission. Exact refusal messages and
+the ordered procedure are in [the v0.4.8 guide](../upgrade.md#gr-capability-and-legacy-recovery).
+
+Two exceptions use the weaker released ONLINE/count proof, **not** full UUID-set
+convergence:
+
+- In-flight structural work started before the control-plane upgrade completes
+  with Warning `LegacyGRRetirement`:
+  “Completing legacy in-flight GR structural work using the pre-upgrade ONLINE/count proof, not the full UUID identity barrier; upgrade surviving agents before starting new structural work”.
+- Confirmed-loss replacement, explicit or automatic, is admitted with positively
+  known legacy survivors after the existing majority, same-group, GTID and donor
+  checks. At admission, Warning `LegacyGRRetirement` states:
+  “Admitting confirmed-loss GR replacement using the released ONLINE/count proof because surviving agents lack full GroupView capability; upgrade agents after recovery with karactl -n NS clusters upgrade-agents CLUSTER --wait”.
+
+Observe existing native recovery and cleanup to completion, then upgrade agents
+before healthy structural work. Unknown/unreachable observations do not select
+legacy mode; full-capability work remains strict even if capability is later lost.
+The legacy proof does not establish exact UUID convergence and retains its weaker
+released membership guarantees.
+
+Cancelling a confirmed-loss GR replacement once its joiner has joined completes
+forward, not by restoring the permanently lost predecessor. Before join it rolls
+back the new allocation while retaining the lost member and affirmative loss for
+a fresh `replace-member` after cleanup. A pre-existing rollback owner whose
+joined replacement is before native/runtime shutdown (empty, handoff, drain, or
+runtime-stop without a stop receipt) is converted to forward completion after a
+fresh ONLINE, same-group observation; it does not stop that replacement. A native
+leave checkpoint or persisted runtime-stop receipt instead retains exact rollback
+cleanup, preserving the old member's loss fence. A queued replacement can then
+restore the missing replica. After forward completion, a queued request
+for the removed predecessor fails explicitly because its target no longer exists;
+another replacement is unnecessary.
+
+Cancellation also settles a replacement whose placement was refused after
+planning. Desired resources, replica count and version are not evidence that a
+runtime was deployed. A durable journal distinguishes never-submitted plans and
+authoritative placement refusal from requests whose outcome is unknown. Negative
+inventory alone never settles an unknown submission. Matching positive backend
+reservations are adopted before exact cleanup; retained service IDs, unresolved
+import intent, deployment/stop receipts or initialized native state prevent the
+unprovisioned-allocation shortcut.
+
+An unknown import reports `ReplacementWaiting=True`, reason `ImportOutcomeUnknown`,
+with the exact runtime/volume names to inspect. Cleanup keeps its owner, frozen
+plan and token while a reservation can still arrive, and re-observes without
+creating duplicates. This can remain pending after an ambiguous submit or a
+control-plane crash inside submission, including a partial batch. Legacy frozen
+plans without a durable submission journal are conservative too. If the provider
+cannot establish a terminal outcome and some reservations never appear, automatic
+cleanup cannot safely finish; do not clear internal state or delete tokens to
+bypass that uncertainty.
+
+Older released cancellations may already have erased their import plan before
+the control-plane upgrade. For that legacy rollback checkpoint, cleanup inventories
+the named member runtime and volume before deleting credentials: visible owned,
+fully materialized reservations return to exact fencing/deletion, inventory errors
+retry, and observed absence permits the released cleanup behavior rather than a
+permanent owner wait. An importing-only or partially materialized visible object
+retains the owner with a reason naming the exact reservations. Let those platform
+imports finish, or remove the exact owned objects on the platform; cleanup
+re-observes and continues without a control-plane restart. It never reconstructs
+or submits the erased import.
+
+**Legacy limitation:** a create whose reply was lost on the older control plane
+may still publish *after* that absence observation and cancellation completion,
+as an unowned/orphaned application or job. After upgrading/resuming such a cancel,
+inspect the platform for the named member runtime and volume (including late
+arrivals); cancellation completion is not proof that the old server-side create
+cannot still arrive. Verify ownership before platform cleanup.
+
+For a provisioned but unadmitted rollback member without a recorded native UUID,
+strict cleanup requires a completed exact runtime fence and full survivor UUID-set
+convergence with no extra member in any state. Fence completion is retained across
+runtime deletion; expiry of its backend Stop receipt afterward does not erase it.
+Fresh runtime absence/stopped-incarnation and native proofs still gate cleanup.
+Dokploy can persist stopped intent for an imported, never-deployed application
+after confirming native service absence, without issuing a native start or stop.
+That exact undeployed application is permanently fenced against Deploy, Start
+and Restart, including after receipt completion and backend reconstruction.
+Complete exact cleanup before allocating a new application; ordinary deployed
+Stop/Start remains reversible.
+An extra RECOVERING or UNREACHABLE native row still blocks deletion.
+
+Read-only health scans, including PXC's independent GTID continuity sweep, do not
+dial agents intentionally retired at the stop/delete/credential checkpoints.
+They still observe infrastructure and report native/agent unavailability, never
+health or removal proof. The PXC sweep retains unavailable retired identities in
+its quorum denominator; fresh write-relevant history comparisons remain unchanged.
+This prevents a withdrawn discovery name from exhausting the shared observation
+budget before cleanup can read healthy survivor storage. Fresh receipt, ownership
+and native survivor/identity proofs still gate every destructive retirement step.
+
+A cancellation acknowledgement/Cancelled queue result is not proof of finished
+recovery: inspect native membership, cluster health, cleanup and durable recovery
+ownership before retrying replacement or agent rollout.
+The proof does not establish that native cached senders have been destroyed.
+On confirmed loss, backend Stop can already withdraw the predecessor's discovery
+name before this proof; decoupling fencing from discovery lifetime remains under
+investigation. Automatic confirmed-loss replacement remains experimental/off
+by default.
+
 
 During PXC replacement or scale-in, a retiring member retains its own local
 Galera peer identity in its configuration until resource cleanup completes,
@@ -632,9 +782,26 @@ and a message directing the operator to verify healthy surviving members, then r
 karactl clusters replace-member CLUSTER MEMBER --wait
 ```
 
-**Known issue:** do not cancel a Group Replication replacement after it starts when the old member and its volume are gone; [cancellation can leave the serving cluster stuck](../limitations.md#mysql-gr-lost-member-cancellation).
+A queued `replace-member` waits for the current replacement or other native
+maintenance to settle; queue admission does not interrupt that owner. Inspect
+the operation's message for the waiting reason (including the replacement owner
+and stage), and use `karactl clusters get CLUSTER` to inspect the cluster status
+message and conditions for the underlying maintenance blocker. The queued
+operation starts automatically once the current owner settles; do not submit
+duplicate replacements while it waits.
+
+**Historical v0.4.7 known issue — fixed in v0.4.8:** cancelling confirmed-loss
+GR replacement could leave the serving cluster stuck waiting for its lost
+predecessor. In v0.4.8 a joined replacement completes forward; before join,
+cancellation rolls back the allocation and retains loss for a fresh replacement.
+Cancellation acknowledgement is not completed recovery. See
+[the historical issue](../limitations.md#mysql-gr-lost-member-cancellation) and
+[current retirement/recovery guidance](#gr-retirement-and-legacy-recovery).
 
 Explicit replacement is unchanged and retains the native safety checks below.
+Expect occasional multi-second commits during and for several minutes after a
+replacement; a commit that times out may still have been applied (see
+[client errors during rollout and replacement](#agent-rollout)).
 While a confirmed-lost member awaits explicit replacement, new rolling
 version/resource/parameter/proxy changes are deferred without taking maintenance
 ownership, so the replacement operation remains claimable. Existing rolling

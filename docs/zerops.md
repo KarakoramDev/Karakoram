@@ -23,6 +23,33 @@ For a provider comparison, see [Providers](providers.md). For engine configurati
 
 Importing infrastructure and deploying code are separate steps. Runtimes are initially `READY_TO_DEPLOY`; import acceptance, Process completion and engine readiness are different observations. Karakoram uploads artifacts and observes the engine before declaring convergence. See [Architecture](architecture.md) and [ADR 0006](adr/0006-zerops-backend-client.md) for the infrastructure boundary.
 
+Steady availability renewal uses agent heartbeats and a shared platform snapshot
+below the HTTP client, keyed by API base + project. Drift checks list
+`GET /project/{id}/service-stack` pages (100 services per page), shared across all
+clusters in that target. Listing checks must be less than 60 seconds old and
+snapshot entries at most 40 minutes old; changed listings and mutations
+invalidate the snapshot. Non-steady observation and lifecycle safety decisions
+remain fresh. See [platform read budget](providers.md#platform-read-budget),
+[cluster observation](clusters.md#operations-and-status) and
+[out-of-band platform changes and forcing a reconcile](operations.md#out-of-band-platform-changes-and-forcing-a-reconcile).
+
+**Conditional proxy configuration corner.** For updated PostgreSQL proxy agents,
+a listing-visible service-stack record change or peer withdrawal can precede a
+change in the incumbent database/agent's native health. Such platform-only
+changes allow **≤60 s project-listing detection + ≤7 s heartbeat reload notice +
+fresh render/apply time**. The notice bound is heartbeat scheduling delay only
+(a 3 s scheduled wait and up to 4 s bounded sample collection, excluding
+transport/server time and retries after a failed heartbeat): approximately
+**7 s worse** than v0.4.7's ≤60 s
+fresh config pull, plus the same render/apply work. Ordinary stopped agents use
+the shorter pushed-health path.
+
+`karactl -n NS clusters reconcile CLUSTER` forces a fresh pass immediately when
+admitted, bypassing the normal listing/resync wait. A persistent invalidation
+generation causes a full config pull at the next heartbeat even after a fast
+return to steady. The command does not wait for application, and repeated
+requests retain the existing 30 s force-coalescing/minimum-spacing rule.
+
 ## Capabilities
 
 | Capability | Zerops behavior |
@@ -150,6 +177,7 @@ CPU-mode rate limits surface `PlatformCooldown` with a persisted retry deadline;
 - **One control-plane replica:** SQLite requires a single writer. Keep `maxContainers: 1` and `temporaryShutdown`; upgrades interrupt management. Lost state cannot be reconstructed by automatically adopting existing services.
 - **Asynchronous platform work:** Zerops Processes are polled, not watched. Accepted work and terminal Process success do not establish engine health.
 - **Deployment admission:** the default cap is two in-flight owned deploy/build processes per API endpoint/project in this process, shared across namespaces. New version allocation/upload also waits for prior deployment/build work on that service. Finished history does not consume slots or impose a service lifetime limit. Each observation queries all known unfinished process states (PENDING, WAITING, RUNNING, ROLLBACKING, CANCELING) independently of history ordering or retention; a ten-second project cache shares observations. Filtered pagination rejects changed totals and duplicate IDs instead of accepting incomplete evidence. History is fully indexed on cold start and at least every ten minutes, with incremental prefix reads and unfinished-process refresh between rebuilds. History shrinkage or an ID gap also requires rebuilding. Observed unknown states fail closed, but a late-visible unrecognized state hidden behind an indexed prefix may remain undiscovered until the next full rebuild. Running or unknown work counts regardless of age once observed. Unreadable or incomplete evidence reports `DeploymentEvidenceUnavailable` in deployment-wait status and events rather than authorizing more mutations.
+- **Steady observation:** healthy, converged clusters reconcile every 30 minutes while heartbeat-backed availability is evaluated every five seconds. Platform snapshot sharing does not cache Process polling, deployment admission or mutation prerequisites; these retain their existing freshness rules. Older agents remain pull-observed. Use [monitoring](monitoring.md) to separate listing and steady-renewal traffic from operation bursts.
 - **Environment snapshots:** writing service secrets does not restart members. Engine drivers own safe rolling restarts to apply changes.
 - **Deletion and retained costs:** platform refusals can leave verified owned volumes in orphan inventory. Cluster deletion completion does not prove all charged storage is gone.
 - **Platform not-found answers:** Karakoram reads the Zerops error code, not the HTTP status, so older (HTTP 400) and current (HTTP 404) answers for a missing entity behave the same. Only a missing service or app version counts as absence, and a missing Process as expiry; another entity's not-found code is a rejection. An HTTP 404 without a known Zerops error code, such as a gateway or unknown-route answer, is handled like a temporary platform outage: reconciliation retries it, a write answered this way has an unknown outcome and is not replayed blindly, and it is never evidence that a service was deleted.

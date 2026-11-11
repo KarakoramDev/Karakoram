@@ -35,6 +35,27 @@ make openapi-check
 
 `make test-integration` selects only the integration-suite directory; the command above includes internal tagged tests too. Local recovery state machines use controlled doubles; actual data/[S3](https://aws.amazon.com/s3/) recovery needs deployed checks.
 
+The PostgreSQL and MySQL engine state-machine fixtures clone a closed, empty
+SQLite schema migrated once per test process. Each case retains its own on-disk
+database, WAL, locks, secret sealer and transactions; no cluster records or live
+connections are shared. Store migration and damaged-state recovery tests still
+open their own databases directly. This avoids charging every engine scenario
+for the complete migration history while preserving persistence/restart coverage.
+Independent PostgreSQL recovery matrices and real-time observation-budget cases
+also run in parallel using Go's test-worker limit. Their servers, clusters and
+databases are case-local; real four-second deadline assertions remain intact.
+
+The Dokploy MySQL group observation budget includes eligible-node placement
+inventory in the same pass-scoped snapshot as member inventory: one
+`cluster.getNodes` read per pass, including at 750 ms simulated platform latency.
+The deadline and request-count assertions are not relaxed for placement checks.
+
+The Dokploy public-port refusal tests compare the complete private task snapshot
+before and after preflight or rollback, including task environment and forced-update
+generation. Snapshot copies preserve Go scalar types: JSON round-tripping an integer
+generation into a floating-point value would falsely report a task mutation.
+These are controlled API-double checks, not deployed port-publication evidence.
+
 `TestPostgresBindingsAcrossOpenBaoAndTemporal` in `internal/server` is a normal
 unit test included in `go test ./...`. It uses the production engine driver composition,
 one shared binding manager, [SQLite](https://sqlite.org/), authenticated HTTP requests and the real
