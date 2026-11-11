@@ -739,6 +739,9 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 					}
 				}
 			}
+			if err := m.pendingOperationClaimMessage(ctx, p, c); err != nil {
+				return 0, err
+			}
 			return result.RequeueAfter, syncErr
 		}
 	}

@@ -15,6 +15,59 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
+func TestUpdatePendingOperationMessagePreservesOwnership(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := t.Context()
+	c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "mysql"}}
+	if err := s.CreateCluster(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	op := &domain.Operation{ID: "queued", Cluster: c.Name, Kind: domain.OperationRestart}
+	if err := s.EnqueueOperation(ctx, op); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdatePendingOperationMessage(ctx, op.ID, "Waiting for native maintenance"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetOperation(ctx, op.ID)
+	if err != nil || got.Message != "Waiting for native maintenance" || got.Phase != domain.PhasePending || got.Attempts != 0 {
+		t.Fatal(got, err)
+	}
+	if err := s.UpdatePendingOperationMessage(ctx, op.ID, got.Message); err != nil {
+		t.Fatal(err)
+	}
+	unchanged, err := s.GetOperation(ctx, op.ID)
+	if err != nil || !unchanged.UpdatedAt.Equal(got.UpdatedAt) {
+		t.Fatal(unchanged, err)
+	}
+	claimed, err := s.ClaimOperation(ctx, c.Ref())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdatePendingOperationMessage(ctx, op.ID, "Stale waiting reason"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetOperation(ctx, op.ID)
+	if err != nil || got.Phase != domain.PhaseRunning || got.Attempts != 1 || got.Message != claimed.Message || !got.UpdatedAt.Equal(claimed.UpdatedAt) {
+		t.Fatal(got, err)
+	}
+	cancelled := &domain.Operation{ID: "cancelled", Cluster: c.Name, Kind: domain.OperationRestart}
+	if err := s.EnqueueOperation(ctx, cancelled); err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.RequestOperationCancellation(ctx, cancelled.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdatePendingOperationMessage(ctx, cancelled.ID, "Stale waiting reason"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetOperation(ctx, cancelled.ID)
+	if err != nil || got.Phase != domain.PhaseCancelled || !got.CancelRequested || got.Message != before.Message || !got.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Fatal(got, err)
+	}
+}
+
 func operationStateFixture(t *testing.T, s *Store) (*domain.Cluster, *domain.Operation) {
 	t.Helper()
 	ctx := context.Background()

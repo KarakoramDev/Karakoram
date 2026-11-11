@@ -159,6 +159,34 @@ func (s *Store) UpdateOperation(ctx context.Context, op *domain.Operation) error
 	return tx.Commit()
 }
 
+// UpdatePendingOperationMessage changes only a queued operation's diagnostic.
+// Reload under the writer transaction so a concurrent claim or cancellation
+// cannot be overwritten by the reconciler's earlier queue snapshot.
+func (s *Store) UpdatePendingOperationMessage(ctx context.Context, id, message string) error {
+	tx, err := s.writer.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var raw []byte
+	if err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='operation' AND key=?", id).Scan(&raw); err != nil {
+		return typed(err)
+	}
+	var op domain.Operation
+	if err = json.Unmarshal(raw, &op); err != nil {
+		return err
+	}
+	if op.Phase != domain.PhasePending || op.Message == message {
+		return nil
+	}
+	op.Message = message
+	op.UpdatedAt = time.Now().UTC()
+	if err = put(ctx, tx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, &op, "", "", string(op.Phase), false); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // UpdateOperationAndClusterState commits the checkpoint together with the
 // provider state it references, without overwriting concurrent desired-state
 // edits or deletion intent. Neither record is created if it has been removed.

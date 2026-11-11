@@ -65,6 +65,13 @@ type OperationClaimPolicy interface {
 	CanClaimOperation(*domain.Cluster) (bool, error)
 }
 
+// OperationClaimWaitReason optionally explains a declined OperationClaimPolicy.
+// It reads persisted state only, without platform calls. Empty leaves the queued
+// message unchanged; reasons must not contain credentials or host addresses.
+type OperationClaimWaitReason interface {
+	OperationClaimWaitReason(*domain.Cluster) (string, error)
+}
+
 // RecoveryOperationClaimPolicy may admit one narrowly scoped Pending remedy
 // while ordinary convergence owns maintenance. Running work always resumes first.
 type RecoveryOperationClaimPolicy interface {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -23,6 +24,46 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 		return false, err
 	}
 	return canClaimOperation(s, bs), nil
+}
+
+// OperationClaimWaitReason explains native ownership from persisted state only.
+func (*Core) OperationClaimWaitReason(c *domain.Cluster) (string, error) {
+	s, err := load(c)
+	if err != nil {
+		return "", err
+	}
+	bs, err := loadBackupState(c)
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case bs.RestoreOperation != nil:
+		return fmt.Sprintf("Waiting for restore %s to finish", bs.RestoreOperation.ID), nil
+	case s.RestoreGTIDBlocked != "":
+		return "Waiting for restore GTID certification to settle", nil
+	case s.Formation.GTIDCertification != nil && pxcFormationMappingPending(s):
+		return "Waiting for formation GTID certification to settle", nil
+	case s.Replacement != nil:
+		return fmt.Sprintf("Waiting for member replacement %s (stage %s) to finish", s.Replacement.Operation, s.Replacement.Stage), nil
+	case s.TLSRotation != nil:
+		return fmt.Sprintf("Waiting for TLS rotation %s (stage %s) to finish", s.TLSRotation.Operation, s.TLSRotation.Stage), nil
+	case s.GaleraTLS != nil:
+		return fmt.Sprintf("Waiting for Galera TLS rotation (stage %s) to finish", s.GaleraTLS.Stage), nil
+	case s.Rolling != nil && s.Rolling.Stage != "backup":
+		return fmt.Sprintf("Waiting for rolling maintenance (stage %s) to finish", s.Rolling.Stage), nil
+	case s.Pending != nil:
+		return "Waiting for member deployment or scale maintenance to finish", nil
+	case s.Suspended:
+		return "Waiting for the cluster to resume", nil
+	case s.Formation.State != "formed":
+		return "Waiting for cluster formation to finish", nil
+	}
+	for _, m := range s.Members {
+		if m.Stage != "joined" || m.ImportBatch != nil || m.ProxyDraining || m.ProxyDrainOperation != "" {
+			return "Waiting for member convergence or rollout drain to finish", nil
+		}
+	}
+	return "", nil
 }
 
 func canClaimOperation(s *state, bs backupState) bool {

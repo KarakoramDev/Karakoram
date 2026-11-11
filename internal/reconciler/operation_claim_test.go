@@ -22,6 +22,85 @@ func (*maintenanceClaimProvider) CanClaimOperation(c *domain.Cluster) (bool, err
 	return string(c.Internal) != `{"maintenance":true}`, nil
 }
 
+type reasonClaimProvider struct {
+	*maintenanceClaimProvider
+	reason string
+}
+
+func (p *reasonClaimProvider) OperationClaimWaitReason(*domain.Cluster) (string, error) {
+	return p.reason, nil
+}
+
+func TestMaintenanceClaimWaitReason(t *testing.T) {
+	for _, reason := range []string{"Waiting for member replacement owner (stage retire) to finish", ""} {
+		t.Run(map[bool]string{true: "reason", false: "empty"}[reason != ""], func(t *testing.T) {
+			p := &reasonClaimProvider{
+				maintenanceClaimProvider: &maintenanceClaimProvider{&operationProvider{fakeProvider: &fakeProvider{}}},
+				reason:                   reason,
+			}
+			maintenance := true
+			p.syncFn = func(rc *engine.Context) (engine.Result, error) {
+				rc.Cluster.Internal = json.RawMessage(`{"maintenance":false}`)
+				if maintenance {
+					rc.Cluster.Internal = json.RawMessage(`{"maintenance":true}`)
+				}
+				return engine.Result{RequeueAfter: time.Second}, nil
+			}
+			p.runFn = func(*engine.Context, *domain.Operation) (engine.OpResult, error) {
+				return engine.OpResult{Done: true, Message: "Replacement complete"}, nil
+			}
+			m, s := newTestManager(t, p)
+			createOperationCluster(t, s)
+			op := &domain.Operation{ID: "queued", Cluster: "demo", Kind: domain.OperationReplaceMember, Payload: json.RawMessage(`{"member":"demom0"}`)}
+			if err := s.EnqueueOperation(t.Context(), op); err != nil {
+				t.Fatal(err)
+			}
+			want := op.Message
+			if reason != "" {
+				want = reason + " before starting replace-member for member demom0"
+			}
+			var updated time.Time
+			for i := range 3 {
+				if _, err := m.reconcile(t.Context(), domain.ClusterRef{Name: "demo"}); err != nil {
+					t.Fatal(err)
+				}
+				got, err := s.GetOperation(t.Context(), op.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got.Message != want || got.Phase != domain.PhasePending || got.Attempts != 0 || got.StartedAt != nil || got.Failures != 0 {
+					t.Fatalf("unexpected queued operation: %+v", got)
+				}
+				if i > 0 && !got.UpdatedAt.Equal(updated) {
+					t.Fatal("unchanged waiting reason rewrote operation")
+				}
+				if reason == "" && !got.UpdatedAt.Equal(op.UpdatedAt) {
+					t.Fatal("empty reason rewrote operation")
+				}
+				updated = got.UpdatedAt
+			}
+			if reason != "" {
+				p.reason = "Waiting for rolling maintenance (stage rejoin) to finish"
+				if _, err := m.reconcile(t.Context(), domain.ClusterRef{Name: "demo"}); err != nil {
+					t.Fatal(err)
+				}
+				got, err := s.GetOperation(t.Context(), op.ID)
+				if err != nil || got.Message != p.reason+" before starting replace-member for member demom0" {
+					t.Fatal(got, err)
+				}
+			}
+			maintenance = false
+			if _, err := m.reconcile(t.Context(), domain.ClusterRef{Name: "demo"}); err != nil {
+				t.Fatal(err)
+			}
+			got, err := s.GetOperation(t.Context(), op.ID)
+			if err != nil || got.Phase != domain.PhaseSucceeded || got.Attempts != 1 || got.Message != "replace-member completed successfully" {
+				t.Fatal(got, err)
+			}
+		})
+	}
+}
+
 func TestMaintenanceClaimGateDefersWithoutConsumingOperationBudget(t *testing.T) {
 	p := &maintenanceClaimProvider{&operationProvider{fakeProvider: &fakeProvider{}}}
 	maintenance := true
@@ -56,6 +135,9 @@ func TestMaintenanceClaimGateDefersWithoutConsumingOperationBudget(t *testing.T)
 		queued, err := s.GetOperation(t.Context(), op.ID)
 		if err != nil || queued.Phase != domain.PhasePending || queued.Attempts != 0 || queued.Failures != 0 || queued.StartedAt != nil {
 			t.Fatalf("deferred operation changed: %+v %v", queued, err)
+		}
+		if queued.Message != op.Message || !queued.UpdatedAt.Equal(op.UpdatedAt) {
+			t.Fatal("provider without reason changed queue message", queued)
 		}
 	}
 	if syncs != 3 || runs != 0 {

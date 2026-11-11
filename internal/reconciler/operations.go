@@ -214,6 +214,36 @@ func (m *Manager) operationFailure(op *domain.Operation, err error) bool {
 	return true
 }
 
+// pendingOperationClaimMessage explains native maintenance without claiming work
+// or starting its execution budget. Providers without a reason retain their text.
+func (m *Manager) pendingOperationClaimMessage(ctx context.Context, p engine.Provider, c *domain.Cluster) error {
+	policy, ok := p.(engine.OperationClaimWaitReason)
+	if !ok {
+		return nil
+	}
+	reason, err := policy.OperationClaimWaitReason(c)
+	if err != nil || reason == "" {
+		return err
+	}
+	ops, err := m.opts.Store.ListOperations(ctx, c.Ref(), domain.PhasePending)
+	if err != nil {
+		return err
+	}
+	for _, op := range ops {
+		if domain.IsConvergenceOperation(op.Kind) {
+			continue
+		}
+		message := boundedMessage(redact.Diagnostic(fmt.Sprintf("%s before starting %s for %s %s", reason, op.Kind, op.Target.Kind, op.Target.Name)), 1024)
+		if message == op.Message {
+			continue
+		}
+		if err := m.opts.Store.UpdatePendingOperationMessage(ctx, op.ID, message); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // trackingOperations do not own the imperative queue: ordinary Sync converges
 // desired state while these records observe the target generation. Failed tracking
 // does not discard desired state or stop eventual cleanup.
