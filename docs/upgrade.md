@@ -4,6 +4,71 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading to v0.4.8
+
+v0.4.8 is a hotfix of v0.4.7 with one change: the Zerops provider classifies
+Zerops API errors by their error code instead of their HTTP status. It does
+not include the features planned for the next feature release, v0.4.9.
+
+### Fixed in v0.4.8
+
+**Support for the new Zerops API error codes:** Zerops is changing how its API
+reports a missing object. The error code stays the same (for example
+`serviceStackNotFound` or `projectNotFound`), but the HTTP status changes from
+400 to 404 and the error metadata gains the object's ID. v0.2.0–v0.4.7 treat
+every HTTP 404 as "this service or app version no longer exists" and every
+other 4xx answer as a rejected request. Deleted services, missing app versions
+and expired platform Processes are still recognized after the Zerops change.
+But once Zerops sends the new answers, those versions read any other missing
+object as a missing service or app version:
+
+- A create or import that names a service type or version Zerops does not
+  offer, or a resource change Zerops refuses because of a missing type
+  version or autoscaling profile, is no longer reported as rejected. MySQL,
+  PXC and Weaviate resource changes that would stop at a rejection keep
+  retrying instead. When Zerops refuses to delete a PostgreSQL or MySQL
+  member's volume for such a reason, the volume is not moved to the
+  [orphaned volume inventory](operations.md#orphaned-platform-volumes) and
+  retirement keeps retrying.
+- A project-level answer such as `projectNotFound` (for example, a wrong
+  project ID or a deleted project) reads as the cluster's services being
+  absent. Keycloak, Supabase and Temporal component checks report missing
+  components, Temporal deletion can be reported complete, and MySQL
+  formation skips such members, instead of failing with a clear rejection.
+- A 404 from a gateway or an unknown API route reads as a deleted service.
+
+v0.4.8 decides by the error code, so it behaves the same before and after the
+Zerops change. Only a missing service or app version counts as absence, and a
+missing Process as expiry. Another object's not-found code is a rejected
+request, as before. An HTTP 404 without a known Zerops error code is handled
+like a temporary platform outage: it is retried, a write answered this way has
+an unknown outcome, and it is never evidence that a service was deleted. See
+[Zerops operations and limits](zerops.md#operations-and-limits).
+
+**Who is affected:** every installation that manages clusters on Zerops, from
+the day Zerops deploys the change. Zerops has not announced a date, and the
+switch has no compatibility period. Nomad and Dokploy installations are not
+affected; upgrading changes nothing for them.
+
+### Required rollout
+
+Back up state, then upgrade the control plane. Use the
+[consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
+the original `KARAKORAM_MASTER_KEY` separately, and retain the old executable
+with its pre-upgrade state. Deploy v0.4.8 through your provider's documented
+singleton control-plane deployment path. This step applies the fix. Member
+agents never call the Zerops API: v0.4.7 agents keep working with the v0.4.8
+control plane and need no rollout. No database restart, engine upgrade, backup
+or configuration change is needed. Upgrade before Zerops deploys its change if
+you can; upgrading afterwards is also safe.
+
+### Known issues in v0.4.8
+
+v0.4.8 changes nothing else. The
+[continuing limitations](limitations.md#continuing-limitations) and all
+[known issues in v0.4.7](#known-issues-in-v047) remain present, and their
+workarounds still apply.
+
 ## Upgrading to v0.4.7
 
 v0.4.7 includes the [v0.4.6 security hotfix](#upgrading-to-v046)
