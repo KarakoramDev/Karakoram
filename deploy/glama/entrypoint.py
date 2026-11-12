@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The Karakoram Authors
-"""Throwaway v0.4.7 control plane for Glama's stdio MCP inspection, not deployment.
+"""Throwaway v0.4.8 control plane for Glama's stdio MCP inspection, not deployment.
 
 Inspection only: no provider is reachable. The control plane requires a default backend,
 so Nomad points to a closed loopback port with an obviously fake credential.

@@ -15,10 +15,10 @@ WORKDIR /download
 RUN set -eu; \
     arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
     case "$arch" in amd64|arm64) ;; *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; esac; \
-    base=https://github.com/KarakoramDev/Karakoram/releases/download/v0.4.7; \
+    base=https://github.com/KarakoramDev/Karakoram/releases/download/v0.4.8; \
     curl -fsSLO "$base/checksums.txt"; \
-    echo 'f45120082779d05d20ea21333cc7083f9df3eabc42bd0c65329d253c6431300b  checksums.txt' | sha256sum -c -; \
-    server="karakoram-v0.4.7-linux-$arch.tar.gz"; cli="karactl-linux-$arch"; \
+    echo '6c106e67fdc19fb0b18780246c07e87ab711466f044fd9a50d4ced1e6355f244  checksums.txt' | sha256sum -c -; \
+    server="karakoram-v0.4.8-linux-$arch.tar.gz"; cli="karactl-linux-$arch"; \
     curl -fsSLO "$base/$server"; curl -fsSLO "$base/$cli"; \
     grep -E "  ($server|$cli)\$" checksums.txt | sha256sum --strict -c -; \
     tar -xzf "$server"; mv "$cli" karactl; chmod 755 karakoram karactl
