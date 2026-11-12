@@ -3,7 +3,7 @@
   "name": "io.github.KarakoramDev/karakoram",
   "title": "Karakoram",
   "description": "Self-hosted database control plane: clusters, backups and operations. Read-only by default.",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "websiteUrl": "https://karakoram.dev/docs/mcp/",
   "repository": {
     "url": "https://github.com/KarakoramDev/Karakoram",
