@@ -192,7 +192,7 @@ Match the CLI release to the **deployed control-plane version**, not the latest 
 [Release assets](https://github.com/KarakoramDev/Karakoram/releases) cover [Linux](https://www.kernel.org/)/[macOS](https://www.apple.com/macos/) (`linux`/`darwin`, `amd64`/`arm64`) and [Windows](https://learn.microsoft.com/en-us/windows/) (`windows-amd64.exe`) from v0.1.0; signed manifests start at **v0.1.2**. Linux amd64:
 
 ```sh
-RELEASE=v0.4.7   # replace with the release your server reports
+RELEASE=v0.4.8   # replace with the release your server reports
 ASSET=karactl-linux-amd64
 BASE="https://github.com/KarakoramDev/Karakoram/releases/download/$RELEASE"
 curl --fail --location --proto '=https' --proto-redir '=https' \
