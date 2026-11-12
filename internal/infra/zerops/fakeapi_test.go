@@ -369,13 +369,13 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		fakeError(w, 404, "notFound")
+		fakeError(w, 404, "userDataNotFound")
 		return
 	}
 	if len(parts) == 2 && parts[0] == "public-port-routing" {
 		route, ok := f.routes[parts[1]]
 		if !ok {
-			fakeError(w, 404, "notFound")
+			fakeError(w, 404, "publicPortRoutingNotFound")
 			return
 		}
 		route.DeleteOnSync = true

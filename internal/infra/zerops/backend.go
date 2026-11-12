@@ -193,17 +193,6 @@ func (b *Backend) refresh(ctx context.Context) ([]ServiceStack, error) {
 	b.mu.Unlock()
 	return list, nil
 }
-func notFound(err error) bool {
-	var e *APIError
-	return errors.As(err, &e) && (e.StatusCode == 404 || (e.StatusCode == 400 && (e.Code == "serviceStackNotFound" || e.Code == "appVersionNotFound")))
-}
-
-// processExpired recognizes a process the platform no longer retains. Zerops
-// forgets finished processes after about a day.
-func processExpired(err error) bool {
-	var e *APIError
-	return errors.As(err, &e) && (e.StatusCode == 404 || e.StatusCode == 400) && e.Code == "processNotFound"
-}
 
 // maskedValue is how Zerops returns sensitive variables to tokens without
 // sudo mode. It is never a value: it only means "not readable".

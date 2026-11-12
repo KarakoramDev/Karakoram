@@ -31,9 +31,15 @@
 // Karakoram identity and data-directory environment keys in non-serialized
 // ownership evidence; providers verify it before adopting legacy resources.
 // Start/Stop control every container in a service, including replicated mongos.
-// A deleted service may return HTTP 400 with serviceStackNotFound, not HTTP 404;
-// both invalidate cached service IDs and resolve the absent hostname as nil.
-// Missing app versions likewise return HTTP 400 appVersionNotFound or HTTP 404.
+// A deleted service returns serviceStackNotFound, with HTTP 400 from older Zerops
+// API versions and HTTP 404 from current ones; both invalidate cached service IDs
+// and resolve the absent hostname as nil. The error code decides, not the status:
+// HTTP 404 with another entity's code (projectNotFound, userDataNotFound,
+// serviceStackTypeVersionNotFound, ...) stays a rejection and never reads as the
+// requested service or version being absent. HTTP 404 without a known Zerops
+// error code (a gateway or unknown-route answer) is a transient failure, never
+// absence. Expired processes return processNotFound and missing app versions
+// appVersionNotFound, with either status.
 // This is resource absence, not successful deployment evidence. If the owning
 // service remains, replacement requires the same bounded terminal process and
 // app-version evidence as the previous-deployment gate; incomplete evidence waits

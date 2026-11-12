@@ -659,7 +659,9 @@ func ambiguousMutation(err error) bool {
 	}
 	var api *APIError
 	if errors.As(err, &api) {
-		return api.StatusCode >= 500
+		// A 404 that names no known missing entity may come from a gateway
+		// after the platform accepted the request.
+		return api.StatusCode >= 500 || unexplainedNotFound(api)
 	}
 	return errors.Is(err, infra.ErrUnavailable)
 }

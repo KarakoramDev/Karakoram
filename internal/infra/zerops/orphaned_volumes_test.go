@@ -30,7 +30,7 @@ func TestDeleteServiceByIDFencesReplacementAndProtectedServices(t *testing.T) {
 				}
 				if r.Method == "GET" {
 					if variant == "absent" {
-						w.WriteHeader(http.StatusNotFound)
+						fakeError(w, http.StatusNotFound, "serviceStackNotFound")
 						return
 					}
 					_ = json.NewEncoder(w).Encode(service)

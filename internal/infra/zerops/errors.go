@@ -254,6 +254,78 @@ func attemptedResources(config map[string]json.RawMessage) string {
 		scalar(h, "minContainerCount"), scalar(h, "maxContainerCount"))
 }
 
+// notFoundCodes are the entity codes Zerops answers a missing entity with.
+// Older API versions send them with HTTP 400; current ones with HTTP 404 and
+// the entity ID in metadata.
+var notFoundCodes = map[string]bool{}
+
+func init() {
+	for _, code := range []string{
+		"twoFactorAuthSessionNotFound", "clientNotFound", "userNotFound", "userDataNotFound", "projectEnvNotFound",
+		"userTokenNotFound", "userAccountNotFound", "templateNotFound", "countryNotFound", "recordNotFound",
+		"clientUserConnectionNotFound", codeServiceNotFound, "serviceStackTypeNotFound", "serviceStackTypeVersionNotFound",
+		"objectStorageNotFound", "containerNotFound", codeProcessNotFound, "projectNotFound", "coreServiceStackTypeVersionNotFound",
+		"l7HttpBalancerServiceStackTypeVersionNotFound", "publicHttpRoutingNotFound", "publicHttpRoutingServiceStackAccessPointNotFound",
+		"publicHttpRoutingDomainNotFound", "userNotificationNotFound", "publicPortRoutingNotFound", "driverNotFound",
+		codeVersionNotFound, "objectNotFound", "vpnPublicKeyNotFound", "autoscalingTrimProfileNotFound",
+		"autoscalingTrimProfileOverrideNotFound", "autoscalingProfileNotFound", "cdnActiveDomainNotFound", "cdnActiveBucketNotFound",
+		"locationInstanceNotFound", "locationNotFound",
+	} {
+		notFoundCodes[code] = true
+	}
+}
+
+const (
+	codeServiceNotFound = "serviceStackNotFound"
+	codeVersionNotFound = "appVersionNotFound"
+	codeProcessNotFound = "processNotFound"
+)
+
+// missing is the single not-found classification of Zerops API errors. The
+// error code decides, not the HTTP status, so both API versions classify
+// alike. It returns the entity code of an answer that reports a missing
+// entity, with HTTP 400 or 404; "" for anything else. Only a missing service
+// or app version (notFound) and an expired process (processExpired) mean the
+// requested object is gone. Another entity's code (projectNotFound,
+// userDataNotFound, serviceStackTypeVersionNotFound, ...) stays a rejection,
+// as it was under HTTP 400. unexplained reports HTTP 404 without a known
+// entity code: a gateway or route answer, a body that is not a Zerops error,
+// or a code Karakoram does not know. It proves nothing about the requested
+// object and is classified as a transient failure, never as absence.
+func missing(e *APIError) (code string, unexplained bool) {
+	if (e.StatusCode == http.StatusBadRequest || e.StatusCode == http.StatusNotFound) && notFoundCodes[e.Code] {
+		return e.Code, false
+	}
+	return "", e.StatusCode == http.StatusNotFound && !IsAuthenticationError(e)
+}
+
+// notFound reports a service or app version that no longer exists.
+func notFound(err error) bool {
+	var e *APIError
+	if !errors.As(err, &e) {
+		return false
+	}
+	code, _ := missing(e)
+	return code == codeServiceNotFound || code == codeVersionNotFound
+}
+
+// processExpired recognizes a process the platform no longer retains. Zerops
+// forgets finished processes after about a day.
+func processExpired(err error) bool {
+	var e *APIError
+	if !errors.As(err, &e) {
+		return false
+	}
+	code, _ := missing(e)
+	return code == codeProcessNotFound
+}
+
+// unexplainedNotFound is an HTTP 404 that names no known missing entity.
+func unexplainedNotFound(e *APIError) bool {
+	_, unexplained := missing(e)
+	return unexplained
+}
+
 // IsAuthenticationError identifies an explicit rejection, never an outage.
 func IsAuthenticationError(err error) bool {
 	var api *APIError
@@ -282,11 +354,11 @@ func (e *APIError) Is(target error) bool {
 	case infra.ErrConflict:
 		return e.StatusCode == http.StatusConflict
 	case infra.ErrUnavailable:
-		return e.StatusCode == http.StatusTooManyRequests || (e.StatusCode >= 500 && e.StatusCode < 600)
+		return e.StatusCode == http.StatusTooManyRequests || (e.StatusCode >= 500 && e.StatusCode < 600) || unexplainedNotFound(e)
 	case infra.ErrResourceChangeCooldown:
 		return e.Code == "lastCpuModeChangeTooRecent"
 	case infra.ErrRejected:
-		return e.Code == "lastCpuModeChangeTooRecent" || (e.StatusCode >= 400 && e.StatusCode < 500 && !IsAuthenticationError(e) && !notFound(e) && e.StatusCode != 409 && e.StatusCode != 429)
+		return e.Code == "lastCpuModeChangeTooRecent" || (e.StatusCode >= 400 && e.StatusCode < 500 && !IsAuthenticationError(e) && !notFound(e) && !unexplainedNotFound(e) && e.StatusCode != 409 && e.StatusCode != 429)
 	}
 	return false
 }
