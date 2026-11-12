@@ -72,7 +72,22 @@ These cross-engine constraints define the operating model; engine-specific limit
 - Result/rate/concurrency bounds are not query-cost guarantees. Stored data can inject prompts; confirmations do not provide rollback. RabbitMQ peeking consumes/requeues and therefore needs write access. Elasticsearch hidden/system/dot indices and streams backed by them are refused.
 - PostgreSQL's companion connects to the first scoped database (default `postgres`); existing PUBLIC grants are not revoked and can weaken scope isolation. See [scope and identity caveats](data-mcp.md#managed-identities-and-rotation).
 
+## Known issues in v0.4.8
+
+v0.4.8 is a hotfix that only changes how the Zerops provider classifies Zerops
+API errors; see the [v0.4.8 upgrade notes](upgrade.md#upgrading-to-v048). All
+[known issues in v0.4.7](#known-issues-in-v047) below remain present, and their
+workarounds still apply.
+
 ## Known issues in v0.4.7
+
+- **Zerops API error change** (v0.2.0–v0.4.7 on Zerops; **fixed in v0.4.8**).
+  Once Zerops answers missing objects with HTTP 404 instead of HTTP 400, these
+  versions read another object's absence, or a gateway 404, as a missing
+  service or app version. Rejected creates and resource changes then keep
+  retrying instead of failing as rejected, and a project-level not-found
+  answer reads as the cluster's services being absent. Upgrade to v0.4.8; see
+  [Fixed in v0.4.8](upgrade.md#fixed-in-v048).
 
 <a id="dokploy-proxy-paused-update"></a>
 
@@ -87,7 +102,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   count or resources on Dokploy, make sure the nodes have spare capacity for
   the new proxy tasks. If an update pauses, keep the existing proxies running,
   do not edit the Swarm service by hand, and upgrade when the fix is released,
-  or open an issue. A fix is planned for the next release.
+  or open an issue. A fix is planned for v0.4.9.
 
 <a id="mysql-gr-lost-member-cancellation"></a>
 
@@ -111,7 +126,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   on Dokploy runs out of memory and CPU while starting: it never reports Ready
   and the create operation fails after about 40 minutes. Workaround: create
   Neo4j clusters on Dokploy with at least 2 GiB of memory. Existing clusters are
-  not affected. A fix is planned for the next release.
+  not affected. A fix is planned for v0.4.9.
 
 <a id="dokploy-replacement-placement"></a>
 
@@ -126,7 +141,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   node). If two data members share a node, there is no reliable way to move one
   in this release: replacing again or draining nodes can make it worse. Keep
   the cluster as it is, take a fresh full backup, and upgrade when the fix is
-  released. A fix is planned for the next release.
+  released. A fix is planned for v0.4.9.
 - **Karakoram's status checks cause heavy disk writes on the Dokploy manager**
   (also present in v0.2.0–v0.4.6). Karakoram reads Dokploy's API several times per
   second for each cluster, and Dokploy records every API-key use in its own
@@ -150,7 +165,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   change, make sure the Dokploy nodes have enough free CPU and memory for one
   extra proxy instance and that the cluster is healthy; run the change in a
   maintenance window; if a proxy rollout stops or fails, don't resume the Docker
-  Swarm service update by hand. A fix is planned for the next release.
+  Swarm service update by hand. A fix is planned for v0.4.9.
 - **MySQL Group Replication clusters on Dokploy can briefly report Degraded, and
   adding proxy instances can be reported as failed** (also present in
   v0.4.3–v0.4.6). The Dokploy provider reads the state of each member and proxy

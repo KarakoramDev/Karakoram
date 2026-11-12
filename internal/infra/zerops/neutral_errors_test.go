@@ -21,7 +21,7 @@ func TestAPIErrorNeutralClasses(t *testing.T) {
 		class  error
 	}{
 		{401, "", infra.ErrUnauthorized}, {403, "", infra.ErrUnauthorized}, {400, "accessDenied", infra.ErrUnauthorized}, {0, "tokenExpired", infra.ErrUnauthorized},
-		{404, "", infra.ErrNotFound}, {400, "serviceStackNotFound", infra.ErrNotFound}, {409, "", infra.ErrConflict},
+		{404, "serviceStackNotFound", infra.ErrNotFound}, {400, "serviceStackNotFound", infra.ErrNotFound}, {404, "", infra.ErrUnavailable}, {409, "", infra.ErrConflict},
 		{429, "", infra.ErrUnavailable}, {500, "", infra.ErrUnavailable}, {503, "", infra.ErrUnavailable},
 		{400, "lastCpuModeChangeTooRecent", infra.ErrResourceChangeCooldown}, {400, "invalidValue", infra.ErrRejected}, {422, "", infra.ErrRejected},
 	} {

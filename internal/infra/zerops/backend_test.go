@@ -569,7 +569,9 @@ func TestNotFoundPlatformErrors(t *testing.T) {
 		code   string
 		want   bool
 	}{
-		{http.StatusNotFound, "", true},
+		{http.StatusNotFound, "", false},
+		{http.StatusNotFound, "serviceStackNotFound", true},
+		{http.StatusNotFound, "projectNotFound", false},
 		{http.StatusBadRequest, "serviceStackNotFound", true},
 		{http.StatusBadRequest, "invalidCustomAutoscalingValue", false},
 		{http.StatusForbidden, "serviceStackNotFound", false},

@@ -1,0 +1,38 @@
+{
+  "serviceStackNotFound": {
+    "old": {"status": 400, "body": {"error": {"code": "serviceStackNotFound", "message": "Service stack not found.", "meta": [{"error": "Service stack not found.", "code": "serviceStackNotFound", "metadata": null}]}}},
+    "new": {"status": 404, "body": {"error": {"code": "serviceStackNotFound", "message": "Service stack not found.", "meta": [{"error": "Service stack not found.", "code": "serviceStackNotFound", "metadata": {"serviceStackId": ["ExampleID0000000000101"]}}]}}}
+  },
+  "appVersionNotFound": {
+    "old": {"status": 400, "body": {"error": {"code": "appVersionNotFound", "message": "App version not found", "meta": [{"error": "App version not found", "code": "appVersionNotFound", "metadata": null}]}}},
+    "new": {"status": 404, "body": {"error": {"code": "appVersionNotFound", "message": "App version not found", "meta": [{"error": "App version not found", "code": "appVersionNotFound", "metadata": {"appVersionId": ["ExampleID0000000000102"]}}]}}}
+  },
+  "processNotFound": {
+    "old": {"status": 400, "body": {"error": {"code": "processNotFound", "message": "Process not found.", "meta": [{"error": "Process not found.", "code": "processNotFound", "metadata": null}]}}},
+    "new": {"status": 404, "body": {"error": {"code": "processNotFound", "message": "Process not found.", "meta": [{"error": "Process not found.", "code": "processNotFound", "metadata": {"processId": ["ExampleID0000000000103"]}}]}}}
+  },
+  "projectNotFound": {
+    "old": {"status": 400, "body": {"error": {"code": "projectNotFound", "message": "Project not found.", "meta": [{"error": "Project not found.", "code": "projectNotFound", "metadata": null}]}}},
+    "new": {"status": 404, "body": {"error": {"code": "projectNotFound", "message": "Project not found.", "meta": [{"error": "Project not found.", "code": "projectNotFound", "metadata": {"projectId": ["ExampleID0000000000077"]}}]}}}
+  },
+  "userDataNotFound": {
+    "old": {"status": 400, "body": {"error": {"code": "userDataNotFound", "message": "Service environment variable not found.", "meta": [{"error": "Service environment variable not found.", "code": "userDataNotFound", "metadata": null}]}}},
+    "new": {"status": 404, "body": {"error": {"code": "userDataNotFound", "message": "Service environment variable not found.", "meta": [{"error": "Service environment variable not found.", "code": "userDataNotFound", "metadata": {"userDataId": ["ExampleID0000000000104"]}}]}}}
+  },
+  "publicPortRoutingNotFound": {
+    "old": {"status": 400, "body": {"error": {"code": "publicPortRoutingNotFound", "message": "PublicPortRouting not found.", "meta": [{"error": "PublicPortRouting not found.", "code": "publicPortRoutingNotFound", "metadata": null}]}}},
+    "new": {"status": 404, "body": {"error": {"code": "publicPortRoutingNotFound", "message": "PublicPortRouting not found.", "meta": [{"error": "PublicPortRouting not found.", "code": "publicPortRoutingNotFound", "metadata": {"publicPortRoutingId": ["ExampleID0000000000105"]}}]}}}
+  },
+  "serviceStackTypeNotFound": {
+    "old": {"status": 400, "body": {"error": {"code": "serviceStackTypeNotFound", "message": "Service base not found.", "meta": [{"error": "Service base not found.", "code": "serviceStackTypeNotFound", "metadata": {"serviceStackTypeVersion": ["postgresql@99"]}}]}}},
+    "new": {"status": 404, "body": {"error": {"code": "serviceStackTypeNotFound", "message": "Service base not found.", "meta": [{"error": "Service base not found.", "code": "serviceStackTypeNotFound", "metadata": {"serviceStackTypeVersion": ["postgresql@99"]}}]}}}
+  },
+  "serviceStackTypeVersionNotFound": {
+    "old": {"status": 400, "body": {"error": {"code": "serviceStackTypeVersionNotFound", "message": "Service base version not found.", "meta": [{"error": "Service base version not found.", "code": "serviceStackTypeVersionNotFound", "metadata": null}]}}},
+    "new": {"status": 404, "body": {"error": {"code": "serviceStackTypeVersionNotFound", "message": "Service base version not found.", "meta": [{"error": "Service base version not found.", "code": "serviceStackTypeVersionNotFound", "metadata": {"serviceStackTypeVersionId": ["ExampleID0000000000106"]}}]}}}
+  },
+  "notFound": {
+    "old": {"status": 404, "body": {"error": {"code": "notFound", "message": "Not Found", "meta": [{"error": "Not Found", "code": "notFound", "metadata": null}]}}},
+    "new": {"status": 404, "body": {"error": {"code": "notFound", "message": "Not Found", "meta": [{"error": "Not Found", "code": "notFound", "metadata": null}]}}}
+  }
+}
