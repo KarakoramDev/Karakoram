@@ -72,10 +72,51 @@ These cross-engine constraints define the operating model; engine-specific limit
 - Result/rate/concurrency bounds are not query-cost guarantees. Stored data can inject prompts; confirmations do not provide rollback. RabbitMQ peeking consumes/requeues and therefore needs write access. Elasticsearch hidden/system/dot indices and streams backed by them are refused.
 - PostgreSQL's companion connects to the first scoped database (default `postgres`); existing PUBLIC grants are not revoked and can weaken scope isolation. See [scope and identity caveats](data-mcp.md#managed-identities-and-rotation).
 
+## Known issues in v0.4.9
+
+The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
+still apply to v0.4.9.
+
+<a id="mysql-gr-commit-stalls-after-lost-member-replacement"></a>
+
+- **After a lost MySQL Group Replication member is replaced, commits can stall
+  for several seconds at a time for about five minutes** (also present in
+  v0.4.7 and v0.4.8). When
+  `karactl clusters replace-member` replaces a member whose volume was lost, the
+  remaining members keep trying to reach the removed member for about five
+  minutes after its name is withdrawn. During that time a single commit can
+  take 4–5 seconds roughly every 14 seconds; writes continue between the stalls
+  and no acknowledged write is lost. A client with a short read timeout can get
+  error 2013 (`Lost connection to MySQL server`) at COMMIT even though the
+  transaction was committed. Replacing a healthy member is not affected.
+  Workaround: treat a timeout or error 2013 at COMMIT as an unknown outcome —
+  check whether the write was applied before retrying, or make writes
+  idempotent; a longer client read timeout (for example 10 seconds) can turn
+  these errors into slower commits; expect slower commits for about five
+  minutes after a lost-member replacement; keep automatic replacement of lost
+  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled. A fix is
+  planned for v0.4.10.
+
+<a id="status-during-long-operations"></a>
+
+- **During a long operation, status can report a serving cluster as
+  Degraded** (status only; also present in v0.4.7 and v0.4.8). While
+  `karactl clusters upgrade-agents`, `karactl clusters replace-member` or a
+  count or resource change waits on a stalled platform rollout, status can
+  show `Healthy=Unknown` (`ObservationStale` or `ObservationFailed`),
+  `AgentsCurrent=Unknown` and phase Degraded although the members and proxies
+  keep serving. One episode on Dokploy under heavy read load lasted 692
+  seconds. The status clears when health observation succeeds again or the
+  operation ends. Workaround: check serving directly with
+  `karactl clusters members` and client checks, and the operation's progress
+  with `karactl operations get`; resolve the stalled rollout (for example, free
+  scheduler capacity) rather than restarting members or the control plane. A
+  fix is planned for v0.4.10.
+
 ## Known issues in v0.4.8
 
 v0.4.8 is a hotfix that only changes how the Zerops provider classifies Zerops
-API errors; see the [v0.4.8 upgrade notes](upgrade.md#upgrading-to-v048). All
+API errors; see the [v0.4.8 upgrade notes](upgrade.md#upgrading-to-v048). All other
 [known issues in v0.4.7](#known-issues-in-v047) below remain present, and their
 workarounds still apply.
 
@@ -98,8 +139,9 @@ workarounds still apply.
 
 ## Known issues in v0.4.7
 
-These descriptions and workarounds are historical v0.4.7 guidance, not current
-v0.4.8 advice. Fixed dispositions identify the required upgrade actions.
+The non-Zerops issues and workarounds below apply to both v0.4.7 and v0.4.8.
+Only the issues marked fixed are resolved by upgrading to v0.4.9; the fixed
+dispositions identify the required upgrade actions.
 
 - **Zerops API error change** (v0.2.0–v0.4.7 on Zerops; **fixed in v0.4.8**).
   Once Zerops answers missing objects with HTTP 404 instead of HTTP 400, these
@@ -112,19 +154,19 @@ v0.4.8 advice. Fixed dispositions identify the required upgrade actions.
 <a id="dokploy-proxy-paused-update"></a>
 
 - **On Dokploy, a ProxySQL count or resource change can leave a cluster stuck**
-  (v0.4.7 only; ProxySQL in front of MySQL, PXC, PostgreSQL and Supabase). If the
+  (v0.4.7 and v0.4.8; ProxySQL in front of MySQL, PXC, PostgreSQL and Supabase). If the
   new proxy task does not become healthy (for example, the node lacks CPU or
   memory), Docker Swarm pauses the update. The existing proxies keep serving,
   but the operation stays Running for about 15 minutes before failing, cannot
   be cancelled, and afterwards the cluster stays Degraded: changing the proxy
   settings back is accepted but not applied, and agent upgrades are blocked.
-  There is no supported way to recover in v0.4.7. Before changing proxy count or
+  There is no supported way to recover in v0.4.7 or v0.4.8. Before changing proxy count or
   resources, make sure the nodes have spare capacity for the new proxy tasks.
   If an update pauses, keep the existing proxies running and do not edit the
   Swarm service by hand.
-  **Fixed in v0.4.8:** paused updates fail promptly; after repairing the cause,
+  **Fixed in v0.4.9:** paused updates fail promptly; after repairing the cause,
   submit a different proxy count/resource target to clear the failed receipt.
-  See [proxy recovery](upgrade.md#proxy-count-and-resource-changes).
+  See [proxy recovery](upgrade.md#ordinary-proxy-update-recovery-from-v047).
 
 <a id="mysql-gr-lost-member-cancellation"></a>
 
@@ -137,8 +179,8 @@ v0.4.8 advice. Fixed dispositions identify the required upgrade actions.
   The cluster keeps serving, but new replacements and agent upgrades are
   blocked and there is no supported way to recover in this release. Do not
   cancel these replacements once they have started; let them finish. If a
-  cluster is already stuck on v0.4.7, keep it serving and take a full backup.
-  **Fixed in v0.4.8:** joined confirmed-loss replacement completes forward on
+  cluster is already stuck on v0.4.7 or v0.4.8, keep it serving and take a full backup.
+  **Fixed in v0.4.9:** joined confirmed-loss replacement completes forward on
   cancellation; unjoined work rolls back its allocation and retains loss for a
   fresh replacement. Existing rollback owners settle after upgrade. Cancellation
   acknowledgement is not finished recovery; see
@@ -151,7 +193,7 @@ v0.4.8 advice. Fixed dispositions identify the required upgrade actions.
   on Dokploy runs out of memory and CPU while starting: it never reports Ready
   and the create operation fails after about 40 minutes. Workaround: create
   Neo4j clusters on Dokploy with at least 2 GiB of memory. Existing clusters are
-  not affected. **Fixed in v0.4.8:** new clusters/resource edits require 2 GiB
+  not affected. **Fixed in v0.4.9:** new clusters/resource edits require 2 GiB
   on all backends; unchanged legacy shapes are grandfathered, not automatically
   resized. See [sizing guidance](upgrade.md#neo4j-minimum-memory).
 
@@ -167,11 +209,11 @@ v0.4.8 advice. Fixed dispositions identify the required upgrade actions.
   with `karactl clusters members CLUSTER` (the `PLACEMENTGROUP` column shows the
   node). If two data members share a node, there is no reliable way to move one
   in this release: replacing again or draining nodes can make it worse. Keep
-  the cluster as it is on v0.4.7 and take a fresh full backup.
-  **Fixed in v0.4.8:** new Dokploy/Nomad imports preserve predecessor identity
+  the cluster as it is on v0.4.7 or v0.4.8 and take a fresh full backup.
+  **Fixed in v0.4.9:** new Dokploy/Nomad imports preserve predecessor identity
   and strictly exclude survivor nodes. Existing co-location needs inspection and
   repair; healthy GR replacement requires upgraded full-view survivor agents.
-  See [placement repair](upgrade.md#check-database-placement-after-v047-replacements).
+  See [placement repair](upgrade.md#check-database-placement-after-v047-or-v048-replacements).
 - **Karakoram's status checks cause heavy disk writes on the Dokploy manager**
   (also present in v0.2.0–v0.4.6). Karakoram reads Dokploy's API several times per
   second for each cluster, and Dokploy records every API-key use in its own
@@ -183,7 +225,7 @@ v0.4.8 advice. Fixed dispositions identify the required upgrade actions.
   Workaround: run the Dokploy manager on fast SSD storage and give it enough
   disk throughput for the number of clusters you manage; avoid co-locating
   other disk-heavy workloads on the manager.
-  **Fixed in v0.4.8:** control-plane-only snapshots and parallel observation reduce
+  **Fixed in v0.4.9:** control-plane-only snapshots and parallel observation reduce
   request amplification, not Dokploy accounting writes. Infrastructure sizing
   remains relevant; historical I/O figures are not a fixed-version guarantee.
   See [observation caveats](upgrade.md#companion-refresh-and-dokploy-observation).
@@ -199,7 +241,7 @@ v0.4.8 advice. Fixed dispositions identify the required upgrade actions.
   extra proxy instance and that the cluster is healthy; run the change in a
   maintenance window; if a proxy rollout stops or fails, don't resume the Docker
   Swarm service update by hand.
-  **Fixed in v0.4.8:** fixed agents plus the fixed control plane provide opted-in
+  **Fixed in v0.4.9:** fixed agents plus the fixed control plane provide opted-in
   task/revision-bound admission. Upgrade old marked agents before count/resource
   changes; surge capacity, no manual resume and daemon/executor-restart caveats
   remain. See [proxy recovery](upgrade.md#proxysql-admission-startup-and-recovery).
@@ -214,9 +256,9 @@ v0.4.8 advice. Fixed dispositions identify the required upgrade actions.
   Workaround: keep two proxy instances on Dokploy; if a proxy-count change
   fails, check the cluster's status and the Dokploy service before retrying,
   because the change has usually been applied.
-  **Fixed in v0.4.8:** concurrent bounded observations and snapshots correct the
+  **Fixed in v0.4.9:** concurrent bounded observations and snapshots correct the
   serialized-read mechanism, not all latency/network causes. Two proxies is not
-  a v0.4.8 maximum recommendation. See
+  a v0.4.9 maximum recommendation. See
   [observation changes](upgrade.md#companion-refresh-and-dokploy-observation).
 - **MySQL/PXC automatic lost-volume replacement is experimental and off by
   default.** Testing observed Group Replication quorum loss after an automatic

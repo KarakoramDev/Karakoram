@@ -187,7 +187,7 @@ preceding reconciliation, subject to platform retry deadlines.
 
 Availability is still evaluated every five seconds, with additional wakeups for
 failed heartbeat samples, changed sessions/identities and stale heartbeat
-samples. v0.4.8 agents push generic status and subscribed read-only native
+samples. v0.4.9 agents push generic status and subscribed read-only native
 observations every three seconds over their authenticated control-plane channel.
 Only allowlisted native reads can be subscribed, for ten minutes, renewed on
 each read or pushed hit. The control plane timestamps samples using the issue

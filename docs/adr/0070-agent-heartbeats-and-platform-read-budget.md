@@ -6,9 +6,9 @@ Status: Accepted
 
 Up to v0.4.7 every active cluster was observed by pulling: each reconcile pass (requeued at most five seconds after the previous one), each independent availability renewal and each backoff observation re-read the platform services and runtime tasks of every member and dialled every agent and every pinned proxy instance. Caches were pass-local by design, so nothing was shared between passes, loops or clusters. In relay-backed namespaces every pinned proxy connection additionally re-enumerated the member's tasks to authorize the dial.
 
-On Dokploy a MySQL Group Replication cluster with three proxies cost 66 GETs per status pass in v0.4.7 (28 after the v0.4.8 pass-local snapshot fix), PostgreSQL with two proxies 33 (16), Neo4j 12 (8). A lab with three such clusters measured 29 GET/s. Dokploy authenticates every REST request twice and better-auth writes the API-key row twice per verification, so each GET costs four `apikey` UPDATEs; the lab's Dokploy PostgreSQL sustained 116 UPDATE/s, about 1 MB/s and 233 write IOPS with no user activity. Request count is the only lever on the control-plane side. Zerops and Nomad have the same structure (estimated 18–30 and 38–77 requests per GR pass); Nomad adds placement and stop diagnostics per member on every pass.
+On Dokploy a MySQL Group Replication cluster with three proxies cost 66 GETs per status pass in v0.4.7 (28 after the v0.4.9 pass-local snapshot fix), PostgreSQL with two proxies 33 (16), Neo4j 12 (8). A lab with three such clusters measured 29 GET/s. Dokploy authenticates every REST request twice and better-auth writes the API-key row twice per verification, so each GET costs four `apikey` UPDATEs; the lab's Dokploy PostgreSQL sustained 116 UPDATE/s, about 1 MB/s and 233 write IOPS with no user activity. Request count is the only lever on the control-plane side. Zerops and Nomad have the same structure (estimated 18–30 and 38–77 requests per GR pass); Nomad adds placement and stop diagnostics per member on every pass.
 
-The goal for v0.4.8 is that an idle cluster costs less than 0.1–0.2 platform requests per second on every provider, with bursts only while operations run, without slowing failure detection beyond 15 seconds and without letting any safety decision consume cached state.
+The goal for v0.4.9 is that an idle cluster costs less than 0.1–0.2 platform requests per second on every provider, with bursts only while operations run, without slowing failure detection beyond 15 seconds and without letting any safety decision consume cached state.
 
 ## Decision
 
@@ -179,13 +179,13 @@ Missing-target legacy replies remain bounded without assuming a new target.
 Own generation, relevant persisted peer membership and credentials notify
 promptly, including during an operation. Platform-only peer recovery/removal/
 replacement instead uses listing drift or the ordinary minute pull. With
-working v0.4.8 heartbeats, normal detection-to-render-start is approximately
+working v0.4.9 heartbeats, normal detection-to-render-start is approximately
 60 s listing cadence + up to 5 s listing I/O + 3 s heartbeat wait; bounded
 sample collection can add another 4 s. Config HTTP/render/apply time follows.
 If the mutation epoch advanced after the last applied full payload, the next
 minute pull independently resolves peers freshly.
 
-A v0.4.8 agent whose heartbeat path is failing can retain conditional pulls:
+A v0.4.9 agent whose heartbeat path is failing can retain conditional pulls:
 its fallback is at most 60 s to listing + up to 5 s listing I/O + 60 s to the
 next pull (approximately 125 s before that pull's rendering/application).
 This is a degraded push path: pushed health evidence expires after 7 s and
@@ -281,11 +281,11 @@ PostgreSQL polling profile falls from about 6.6 GET/s in v0.4.7 to about
 That is **not a hard cap**: additional health cycles, triggers, changing local
 inputs, retries and independent pulls can add work. Tests exercise repeated
 drift/health cycles and quiescent heartbeat windows to ensure renders grow
-linearly with external triggers, never sustain themselves. The v0.4.9 plan is
+linearly with external triggers, never sustain themselves. The v0.4.10 plan is
 to reduce per-peer rendering cost through targeted reads/shared listings,
 scope mutation and listing dependencies to each cluster's own services, and
 enforce one render per listing drift. None of these additional improvements
-is implemented in v0.4.8.
+is implemented in v0.4.9.
 
 
 Rejected alternatives: using the 40-minute observation snapshot for config
@@ -321,7 +321,7 @@ window does not establish the same own/sibling split.
 
 This burst shape already existed in v0.4.7: the same two-second pending
 requeue, fresh lifecycle observations and two-attempt observation policy.
-v0.4.8 reduces baseline work per status pass (the reference PG status
+v0.4.9 reduces baseline work per status pass (the reference PG status
 fixture falls from **33 to 16 GETs**), but no head-to-head v0.4.7 total for
 this operation was measured. Cheaper passes and low idle traffic do not
 establish a low operation-wide total.
@@ -332,11 +332,11 @@ It is a **single backend-call scenario**, not a complete PG Manager
 operation budget. It does not account for all repeated lifecycle passes or
 their immediate second observation attempts.
 
-The v0.4.9 plan also includes an operation-pass read budget: avoid an immediate
+The v0.4.10 plan also includes an operation-pass read budget: avoid an immediate
 second observation while a receipt is pending, deduplicate snapshot reads
 across pre-/post-observations within a pass, slow the pending cadence where
 safe, and add end-to-end per-operation budget tests. These are planned
-changes, not behavior or guarantees implemented in v0.4.8; fresh safety
+changes, not behavior or guarantees implemented in v0.4.9; fresh safety
 decision points remain mandatory.
 
 
@@ -361,8 +361,8 @@ The reconciler has simulated-time tests for the steady schedule, discovery skipp
 
 ### Compatibility
 
-- **v0.4.7 and older agents** never heartbeat. Their reads miss and fall back to live pulls on every evaluation (unchanged detection), while platform reads still come from the snapshot. Pinned proxy dials in relay-backed namespaces still authorize against fresh tasks, so such clusters land between the old and new rates until `clusters upgrade-agents` (or the opt-in automatic rollout) installs v0.4.8 agents.
-- **v0.4.8 agents under an older control plane** receive 404 for the heartbeat endpoint, back off for 10 minutes and keep serving pulls exactly as before.
+- **v0.4.7 and older agents, plus v0.4.8 hotfix agents** never heartbeat. Their reads miss and fall back to live pulls on every evaluation (unchanged detection), while platform reads still come from the snapshot. Pinned proxy dials in relay-backed namespaces still authorize against fresh tasks, so such clusters land between the old and new rates until `clusters upgrade-agents` (or the opt-in automatic rollout) installs v0.4.9 agents.
+- **v0.4.9 agents under an older control plane** receive 404 for the heartbeat endpoint, back off for 10 minutes and keep serving pulls exactly as before.
 - Dokploy proxies expose their task ID only when they run with proxy serving admission (`KARAKORAM_TASK_ID`); unmarked proxies' pinned reads keep falling back to pulls.
 - The control-plane upgrade does not automatically redeploy members. Conditional
   configuration pulls require updated agent binaries; released agents that send
@@ -372,7 +372,7 @@ The reconciler has simulated-time tests for the steady schedule, discovery skipp
 
 - Idle request rates drop by more than two orders of magnitude. The idle-hour model includes 660 conditional-helper invocations across the three fixtures; these model calls alone are not end-to-end eligibility/full-render evidence. Separate production HTTP tests on every provider use a real running Manager's steady predicate and real MySQL/PostgreSQL renderers, obtain initial revisions from full authenticated responses, and perform 180/120 independently phased proxy-instance pulls per hour with zero configuration network starts. Storage-only changes and invalidation require full real rendering. The base observation/deep-reconcile budgets below remain model measurements per cluster (GR3 + three proxies / PostgreSQL + two proxies / Neo4j):
 
-  | Provider | Fresh status pass (requests) | Deep reconcile (requests) | Idle, v0.4.7 cadence (req/s) | Idle, v0.4.8 (req/s) |
+  | Provider | Fresh status pass (requests) | Deep reconcile (requests) | Idle, v0.4.7 cadence (req/s) | Idle, v0.4.9 (req/s) |
   |---|---|---|---|---|
   | Dokploy | 28 / 16 / 8 | 94 / 104 / 54 | 18.8 / 20.8 / 10.8 | 0.058 / 0.063 / 0.036 |
   | Zerops | 30 / 16 / 4 | 60 / 58 / 29 | 12.0 / 11.6 / 5.8 | 0.041 / 0.040 / 0.024 |

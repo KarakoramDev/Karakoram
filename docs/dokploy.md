@@ -155,7 +155,7 @@ A fixed agent deployed by an older control plane using a template that has never
 opted into control-plane serving admission retains native self-admission. This
 is not a downgrade guarantee: templates already opted in by a newer control
 plane keep requiring that protocol for new tasks. See the
-[v0.4.8 rollback warning](upgrade.md#compatibility-and-rollback).
+[v0.4.9 rollback warning](upgrade.md#compatibility-and-rollback).
 For an older marked agent under the fixed control plane, count/resource changes
 are rejected before submission with guidance to run `clusters upgrade-agents`
 first. The upgrade itself remains available because its replacement runs the
@@ -251,10 +251,10 @@ prompt-failed without retained terminal proof. Inspect and settle the original
 attempt before submitting a different corrected target; an unknown outcome is
 not permission to replay.
 
-**Known issue in v0.4.7 (fixed in v0.4.8):** an ordinary proxy count/resource
+**Known issue in v0.4.7 (fixed in v0.4.9):** an ordinary proxy count/resource
 update paused by Swarm can remain Running for about fifteen minutes before
 failing, cannot be cancelled, and can leave the cluster Degraded with a retained
-failed receipt; see [the historical warning and v0.4.8 recovery guidance](limitations.md#dokploy-proxy-paused-update).
+failed receipt; see [the historical warning and v0.4.9 recovery guidance](limitations.md#dokploy-proxy-paused-update).
 
 Inspect the Swarm service, incumbent and replacement health, config-pull
 connectivity, writer availability and surge capacity before recovery.
@@ -525,7 +525,7 @@ and discovery task snapshots are single-flighted.
 MySQL also shares these facts within its invalidatable reconcile read pass.
 MySQL discards its pass-local snapshots after an engine mutation or identity
 change; status-sweep memos never escape into the surrounding mutation context.
-Fresh passes retain the fresh-observation per-pass request bounds. Separately, v0.4.8 shares a
+Fresh passes retain the fresh-observation per-pass request bounds. Separately, v0.4.9 shares a
 platform snapshot below the HTTP client across passes and clusters of the same
 API origin + environment, solely for independent steady availability renewal.
 It checks `environment.one` within 60 seconds before serving entries and limits
@@ -785,7 +785,7 @@ check atomically.
 
 ### Detecting and repairing placement
 
-After upgrading from v0.4.7, inspect existing MySQL GR/PXC and PostgreSQL HA
+After upgrading from v0.4.7 or the v0.4.8 hotfix, inspect existing MySQL GR/PXC and PostgreSQL HA
 (including Supabase's PostgreSQL core) clusters:
 
 ```sh
@@ -808,7 +808,7 @@ not proof that repeat replacement will help.
 Take a fresh full backup and verify native quorum, replication and extra-member
 capacity. For healthy GR replacement, complete the full-view-capable survivor
 agent rollout **before** replacement; follow the
-[v0.4.8 procedure and legacy in-flight recovery](upgrade.md#gr-capability-and-legacy-recovery).
+[v0.4.9 procedure and legacy in-flight recovery](upgrade.md#gr-capability-and-legacy-recovery).
 PXC and PostgreSQL HA do not require GR views. Then replace **one of the
 co-located data members**, one operation at a time:
 
@@ -835,7 +835,7 @@ no CPU/memory headroom. Zerops does not expose this inventory and retains
 best-effort placement without a host-separation guarantee. Other engines retain
 their documented placement behavior. This is a control-plane correction; it does
 not automatically relocate already running members or rewrite already frozen
-imports. See [upgrade guidance](upgrade.md#upgrading-to-v048).
+imports. See [upgrade guidance](upgrade.md#upgrading-to-v049).
 
 ### Dokploy API-key accounting load
 
@@ -848,7 +848,7 @@ and `updatedAt` on every successful verification, so an unlimited-quota key
 can cause four `apikey` row updates per REST request even for a GET
 ([verification source](https://github.com/better-auth/better-auth/blob/v1.6.23/packages/api-key/src/routes/verify-api-key.ts#L184-L375)).
 Reducing redundant reads therefore reduces Dokploy database writes as well as
-HTTP traffic. v0.4.8's shared environment snapshot, heartbeat-backed availability
+HTTP traffic. v0.4.9's shared environment snapshot, heartbeat-backed availability
 renewal and 30-minute steady resync make that amplification apply to far fewer
 requests; they do not change Dokploy authentication accounting. Fresh operation
 passes retain the fresh-observation request bounds, and every actual pinned relay dial still requires

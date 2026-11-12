@@ -162,7 +162,7 @@ roughly deep/5 requests per second per cluster, in MySQL/PostgreSQL/Neo4j order:
 Dokploy **18.8/20.8/10.8**, Zerops **12/11.6/5.8**, Nomad **16.8/11.4/6.4**.
 v0.4.7's own Dokploy status pass was larger still: **66/33/12** requests.
 
-With older (v0.4.7) agents, steady renewal still pulls agents while platform
+With older (v0.4.7 or v0.4.8) agents, steady renewal still pulls agents while platform
 reads use the snapshot. Legacy renewal platform requests in the same topology
 order are Dokploy **10/8/0** (fresh pinned task authorizations, each with its own fresh service inspection), Zerops **12/8/0**,
 and Nomad **7/5/0**. Additional namespaces also perform a separate settled relay
@@ -215,14 +215,14 @@ can therefore cost about **2× v0.4.7's config-pull work during the operation**.
 Idle-hour behavior remains approximately **100× lower** for the reference
 PostgreSQL polling profile (about 6.6 GET/s before versus 0.063 GET/s steady);
 that workload-dependent comparison is not a configuration-only guarantee.
-For v0.4.9 the plan is targeted reads/shared listing to reduce per-peer
+For v0.4.10 the plan is targeted reads/shared listing to reduce per-peer
 render cost, per-cluster mutation/listing scoping, and a hard one-render/drift
-bound. Those further improvements are not present in v0.4.8.
+bound. Those further improvements are not present in v0.4.9.
 
 Own generation/peer/config changes remain prompt. A platform-only change is
 normally detected within the 60 s listing cadence plus up to 5 s listing I/O,
 then the next heartbeat (normally 3 s, plus up to 4 s sample collection) and
-fresh config rendering/application. If a v0.4.8 agent's heartbeat path fails,
+fresh config rendering/application. If a v0.4.9 agent's heartbeat path fails,
 listing plus the next conditional minute pull can take approximately
 **125 s before fresh rendering**, plus config I/O/application. Push health
 evidence is already stale after 7 s and observation falls back to fresh
@@ -251,18 +251,18 @@ the same per-cluster attribution.
 
 These mechanisms are unchanged **in kind** from v0.4.7: two-second pending
 requeues, fresh lifecycle observations and the two-attempt observation
-policy. v0.4.8's reference PG status pass is cheaper (**33 → 16 GETs**),
-but this is not a measured v0.4.7/v0.4.8 total-operation comparison.
+policy. v0.4.9's reference PG status pass is cheaper (**33 → 16 GETs**),
+but this is not a measured v0.4.7/v0.4.9 total-operation comparison.
 The **81-request harness scenario (78 GETs + 3 POSTs)** is one MySQL backend
 count change, completion wait and fresh observation—not a complete PG
 operation budget. Operation duration, phase transitions and retries matter.
 
-For v0.4.9, the operation-pass plan is to avoid the immediate second
+For v0.4.10, the operation-pass plan is to avoid the immediate second
 observation while a receipt is pending, deduplicate reads across a pass's
 pre-/post-observations, use a slower pending cadence where safe and enforce
 end-to-end per-operation budget tests. This work is additional to the
 per-cluster notification/listing scoping above and is **not implemented
-in v0.4.8**.
+in v0.4.9**.
 
 
 

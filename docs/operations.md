@@ -159,7 +159,7 @@ emits a new warning; discarded observations do not emit warnings.
 Take a fresh full backup and verify native quorum, replication and temporary
 extra-member capacity. For healthy GR replacement, first complete the surviving
 data-agent executable rollout with full `GroupView` capability; see the
-[v0.4.8 ordering and supported legacy in-flight recovery](upgrade.md#gr-capability-and-legacy-recovery).
+[v0.4.9 ordering and supported legacy in-flight recovery](upgrade.md#gr-capability-and-legacy-recovery).
 PXC and PostgreSQL HA have no GR-view prerequisite. Then, one operation at a time:
 
 ```sh
@@ -183,7 +183,7 @@ edit it to steer placement. Let the existing recovery settle, then inspect/repai
 This does not add MySQL/PXC `members move` support and does not provide host
 placement guarantees on Zerops. Do not drain occupied database nodes to steer a
 replacement. Existing placements are not automatically changed by upgrade; see
-[v0.4.8 upgrade checks](upgrade.md#upgrading-to-v048) and
+[v0.4.9 upgrade checks](upgrade.md#upgrading-to-v049) and
 [Dokploy placement recovery](dokploy.md#detecting-and-repairing-placement).
 
 ## Moving a member
@@ -268,7 +268,7 @@ allocation IDs need not change. For component artifact rolls after an upgrade,
 see [Supabase restart and member software](supabase/operations.md#cluster-restart-and-member-software).
 
 Agent connectivity records a successful authenticated agent response, including
-usable heartbeat evidence, not native database readiness. v0.4.8 agents send
+usable heartbeat evidence, not native database readiness. v0.4.9 agents send
 heartbeats every **three seconds** over the same agent-to-control-plane HTTPS
 channel as configuration pulls (through the existing agent stream in relayed
 namespaces). Samples are usable for **seven seconds** and retain their
@@ -612,7 +612,7 @@ For `reason: ClusterSpecChangeRequested`, the message summarizes up to the first
 
 Agents pin the internal CA, authenticate with a per-member token and pull only their assigned configuration. They apply usable cached configuration at startup, retry first configuration every **five seconds**, and normally refresh every **60 seconds**. Cached members can keep running during control-plane unavailability; uncached startup cannot. Stateless caches do not survive runtime replacement.
 
-Separately, v0.4.8 agents push heartbeats to `POST /v1/agent/heartbeat` on that
+Separately, v0.4.9 agents push heartbeats to `POST /v1/agent/heartbeat` on that
 authenticated channel every **three seconds**, carrying generic status and
 subscribed read-only native observations. Configuration remains pull-based:
 the initial five-second retry and normal 60-second refresh remain, with an

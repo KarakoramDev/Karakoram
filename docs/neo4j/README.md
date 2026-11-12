@@ -16,7 +16,7 @@ Karakoram operates a native [Neo4j](https://neo4j.com/) Community server with on
 | TLS | Required; cluster CA, `selfSigned` by default or `userProvided` |
 | Recovery | Offline `dump` of `system` and `neo4j`; every backup is an outage |
 
-**Fixed in v0.4.8:** new clusters and resource changes require 2 GiB minimum RAM on all backends; unchanged legacy shapes are grandfathered, not automatically resized. See [upgrade sizing guidance](../upgrade.md#neo4j-minimum-memory).
+**Fixed in v0.4.9:** new clusters and resource changes require 2 GiB minimum RAM on all backends; unchanged legacy shapes are grandfathered, not automatically resized. See [upgrade sizing guidance](../upgrade.md#neo4j-minimum-memory).
 
 Inspect `karactl providers get neo4j -o json` for the running catalog. Native downloads have exact sizes, SHA-256 hashes and upstream provenance in the [artifact lock](../../internal/engine/nativeartifacts/lock.json). An operator mirror takes precedence but must serve identical bytes; see [native artifacts](../native-artifacts.md). The member supervises the server JVM directly rather than retaining the launcher's additional JVM.
 

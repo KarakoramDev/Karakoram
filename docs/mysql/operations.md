@@ -501,8 +501,12 @@ the outcome is unknown: check whether the write landed before replaying it.
 Use bounded, idempotent application retry for both errors.
 
 Member replacement can also make commits slow. While a replacement member
-joins, and for several minutes after the replaced member is retired, a Group
-Replication `COMMIT` can occasionally take several seconds. A client whose read
+joins, a Group Replication `COMMIT` can occasionally take several seconds.
+After a member whose volume was lost is replaced, commits can also stall for
+4–5 seconds at a time for about five minutes after the lost member is retired;
+replacing a healthy member does not have this window. This is a
+[known issue](../limitations.md#mysql-gr-commit-stalls-after-lost-member-replacement)
+with a fix planned for v0.4.10. A client whose read
 timeout expires during `COMMIT` sees error 2013 ("Lost connection to MySQL
 server during query"), usually without a SQLSTATE, and does not learn the
 outcome. In testing, every commit that timed out this way had been applied.
@@ -599,7 +603,7 @@ complete `karactl -n NS clusters upgrade-agents CLUSTER --wait` **before**
 starting them or healthy placement repair. If an unapplied scale-in desired
 count blocks rollout, restore that unapplied count, upgrade, then reapply scale-in.
 Unknown/unreachable capability also refuses admission. Exact refusal messages and
-the ordered procedure are in [the v0.4.8 guide](../upgrade.md#gr-capability-and-legacy-recovery).
+the ordered procedure are in [the v0.4.9 guide](../upgrade.md#gr-capability-and-legacy-recovery).
 
 Two exceptions use the weaker released ONLINE/count proof, **not** full UUID-set
 convergence:
@@ -790,17 +794,19 @@ message and conditions for the underlying maintenance blocker. The queued
 operation starts automatically once the current owner settles; do not submit
 duplicate replacements while it waits.
 
-**Historical v0.4.7 known issue — fixed in v0.4.8:** cancelling confirmed-loss
+**Historical v0.4.7 known issue — fixed in v0.4.9:** cancelling confirmed-loss
 GR replacement could leave the serving cluster stuck waiting for its lost
-predecessor. In v0.4.8 a joined replacement completes forward; before join,
+predecessor. In v0.4.9 a joined replacement completes forward; before join,
 cancellation rolls back the allocation and retains loss for a fresh replacement.
 Cancellation acknowledgement is not completed recovery. See
 [the historical issue](../limitations.md#mysql-gr-lost-member-cancellation) and
 [current retirement/recovery guidance](#gr-retirement-and-legacy-recovery).
 
 Explicit replacement is unchanged and retains the native safety checks below.
-Expect occasional multi-second commits during and for several minutes after a
-replacement; a commit that times out may still have been applied (see
+Expect occasional multi-second commits while the replacement joins and, when
+the replaced member was lost, for about five minutes after it is retired
+([known issue](../limitations.md#mysql-gr-commit-stalls-after-lost-member-replacement));
+a commit that times out may still have been applied (see
 [client errors during rollout and replacement](#agent-rollout)).
 While a confirmed-lost member awaits explicit replacement, new rolling
 version/resource/parameter/proxy changes are deferred without taking maintenance
