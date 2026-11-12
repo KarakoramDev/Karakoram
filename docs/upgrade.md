@@ -69,6 +69,23 @@ v0.4.8 changes nothing else. The
 [known issues in v0.4.7](#known-issues-in-v047) remain present, and their
 workarounds still apply.
 
+- **After a lost MySQL Group Replication member is replaced, commits can stall
+  for several seconds at a time for about five minutes**. When
+  `karactl clusters replace-member` replaces a member whose volume was lost, the
+  remaining members keep trying to reach the removed member for about five
+  minutes after its name is withdrawn. During that time a single commit can
+  take 4–5 seconds roughly every 14 seconds; writes continue between the stalls
+  and no acknowledged write is lost. A client with a short read timeout can get
+  error 2013 (`Lost connection to MySQL server`) at COMMIT even though the
+  transaction was committed. Replacing a healthy member is not affected.
+  Workaround: treat a timeout or error 2013 at COMMIT as an unknown outcome —
+  check whether the write was applied before retrying, or make writes
+  idempotent; a longer client read timeout (for example 10 seconds) can turn
+  these errors into slower commits; expect slower commits for about five
+  minutes after a lost-member replacement; keep automatic replacement of lost
+  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled. A fix is
+  planned for v0.4.10.
+
 ## Upgrading to v0.4.7
 
 v0.4.7 includes the [v0.4.6 security hotfix](#upgrading-to-v046)
