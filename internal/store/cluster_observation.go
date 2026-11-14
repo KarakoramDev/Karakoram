@@ -78,11 +78,8 @@ AND updated=? AND internal=? AND status=?`,
 	return true, nil
 }
 
-// Convergence records track ordinary Sync; they do not own a native operation
-// receipt. Only imperative Running work excludes independent observation. Inspect
-// this under the same writer transaction as publication so operation admission
-// cannot race the check, and reuse the domain classification rather than a SQL
-// copy of its operation-kind list.
+// Check operation admission under the publication transaction as well as in the
+// reconciler. A newly admitted destructive operation must discard an older sample.
 func runningImperativeObservationOwner(ctx context.Context, tx *sql.Tx, ref domain.ClusterRef) (bool, error) {
 	rows, err := tx.QueryContext(ctx, "SELECT json_extract(data,'$.kind') FROM records WHERE kind='operation' AND scope=? AND phase='Running'", ref.Key())
 	if err != nil {
@@ -94,7 +91,7 @@ func runningImperativeObservationOwner(ctx context.Context, tx *sql.Tx, ref doma
 		if err := rows.Scan(&kind); err != nil {
 			return false, err
 		}
-		if !domain.IsConvergenceOperation(kind) {
+		if !domain.AllowsIndependentObservation(kind) {
 			return true, nil
 		}
 	}

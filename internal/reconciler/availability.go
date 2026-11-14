@@ -15,9 +15,10 @@ import (
 )
 
 // renewAvailability does not share the lifecycle worker's mutable Context or
-// Cluster. Provider-owned changes made by Status are deliberately discarded;
-// only a fenced availability sample can be published. Imperative operations
-// retain their existing serialized observation/checkpoint ownership.
+// Cluster. Provider changes to that Cluster are deliberately discarded; only a
+// fenced availability sample can be published. Existing authoritative continuity
+// checks may still persist fail-closed safety-journal evidence independently.
+// Observation-safe operations release publication ownership during their attempt.
 func (m *Manager) renewAvailability(ctx context.Context, ref domain.ClusterRef) error {
 	ctx = infra.WithRequestCaller(ctx, infra.CallerAvailability)
 	ctx = engine.WithObservationPass(ctx)
@@ -32,22 +33,22 @@ func (m *Manager) renewAvailability(ctx context.Context, ref domain.ClusterRef) 
 	if !canObserveAvailability(c) {
 		return nil
 	}
+	p, err := m.opts.Registry.Get(c.Spec.Provider)
+	if err != nil {
+		return err
+	}
 	ops, err := m.opts.Store.ListOperations(ctx, ref, domain.PhaseRunning)
 	if err != nil {
 		return err
 	}
 	for _, op := range ops {
-		if !domain.IsConvergenceOperation(op.Kind) {
+		if !canObserveDuringOperation(p, op.Kind) {
 			return nil
 		}
 	}
 	before := *c
 	before.Internal = bytes.Clone(c.Internal)
 	before.Status.Conditions = slices.Clone(c.Status.Conditions)
-	p, err := m.opts.Registry.Get(c.Spec.Provider)
-	if err != nil {
-		return err
-	}
 	rc := m.opts.Context
 	rc.Cluster, rc.Events, rc.AvailabilityOnly = c, m, true
 	for _, condition := range c.Status.Conditions {
@@ -66,12 +67,24 @@ func (m *Manager) renewAvailability(ctx context.Context, ref domain.ClusterRef) 
 	}
 	rc.Dialer = m.opts.Namespaces.Dialer(rc.Namespace)
 	rc.AgentURL = m.opts.Namespaces.AgentURL(rc.Namespace)
-	status, _ := m.observeSteadyStatus(ctx, p, &rc)
+	status, observationErr := m.observeSteadyStatus(ctx, p, &rc)
+	if observationErr != nil {
+		rc.Logger.Debug("availability observation failed", "cluster", ref.Key(), "stage", "availability.observe")
+	}
 	status.ObservedGeneration = before.Status.ObservedGeneration
 	engine.ApplyDeploymentStatus(&rc, &status)
 	preservePublishedEndpointFailure(before.Status.Conditions, &status)
 	preserveMaintenance(&before, &status)
 	preserveAvailabilityLifecycle(before.Status, &status, rc.Clock.Now())
+	for _, op := range ops {
+		if !domain.IsConvergenceOperation(op.Kind) {
+			// Progress belongs to the operation even when its phase happens to
+			// be Ready. Availability may still withdraw health and Ready.
+			status.Message = before.Status.Message
+			status.Conditions = rebaseOperationConditions(before.Status.Conditions, before.Status.Conditions, status.Conditions)
+			break
+		}
+	}
 	preserveTransitions(before.Status.Conditions, status.Conditions)
 	started := time.Now()
 	published, err := m.opts.Store.UpdateClusterObservation(ctx, &before, previousStatus, status)
@@ -83,6 +96,90 @@ func (m *Manager) renewAvailability(ctx context.Context, ref domain.ClusterRef) 
 		m.publishedAvailability(ctx, ref, status)
 	}
 	return err
+}
+
+func canObserveDuringOperation(p engine.Provider, kind string) bool {
+	if !domain.AllowsIndependentObservation(kind) {
+		return false
+	}
+	policy, ok := p.(engine.OperationObservationPolicy)
+	return !ok || policy.ObserveDuringOperation(kind)
+}
+
+// Rebase observation-owned fields under the publication gate. Internal, applied
+// generation and explicitly classified lifecycle receipts belong to the operation;
+// all other conditions come exclusively from the newest complete observation.
+func rebaseOperationAvailability(before domain.ClusterStatus, operation *domain.ClusterStatus, current domain.ClusterStatus) {
+	// A lifecycle phase retained by renewal is not a newer health verdict:
+	// it must not undo the provider's explicit completion of that lifecycle.
+	// Ready/Degraded observations still supersede an earlier provider verdict.
+	if operation.Phase == before.Phase ||
+		(operation.Phase == domain.PhaseReady || operation.Phase == domain.PhaseDegraded) &&
+			(current.Phase == domain.PhaseReady || current.Phase == domain.PhaseDegraded) {
+		operation.Phase = current.Phase
+	}
+	if operation.Message == before.Message {
+		operation.Message = current.Message
+	}
+	operation.Conditions = rebaseOperationConditions(before.Conditions, operation.Conditions, current.Conditions)
+	operation.ObservedAt, operation.ObservationEpoch = current.ObservedAt, current.ObservationEpoch
+	operation.Agents, operation.Members = current.Agents, current.Members
+	operation.Version, operation.FCV = current.Version, current.FCV
+	operation.Connection, operation.Backup = current.Connection, current.Backup
+	operation.Placement, operation.DataMcp = current.Placement, current.DataMcp
+}
+
+// Unknown condition types are observation-owned: a diagnostic omitted after
+// recovery must disappear. Only these explicit lifecycle/operation receipts may
+// survive a health sweep; this is deliberately not the readiness-expiry predicate.
+func operationOwnedCondition(condition domain.Condition) bool {
+	switch condition.Type {
+	case "OperationReceipt", "MaintenanceWindow":
+		return true
+	case "Ready":
+		if condition.Status == "True" {
+			return false
+		}
+		switch condition.Reason {
+		case "LifecyclePending", "WaitingForWindow", "Restoring", "RestoreFinished":
+			return true
+		}
+	case "InitialDataSource":
+		return condition.Status == "False" && condition.Reason == "RestoreAborted"
+	case "PublishedEndpoint":
+		return condition.Status == "False" && condition.Reason == "PublishedEndpointRepairExhausted"
+	}
+	return false
+}
+
+func rebaseOperationConditions(before, operation, current []domain.Condition) []domain.Condition {
+	for _, old := range before {
+		if !operationOwnedCondition(old) {
+			continue
+		}
+		if !slices.ContainsFunc(operation, func(condition domain.Condition) bool { return condition.Type == old.Type }) {
+			current = slices.DeleteFunc(current, func(condition domain.Condition) bool {
+				return condition.Type == old.Type && operationOwnedCondition(condition)
+			})
+		}
+	}
+	for _, condition := range operation {
+		if !operationOwnedCondition(condition) {
+			continue
+		}
+		index := slices.IndexFunc(before, func(old domain.Condition) bool { return old.Type == condition.Type })
+		if index >= 0 && before[index] == condition &&
+			slices.ContainsFunc(current, func(observed domain.Condition) bool { return observed.Type == condition.Type }) {
+			continue
+		}
+		index = slices.IndexFunc(current, func(old domain.Condition) bool { return old.Type == condition.Type })
+		if index < 0 {
+			current = append(current, condition)
+		} else {
+			current[index] = condition
+		}
+	}
+	return current
 }
 
 // Lifecycle phase does not determine whether existing members need fresh health.

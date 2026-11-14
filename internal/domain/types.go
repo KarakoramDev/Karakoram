@@ -630,6 +630,23 @@ func IsConvergenceOperation(kind string) bool {
 	}
 }
 
+// AllowsIndependentObservation identifies work that does not replace the data set
+// or its access credentials. Observation may report an intermediate failure, but
+// must never perform lifecycle mutations or authorize the operation's next step.
+// Unknown operations, restore, quorum recovery and credential changes stay isolated.
+func AllowsIndependentObservation(kind string) bool {
+	if IsConvergenceOperation(kind) {
+		return true
+	}
+	switch kind {
+	case OperationUpgradeAgents, OperationReplaceMember, OperationRestart,
+		OperationBackup, OperationDeleteBackup, OperationRebalance, OperationRaiseFCV:
+		return true
+	default:
+		return false
+	}
+}
+
 // Terminal reports whether an operation no longer owns queue work.
 func (o Operation) Terminal() bool {
 	return o.Phase == PhaseSucceeded || o.Phase == PhaseFailed || o.Phase == PhaseCancelled

@@ -97,10 +97,12 @@ func TestClusterObservationFencesRawStatusBeforeReadTimeProjection(t *testing.T)
 	}
 }
 
-func TestClusterObservationAllowsConvergenceButNotImperativeOwners(t *testing.T) {
+func TestClusterObservationAllowsSafeOperationOwners(t *testing.T) {
 	for _, kind := range []string{domain.OperationCreate, domain.OperationUpdate, domain.OperationTLS,
 		domain.OperationUpgrade, domain.OperationDelete, domain.OperationResume,
-		domain.OperationRestore, domain.OperationRestart, domain.OperationBackup, "initial-restore", "future-native-operation"} {
+		domain.OperationRestore, domain.OperationRestart, domain.OperationBackup, domain.OperationUpgradeAgents,
+		domain.OperationReplaceMember, domain.OperationDeleteBackup, domain.OperationRotateTLS,
+		domain.OperationRotateSystemUser, "recover-quorum", "initial-restore", "future-native-operation"} {
 		t.Run(kind, func(t *testing.T) {
 			st, _ := testStore(t)
 			ctx := t.Context()
@@ -121,7 +123,10 @@ func TestClusterObservationAllowsConvergenceButNotImperativeOwners(t *testing.T)
 			status := domain.ClusterStatus{Phase: domain.PhaseInitializing, ObservedAt: time.Now(),
 				ObservationEpoch: "current-process", ObservedGeneration: 99}
 			published, err := st.UpdateClusterObservation(ctx, before, checkpoint, status)
-			if err != nil || published != domain.IsConvergenceOperation(kind) {
+			want := domain.IsConvergenceOperation(kind) || kind == domain.OperationRestart ||
+				kind == domain.OperationBackup || kind == domain.OperationUpgradeAgents ||
+				kind == domain.OperationReplaceMember || kind == domain.OperationDeleteBackup
+			if err != nil || published != want {
 				t.Fatal("incorrect operation ownership classification", kind, published, err)
 			}
 			stored, err := st.GetCluster(ctx, c.Ref())

@@ -18,7 +18,7 @@ type observationPass struct {
 }
 
 // WithObservationPass starts a new, bounded-lifetime observation cache. Call it
-// once at the reconcile boundary, not for each status attempt or retry. Derived
+// once at the reconcile or post-operation boundary, not for each status retry. Derived
 // contexts share the cache; a new pass never inherits an earlier pass's samples.
 func WithObservationPass(ctx context.Context) context.Context {
 	return context.WithValue(ctx, observationPassKey{}, new(observationPass))

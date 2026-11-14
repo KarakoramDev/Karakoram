@@ -27,6 +27,31 @@ import (
 	"modernc.org/sqlite"
 )
 
+func TestRebaseOperationAvailabilityPhaseOwnership(t *testing.T) {
+	currentPhases := []domain.Phase{domain.PhaseReady, domain.PhaseDegraded, domain.PhaseUpdating}
+	for _, tt := range []struct {
+		name     string
+		provider domain.Phase
+		want     [3]domain.Phase
+	}{
+		{"unchanged", domain.PhaseUpdating, [3]domain.Phase{domain.PhaseReady, domain.PhaseDegraded, domain.PhaseUpdating}},
+		{"ready", domain.PhaseReady, [3]domain.Phase{domain.PhaseReady, domain.PhaseDegraded, domain.PhaseReady}},
+		{"degraded", domain.PhaseDegraded, [3]domain.Phase{domain.PhaseReady, domain.PhaseDegraded, domain.PhaseDegraded}},
+		{"lifecycle", domain.PhaseRestoring, [3]domain.Phase{domain.PhaseRestoring, domain.PhaseRestoring, domain.PhaseRestoring}},
+	} {
+		for i, current := range currentPhases {
+			t.Run(tt.name+"/"+string(current), func(t *testing.T) {
+				before := domain.ClusterStatus{Phase: domain.PhaseUpdating}
+				operation := domain.ClusterStatus{Phase: tt.provider}
+				rebaseOperationAvailability(before, &operation, domain.ClusterStatus{Phase: current})
+				if operation.Phase != tt.want[i] {
+					t.Fatalf("provider=%s current=%s: phase=%s want=%s", tt.provider, current, operation.Phase, tt.want[i])
+				}
+			})
+		}
+	}
+}
+
 type blockedSyncProvider struct {
 	*fakeProvider
 	started      chan struct{}
@@ -472,4 +497,153 @@ func TestPreliminaryPublicationFailureRetainsGateThroughFallback(t *testing.T) {
 			t.Fatal("expected one failed preliminary write, one fallback and one failed-health publication", writes.Load())
 		}
 	})
+}
+
+func TestPostOperationObservationFailureLogsStage(t *testing.T) {
+	p := &operationProvider{fakeProvider: &fakeProvider{}}
+	m, st := newTestManager(t, p)
+	var logs bytes.Buffer
+	m.opts.Context.Logger = slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"},
+		Status: domain.ClusterStatus{Phase: domain.PhaseReady}}
+	if err := st.CreateCluster(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.EnqueueOperation(t.Context(), &domain.Operation{Cluster: c.Name,
+		Kind: domain.OperationUpgradeAgents, Phase: domain.PhaseRunning}); err != nil {
+		t.Fatal(err)
+	}
+	p.runFn = func(*engine.Context, *domain.Operation) (engine.OpResult, error) {
+		return engine.OpResult{RequeueAfter: time.Minute}, nil
+	}
+	p.statusFn = func(*engine.Context) (domain.ClusterStatus, error) {
+		return domain.ClusterStatus{}, errors.New("native observation unavailable")
+	}
+	if _, err := m.reconcile(t.Context(), c.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(logs.String(), `"stage":"operation.post-attempt.observe"`) ||
+		!strings.Contains(logs.String(), `"cluster":"demo"`) ||
+		!strings.Contains(logs.String(), `"error":"native observation unavailable"`) {
+		t.Fatal("post-attempt failure lacks diagnostic attribution", logs.String())
+	}
+}
+
+func TestAvailabilityPreservesOperationOwnedConditions(t *testing.T) {
+	p := &operationProvider{fakeProvider: &fakeProvider{}}
+	m, st := newTestManager(t, p)
+	c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"},
+		Internal: json.RawMessage(`{"operation":"waiting"}`),
+		Status: domain.ClusterStatus{Phase: domain.PhaseUpdating, Message: "operation progress",
+			Conditions: []domain.Condition{{Type: "Ready", Status: "False", Reason: "LifecyclePending"},
+				{Type: "OperationReceipt", Status: "True", Reason: "Recorded"}},
+			Members: []domain.MemberStatus{{Name: "member"}}}}
+	if err := st.CreateCluster(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.EnqueueOperation(t.Context(), &domain.Operation{Cluster: c.Name,
+		Kind: domain.OperationUpgradeAgents, Phase: domain.PhaseRunning}); err != nil {
+		t.Fatal(err)
+	}
+	p.statusFn = func(rc *engine.Context) (domain.ClusterStatus, error) { return operationHealth(rc), nil }
+	if err := m.renewAvailability(t.Context(), c.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := st.GetCluster(t.Context(), c.Ref())
+	if err != nil || stored.Status.Phase != domain.PhaseUpdating || stored.Status.Message != "operation progress" ||
+		string(stored.Internal) != `{"operation":"waiting"}` || !stored.Status.Members[0].Health {
+		t.Fatal("renewal changed operation-owned lifecycle", stored, err)
+	}
+	receipt, ready := false, false
+	for _, condition := range stored.Status.Conditions {
+		receipt = receipt || condition.Type == "OperationReceipt" && condition.Reason == "Recorded"
+		ready = ready || condition.Type == "Ready" && condition.Status == "False" && condition.Reason == "LifecyclePending"
+	}
+	if !receipt || !ready {
+		t.Fatal("renewal erased operation-owned conditions", stored.Status.Conditions)
+	}
+}
+
+func TestAvailabilityReplacesRecoveredObservationConditions(t *testing.T) {
+	for _, diagnostic := range []domain.Condition{
+		{Type: "Placement/member", Status: "False", Reason: "BackendPlacementFailed"},
+		{Type: "Observation/member", Status: "False", Reason: "AgentUnavailable"},
+		{Type: "NativeObservationFailed", Status: "True", Reason: "NativeReadFailed"},
+		{Type: "Process/member/database", Status: "False", Reason: "ProcessPaused"},
+		{Type: "RuntimeStop/allocation", Status: "False", Reason: "BackendStopStalled"},
+		{Type: "ProviderSpecificRecovered", Status: "False", Reason: "TransientFailure"},
+	} {
+		for _, attempt := range []bool{false, true} {
+			t.Run(diagnostic.Type+map[bool]string{false: "/renewal", true: "/nonterminal-attempt"}[attempt], func(t *testing.T) {
+				p := &operationProvider{fakeProvider: &fakeProvider{}}
+				m, st := newTestManager(t, p)
+				m.opts.Context.ObservationEpoch = "current-process"
+				c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"},
+					Internal: json.RawMessage(`{"operation":"waiting"}`)}
+				c.Status = operationHealth(&engine.Context{Clock: m.opts.Context.Clock})
+				c.Status.ObservedAt, c.Status.ObservationEpoch = time.Now(), "current-process"
+				c.Status.Conditions = append(c.Status.Conditions, diagnostic,
+					domain.Condition{Type: "OperationReceipt", Status: "True", Reason: "Recorded"})
+				if err := st.CreateCluster(t.Context(), c); err != nil {
+					t.Fatal(err)
+				}
+				op := &domain.Operation{ID: "rollout", Cluster: c.Name,
+					Kind: domain.OperationUpgradeAgents, Phase: domain.PhaseRunning}
+				if err := st.EnqueueOperation(t.Context(), op); err != nil {
+					t.Fatal(err)
+				}
+				p.statusFn = func(rc *engine.Context) (domain.ClusterStatus, error) {
+					return operationHealth(rc), nil // Recovered: the diagnostic is absent.
+				}
+				p.runFn = func(rc *engine.Context, _ *domain.Operation) (engine.OpResult, error) {
+					rc.Cluster.Internal = json.RawMessage(`{"operation":"progress"}`)
+					for i := range rc.Cluster.Status.Conditions {
+						condition := &rc.Cluster.Status.Conditions[i]
+						if condition.Type == diagnostic.Type {
+							// A changed earlier observation is still not a receipt.
+							condition.Reason = "EarlierSafetyRead"
+						}
+						if condition.Type == "OperationReceipt" {
+							condition.Reason = "CheckpointAdvanced"
+						}
+					}
+					return engine.OpResult{Step: "next", Checkpoint: json.RawMessage(`{"receipt":"pending"}`),
+						RequeueAfter: time.Minute}, nil
+				}
+				if attempt {
+					if _, err := m.reconcile(t.Context(), c.Ref()); err != nil {
+						t.Fatal(err)
+					}
+				} else if err := m.renewAvailability(t.Context(), c.Ref()); err != nil {
+					t.Fatal(err)
+				}
+				stored, err := st.GetCluster(t.Context(), c.Ref())
+				if err != nil {
+					t.Fatal(err)
+				}
+				receipt := false
+				for _, condition := range stored.Status.Conditions {
+					if condition.Type == diagnostic.Type {
+						t.Fatal("recovered observation diagnostic resurrected", condition)
+					}
+					receipt = receipt || condition.Type == "OperationReceipt" &&
+						condition.Reason == map[bool]string{false: "Recorded", true: "CheckpointAdvanced"}[attempt]
+				}
+				if !receipt || stored.Status.Phase != domain.PhaseReady || !stored.Status.Members[0].Health {
+					t.Fatal("fresh health or operation receipt lost", stored.Status)
+				}
+				tracked, err := st.GetOperation(t.Context(), op.ID)
+				if err != nil || tracked.Phase != domain.PhaseRunning {
+					t.Fatal("observation completed the operation", tracked, err)
+				}
+				if attempt && (tracked.Step != "next" || string(tracked.Checkpoint) != `{"receipt":"pending"}` ||
+					string(stored.Internal) != `{"operation":"progress"}`) {
+					t.Fatal("post-attempt observation erased the checkpoint", tracked, stored.Internal)
+				}
+				if !attempt && string(stored.Internal) != `{"operation":"waiting"}` {
+					t.Fatal("renewal changed provider state", stored.Internal)
+				}
+			})
+		}
+	}
 }

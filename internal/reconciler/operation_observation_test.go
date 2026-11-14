@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -334,4 +336,257 @@ type recoveredBackoffNamespace struct {
 
 func (n recoveredBackoffNamespace) Backend(string) (infra.Backend, error) {
 	return n.DefaultBackend, nil
+}
+
+func operationHealth(rc *engine.Context) domain.ClusterStatus {
+	return domain.ClusterStatus{Phase: domain.PhaseReady,
+		Conditions: []domain.Condition{{Type: "Ready", Status: "True"}, {Type: "Healthy", Status: "True"}},
+		Members: []domain.MemberStatus{{Name: "member", Health: true,
+			Agent: domain.AgentStatus{Healthy: true, LastSeen: rc.Clock.Now(), Build: "previous-build"}}}}
+}
+
+type sampleCachingOperationProvider struct{ *operationProvider }
+
+func (p *sampleCachingOperationProvider) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	engine.ObservationPassStart(ctx, rc.Clock.Now())
+	return p.operationProvider.RunOperation(ctx, rc, op)
+}
+
+func TestBlockedOperationRenewsAvailabilityBeyondLease(t *testing.T) {
+	for _, dead := range []bool{false, true} {
+		t.Run(map[bool]string{false: "healthy", true: "agent-failure"}[dead], func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				p := &sampleCachingOperationProvider{&operationProvider{fakeProvider: &fakeProvider{}}}
+				m, st := newTestManager(t, p)
+				m.opts.Context.ObservationEpoch = "current-process"
+				c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"},
+					Internal: json.RawMessage(`{"checkpoint":true}`),
+					Status:   domain.ClusterStatus{Phase: domain.PhaseReady, ObservedGeneration: 1}}
+				c.Status = operationHealth(&engine.Context{Clock: m.opts.Context.Clock})
+				c.Status.ObservedGeneration = 1
+				c.Status.ObservedAt, c.Status.ObservationEpoch = time.Now(), "current-process"
+				if err := st.CreateCluster(t.Context(), c); err != nil {
+					t.Fatal(err)
+				}
+				op := &domain.Operation{ID: "rollout", Cluster: c.Name, Kind: domain.OperationUpgradeAgents,
+					Phase: domain.PhaseRunning, Step: "waiting"}
+				if err := st.EnqueueOperation(t.Context(), op); err != nil {
+					t.Fatal(err)
+				}
+				started := make(chan struct{})
+				var once sync.Once
+				var unavailable atomic.Bool
+				p.runFn = func(rc *engine.Context, _ *domain.Operation) (engine.OpResult, error) {
+					rc.Cluster.Internal = json.RawMessage(`{"operation":"progress"}`)
+					once.Do(func() { close(started) })
+					time.Sleep(25 * time.Second) // Virtual time, not a synchronization sleep.
+					return engine.OpResult{Step: "next", Message: "waiting for placement",
+						Checkpoint: json.RawMessage(`{"receipt":"pending"}`), RequeueAfter: time.Minute}, nil
+				}
+				p.statusFn = func(rc *engine.Context) (domain.ClusterStatus, error) {
+					if unavailable.Load() {
+						return domain.ClusterStatus{}, errors.New("agent unavailable")
+					}
+					return operationHealth(rc), nil
+				}
+				ctx, cancel := context.WithCancel(t.Context())
+				w := &worker{trigger: make(chan struct{}, 1)}
+				m.wg.Add(1)
+				go m.work(ctx, c.Ref(), w)
+				defer func() { cancel(); m.wg.Wait() }()
+				<-started
+				unavailable.Store(dead)
+				var last time.Time
+				advances := 0
+				for second := 1; second <= 24; second++ {
+					time.Sleep(time.Second)
+					synctest.Wait()
+					stored, err := st.GetCluster(t.Context(), c.Ref())
+					if err != nil {
+						t.Fatal(err)
+					}
+					fresh := engine.FreshStatus(stored.Status, m.opts.Context.Clock.Now())
+					if !dead && second >= 5 {
+						if fresh.Phase == domain.PhaseDegraded || fresh.ObservedAt.IsZero() ||
+							len(fresh.Members) != 1 || !fresh.Members[0].Health || !fresh.Members[0].Agent.Healthy {
+							t.Fatalf("healthy operation lost availability at %ds: %+v", second, fresh)
+						}
+						for _, condition := range fresh.Conditions {
+							if condition.Type == "Healthy" && condition.Status != "True" ||
+								condition.Type == "AgentsCurrent" && (condition.Status != "False" || condition.Reason != "Outdated") {
+								t.Fatal("health or agent inventory withdrawn", condition)
+							}
+						}
+						if fresh.ObservedAt.After(last) {
+							advances++
+							last = fresh.ObservedAt
+						}
+					}
+					if dead && second > int(engine.ReadinessMaxAge/time.Second) &&
+						(!fresh.ObservedAt.IsZero() || fresh.Phase == domain.PhaseReady) {
+						t.Fatal("failed observation kept health alive", fresh)
+					}
+					if string(stored.Internal) != `{"checkpoint":true}` {
+						t.Fatal("renewal published uncheckpointed operation state", stored.Internal)
+					}
+				}
+				if !dead && advances < 4 {
+					t.Fatal("operation did not advance its availability lease", advances)
+				}
+				time.Sleep(time.Second)
+				synctest.Wait()
+				stored, err := st.GetCluster(t.Context(), c.Ref())
+				if err != nil || string(stored.Internal) != `{"operation":"progress"}` {
+					t.Fatal("operation state lost to renewal", stored, err)
+				}
+				if !dead && time.Since(stored.Status.ObservedAt) >= engine.ReadinessMaxAge {
+					t.Fatal("post-attempt observation replayed pre-operation evidence", stored.Status)
+				}
+				tracked, err := st.GetOperation(t.Context(), op.ID)
+				if err != nil || tracked.Step != "next" || string(tracked.Checkpoint) != `{"receipt":"pending"}` ||
+					tracked.Message != "waiting for placement" || tracked.Phase != domain.PhaseRunning {
+					t.Fatal("operation receipt lost to renewal", tracked, err)
+				}
+			})
+		})
+	}
+}
+
+func TestOperationPersistenceRebasesConcurrentRenewal(t *testing.T) {
+	for _, healthy := range []bool{false, true} {
+		t.Run(map[bool]string{false: "newer-failure", true: "newer-success"}[healthy], func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				p := &operationProvider{fakeProvider: &fakeProvider{}}
+				m, st := newTestManager(t, p)
+				m.opts.Context.ObservationEpoch = "current-process"
+				c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"},
+					Internal: json.RawMessage(`{"checkpoint":true}`), Status: domain.ClusterStatus{Phase: domain.PhaseReady}}
+				c.Status = operationHealth(&engine.Context{Clock: m.opts.Context.Clock})
+				c.Status.ObservedAt, c.Status.ObservationEpoch = time.Now(), "current-process"
+				if err := st.CreateCluster(t.Context(), c); err != nil {
+					t.Fatal(err)
+				}
+				op := &domain.Operation{ID: "rollout", Cluster: c.Name, Kind: domain.OperationUpgradeAgents, Phase: domain.PhaseRunning}
+				if err := st.EnqueueOperation(t.Context(), op); err != nil {
+					t.Fatal(err)
+				}
+				operationEntered, finishOperation := make(chan struct{}), make(chan struct{})
+				renewalEntered, finishRenewal := make(chan struct{}), make(chan struct{})
+				var renewalOnce sync.Once
+				p.runFn = func(rc *engine.Context, _ *domain.Operation) (engine.OpResult, error) {
+					rc.Cluster.Internal = json.RawMessage(`{"operation":"complete"}`)
+					rc.Cluster.Status.Message = "operation-owned message"
+					for i := range rc.Cluster.Status.Conditions {
+						if rc.Cluster.Status.Conditions[i].Type == "Healthy" {
+							rc.Cluster.Status.Conditions[i].Reason = "EarlierOperationSafetyRead"
+						}
+					}
+					rc.Cluster.Status.Conditions = append(rc.Cluster.Status.Conditions,
+						domain.Condition{Type: "OperationReceipt", Status: "True", Reason: "Recorded"})
+					close(operationEntered)
+					<-finishOperation
+					return engine.OpResult{Done: true, Step: "complete", Checkpoint: json.RawMessage(`{"done":true}`)}, nil
+				}
+				p.statusFn = func(rc *engine.Context) (domain.ClusterStatus, error) {
+					renewalOnce.Do(func() { close(renewalEntered); <-finishRenewal })
+					if !healthy {
+						return domain.ClusterStatus{}, errors.New("newer failed observation")
+					}
+					return operationHealth(rc), nil
+				}
+				gate := make(chan struct{}, 1)
+				operationCtx := withObservationPublication(t.Context(), gate)
+				renewalCtx := withObservationPublication(t.Context(), gate)
+				operationDone, renewalDone := make(chan error, 1), make(chan error, 1)
+				go func() { _, err := m.reconcile(operationCtx, c.Ref()); operationDone <- err }()
+				<-operationEntered
+				time.Sleep(time.Second)
+				go func() { renewalDone <- m.renewAvailability(renewalCtx, c.Ref()) }()
+				<-renewalEntered
+				close(finishOperation)
+				synctest.Wait()
+				select {
+				case err := <-operationDone:
+					t.Fatal("operation published through an in-flight renewal", err)
+				default:
+				}
+				close(finishRenewal)
+				if err := <-renewalDone; err != nil {
+					t.Fatal(err)
+				}
+				if err := <-operationDone; err != nil {
+					t.Fatal(err)
+				}
+				stored, err := st.GetCluster(t.Context(), c.Ref())
+				if err != nil || string(stored.Internal) != `{"operation":"complete"}` ||
+					stored.Status.Message != "operation-owned message" || stored.Status.Members[0].Health != healthy {
+					t.Fatal("operation and health failed to rebase", stored, err)
+				}
+				if healthy && !stored.Status.ObservedAt.After(c.Status.ObservedAt) ||
+					!healthy && !stored.Status.ObservedAt.IsZero() {
+					t.Fatal("operation replayed an older observation", stored.Status)
+				}
+				found := false
+				for _, condition := range stored.Status.Conditions {
+					found = found || condition.Type == "OperationReceipt" && condition.Status == "True"
+					if !healthy && condition.Type == "Healthy" && condition.Status == "True" {
+						t.Fatal("operation replayed an earlier positive condition", condition)
+					}
+				}
+				tracked, err := st.GetOperation(t.Context(), op.ID)
+				if !found || err != nil || tracked.Phase != domain.PhaseSucceeded ||
+					tracked.Step != "complete" || string(tracked.Checkpoint) != `{"done":true}` {
+					t.Fatal("renewal erased operation fields", stored.Status, tracked, err)
+				}
+				// Renewal after the checkpoint must not mutate provider state.
+				if err := m.renewAvailability(renewalCtx, c.Ref()); err != nil {
+					t.Fatal(err)
+				}
+				stored, err = st.GetCluster(t.Context(), c.Ref())
+				if err != nil || string(stored.Internal) != `{"operation":"complete"}` {
+					t.Fatal("later renewal erased operation state", stored, err)
+				}
+			})
+		})
+	}
+}
+
+type isolatedOperationProvider struct{ *operationProvider }
+
+func (*isolatedOperationProvider) ObserveDuringOperation(string) bool { return false }
+
+func TestUnsafeOperationsExcludeIndependentObservation(t *testing.T) {
+	for _, kind := range []string{domain.OperationRestore, domain.OperationRotateTLS,
+		domain.OperationRotateSystemUser, "recover-quorum", "future-operation", domain.OperationUpgradeAgents} {
+		t.Run(kind, func(t *testing.T) {
+			base := &operationProvider{fakeProvider: &fakeProvider{}}
+			var p engine.Provider = base
+			if kind == domain.OperationUpgradeAgents {
+				p = &isolatedOperationProvider{base}
+			}
+			m, st := newTestManager(t, p)
+			c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"},
+				Status: domain.ClusterStatus{Phase: domain.PhaseReady, ObservedAt: time.Now()}}
+			if err := st.CreateCluster(t.Context(), c); err != nil {
+				t.Fatal(err)
+			}
+			if err := st.EnqueueOperation(t.Context(), &domain.Operation{Cluster: c.Name, Kind: kind, Phase: domain.PhaseRunning}); err != nil {
+				t.Fatal(err)
+			}
+			base.statusFn = func(*engine.Context) (domain.ClusterStatus, error) {
+				t.Fatal("unsafe operation admitted independent observation")
+				return domain.ClusterStatus{}, nil
+			}
+			if canObserveDuringOperation(p, kind) {
+				t.Fatal("unsafe operation released observation ownership")
+			}
+			if err := m.renewAvailability(t.Context(), c.Ref()); err != nil {
+				t.Fatal(err)
+			}
+			stored, err := st.GetCluster(t.Context(), c.Ref())
+			if err != nil || !stored.Status.ObservedAt.Equal(c.Status.ObservedAt) {
+				t.Fatal("excluded operation changed availability", stored, err)
+			}
+		})
+	}
 }

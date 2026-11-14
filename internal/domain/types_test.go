@@ -49,3 +49,22 @@ func TestOperationDefersPITRReanchorLifecycle(t *testing.T) {
 		}
 	}
 }
+
+// Independent observation is an allowlist: a new or provider-specific operation
+// kind keeps exclusive ownership until it is classified here deliberately.
+func TestAllowsIndependentObservationDefaultsToExclusive(t *testing.T) {
+	for kind, want := range map[string]bool{
+		OperationCreate: true, OperationUpdate: true, OperationTLS: true,
+		OperationUpgrade: true, OperationDelete: true, OperationResume: true,
+		OperationUpgradeAgents: true, OperationReplaceMember: true, OperationRestart: true,
+		OperationBackup: true, OperationDeleteBackup: true, OperationRebalance: true,
+		OperationRaiseFCV: true,
+		OperationRestore:  false, OperationRotateSystemUser: false, OperationRotateTLS: false,
+		"initial-restore": false, "recover-quorum": false, "reinit-member": false,
+		"rotate-jwt-secret": false, "future-operation": false, "": false,
+	} {
+		if got := AllowsIndependentObservation(kind); got != want {
+			t.Errorf("AllowsIndependentObservation(%q) = %v, want %v", kind, got, want)
+		}
+	}
+}

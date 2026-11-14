@@ -18,9 +18,14 @@ Existing member availability also has a bounded read-only loop while ordinary
 reconciliation is busy, independent of lifecycle phase. It loads an isolated
 durable snapshot instead of sharing the lifecycle worker's mutable state. Its
 status-only update compares the inspected status, provider state, generation and
-incarnation. Running imperative operations exclude independent publication, but
-ordinary desired-state convergence trackers do not; the distinction is checked
-under the same writer transaction using the domain operation classification.
+incarnation. Known observation-safe imperative operations (agent rollout,
+replacement, restart, backup/deletion, rebalance and FCV raise), like desired-state
+trackers, allow independent publication. Restore, credential/certificate rotation,
+quorum recovery and unknown operation kinds retain serialized ownership. Providers
+may further exclude an entire operation kind with `OperationObservationPolicy`;
+the decision cannot depend on an unpublished checkpoint. The store checks the
+same domain classification under the publication transaction, so admission of an
+excluded operation invalidates an in-flight sample.
 Availability never advances applied generation or completes a non-Ready lifecycle
 phase/negative readiness fence, including during deferred maintenance. New clusters
 without members or prior observations have no availability to renew. Suspended
@@ -32,11 +37,37 @@ Both paths arbitrate each complete observation through its publication using a
 shared per-worker gate; a completed probe alone does not release publication
 ownership. This prevents the ordinary writer from replaying an older healthy
 sample over a newer failure and prevents either writer from shortening a newer
-lease. Only a successful pre-Sync publication releases the gate before Sync.
-If that write fails, ownership remains through the caller's error-path state
+lease. A successful pre-Sync publication releases the gate before Sync.
+Observation-safe imperative attempts likewise release it around provider
+`RunOperation`/`CancelOperation`, but not around dependency-failure publication.
+After the provider returns, the worker reacquires the gate and rebases health
+from the durable status before any post-attempt observation or atomic operation/
+cluster checkpoint. Provider Internal, applied generation, lifecycle receipts and
+explicit lifecycle edits remain operation-owned. Even terminal attempts, which
+may not observe again, cannot replay their pre-attempt health over a newer failure.
+The post-attempt sweep starts a new observation pass: an earlier operation safety
+read's cached evidence cannot overwrite a newer independent sample.
+If a pre-Sync write fails, ownership remains through the caller's error-path state
 publication and deferred release. Final observation retains ownership through
-the lifecycle checkpoint. No health/lifecycle merge or wall-clock comparison is
-used to order failed (zero-lease) samples.
+the lifecycle checkpoint. The gate plus durable rebase, not a wall-clock
+comparison, orders failed samples (whose observation timestamp is zero).
+
+Independent observation uses a separate durable cluster/context, discards mutations
+to that Cluster, and publishes health only with the full-checkpoint compare-and-swap.
+Condition ownership is explicit: operation receipts, maintenance-window receipts,
+negative Ready lifecycle fences, initial-source aborts and exhausted endpoint-repair
+fences may survive a sweep. All other conditions, including provider-specific
+transient diagnostics, are replaced by the fresh observation; omission means removal.
+It does not execute Sync or grant operation permission from published health.
+Existing authoritative PXC continuity checks may nevertheless persist fail-closed
+GTID safety-journal evidence and audit events during renewal; discarding Cluster
+mutations does not discard those independent journal writes. Actor safety reads and
+mutation authorization remain separate and fresh. Forward recovery of previously
+sealed credential actions happens in operation dispatch, not renewal.
+Intermediate failures remain fail-closed under the unchanged 15-second lease.
+Data-set/access replacement stays excluded because old processes or credentials
+could otherwise be mistaken for the new serving state.
+
 
 Record durable events and publish them through `/events/stream` SSE. Reconnects replay authorized events using event IDs; in-process delivery is an acceleration, not the source of truth.
 

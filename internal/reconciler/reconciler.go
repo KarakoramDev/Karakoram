@@ -1122,6 +1122,9 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	}
 	c := rc.Cluster
 	previous := c.Status.Phase
+	operationStatus := c.Status
+	operationStatus.Conditions = slices.Clone(c.Status.Conditions)
+	independent := canObserveDuringOperation(p, op.Kind)
 	callCtx := ctx
 	var opResult engine.OpResult
 	var opErr error
@@ -1193,6 +1196,9 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 			if invalidates {
 				op.Checkpoint = previousCheckpoint
 			}
+			if independent {
+				releaseObservation(ctx)
+			}
 			opResult, opErr = canceller.CancelOperation(callCtx, rc, op)
 			if opResult.Done && opErr == nil && !failing {
 				op.Phase = domain.PhaseCancelled
@@ -1207,8 +1213,28 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 			if invalidates {
 				op.Checkpoint = previousCheckpoint
 			}
+			if independent {
+				releaseObservation(ctx)
+			}
 			opResult, opErr = p.RunOperation(callCtx, rc, op)
 		}
+	}
+	providerStatus := c.Status
+	if independent {
+		// This gate is an ordering fence, not a timestamp comparison: failed
+		// samples have no ObservedAt. Reload after acquiring it, preserving any
+		// operation-owned lifecycle edits and all unpublished provider state.
+		if err := holdObservation(ctx); err != nil {
+			return 0, errors.Join(opErr, err)
+		}
+		current, err := m.opts.Store.GetCluster(ctx, c.Ref())
+		if err != nil {
+			return 0, errors.Join(opErr, err)
+		}
+		rebaseOperationAvailability(operationStatus, &c.Status, current.Status)
+		// Provider work may have populated a pass cache before blocking. A
+		// post-attempt observation must not replay that pre-renewal evidence.
+		ctx = engine.WithObservationPass(ctx)
 	}
 
 	if opResult.Checkpoint != nil {
@@ -1312,7 +1338,12 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		if dependenciesResolved {
 			availability := *rc
 			availability.AvailabilityOnly = true
-			status, _ = m.observeStatus(ctx, p, &availability)
+			var observationErr error
+			status, observationErr = m.observeStatus(ctx, p, &availability)
+			if observationErr != nil {
+				rc.Logger.Debug("operation availability observation failed", "cluster", c.Ref().Key(),
+					"stage", "operation.post-attempt.observe", "error", boundedMessage(redact.Diagnostic(observationErr.Error()), 512))
+			}
 		}
 		if !dependenciesResolved && status.DataMcp != nil {
 			snapshot := *status.DataMcp
@@ -1325,6 +1356,15 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		preserveTransitions(c.Status.Conditions, status.Conditions)
 		if phase != domain.PhaseReady && phase != domain.PhaseDegraded {
 			status.Phase, status.Message = phase, message
+		}
+		if independent {
+			status.Conditions = rebaseOperationConditions(operationStatus.Conditions, providerStatus.Conditions, status.Conditions)
+			if providerStatus.Phase != operationStatus.Phase && providerStatus.Phase != domain.PhaseReady && providerStatus.Phase != domain.PhaseDegraded {
+				status.Phase = providerStatus.Phase
+			}
+			if providerStatus.Message != operationStatus.Message {
+				status.Message = providerStatus.Message
+			}
 		}
 		c.Status = status
 	}

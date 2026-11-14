@@ -85,12 +85,18 @@ type OperationObservationInvalidator interface {
 	InvalidateOperationObservation(*domain.Operation) error
 }
 
+// OperationObservationPolicy may further restrict the domain's observation-safe
+// operation kinds. The decision must be stable for the operation kind: renewal
+// sees the durable checkpoint, not an attempt's unpublished mutable checkpoint.
+// It cannot opt destructive or unknown kinds into concurrent observation.
+type OperationObservationPolicy interface {
+	ObserveDuringOperation(kind string) bool
+}
+
 // OperationSyncPolicy optionally permits ordinary Sync after a nonterminal,
 // successful RunOperation call. Without this policy, Running operations exclude
-// Sync and Status, which may be unsafe while restore stops database processes.
-// The decision uses the newly returned checkpoint. PSMDB must opt in only at
-// replacement provisioning/join checkpoints so Sync can create the new member;
-// restore, restart and credential-recovery checkpoints must remain isolated.
+// Sync; read-only availability is governed separately. PSMDB opts in only at
+// replacement provisioning/join checkpoints so Sync can create the new member.
 type OperationSyncPolicy interface {
 	SyncDuringOperation(op *domain.Operation) bool
 }

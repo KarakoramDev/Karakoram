@@ -11,6 +11,17 @@ platform-read changes below take effect when the control plane is upgraded; they
 need no agent rollout. Only the Dokploy sudo policy arrives with the member
 images, through the normal agent upgrade roll.
 
+### Health observation during long operations
+
+Health observation now keeps running while an agent upgrade, member
+replacement, rolling restart, backup or backup deletion, rebalance or
+feature-compatibility raise waits on a slow platform rollout. A serving cluster
+no longer turns `Healthy=Unknown`, `AgentsCurrent=Unknown` and Degraded only
+because such an operation is long; a member that genuinely fails is still
+reported within the normal readiness lease. Restore, credential and TLS
+rotation, quorum recovery and unknown operation kinds keep the previous
+exclusive behavior.
+
 ### Fewer platform reads during operations
 
 While a platform receipt is pending, PostgreSQL, MySQL and Neo4j skip the
