@@ -182,6 +182,15 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			err = e
 		}
 	}()
+	tombstoneVersion := s.ConfigVersion
+	if err := reconcileResolutionTombstones(ctx, rc, s); err != nil {
+		return result, err
+	}
+	if s.ConfigVersion != tombstoneVersion {
+		// Publish release/cancellation intent durably before projecting a
+		// different set or provisioning a member against that new intent.
+		return result, nil
+	}
 	// Swarm's automatic crash/node-loss replacements have no engine receipt.
 	// Admit only opted-in Starting proxies; never re-probe running incumbents.
 	if !rc.Cluster.Deleting && rc.Backend.Capabilities().ProxyDeploymentPreservesServing {
@@ -547,6 +556,15 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			}
 			publishRevision(s)
 			return result, nil
+		}
+		// Imported runtimes have a provider record/variable now, but no job has
+		// started. Publish the retained set before the first deployment.
+		if m.Role == "data" {
+			if projector, ok := rc.Backend.(infra.ResolutionTombstoneProjector); ok {
+				if e := projector.ProjectResolutionTombstones(ctx, m.Name, resolutionTombstoneHosts(s, m)); e != nil {
+					return result, e
+				}
+			}
 		}
 		spec, e := p.runtimeSpec(rc, m)
 		if e != nil {

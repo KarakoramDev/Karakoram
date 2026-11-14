@@ -6,6 +6,29 @@ The `dokploy` provider runs Karakoram clusters on a [Dokploy](https://dokploy.co
 
 [PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use the same provider-neutral runtime contract and have not been accepted on Dokploy. Members need access to locked native artifacts (including an operator mirror for source-built development entries) and registered [S3](https://aws.amazon.com/s3/) destinations. Public PostgreSQL TCP has no provider CIDR enforcement and needs explicit allow-all acknowledgement plus an external firewall. Supabase gateway public HTTPS uses the provider's domain capability; unavailable component artifacts are still rejected.
 
+New MySQL member images install a root-owned, fixed-target hosts-tombstone helper
+and a separate argument-free sudoers rule. The agent submits at most 64 validated
+retired names; the helper serializes its own writes, removes only retired alias
+tokens (preserving other aliases and comments), and updates the bind-mounted
+`/etc/hosts` inode in place with both multicast sentinels. It accepts no path
+override, arguments or caller-supplied addresses. Existing members need the
+ordinary controlled image/agent upgrade first.
+
+The helper keeps a private backup, compares the current file with its snapshot
+immediately before writing, and retries at most three times if Docker changed
+it. A builtin `printf` writes the buffered replacement in one write where the
+shell and content size permit; a failed write or mismatching readback triggers
+restoration and verification of the backup. Catchable interruptions also attempt
+rollback. Persistent storage errors can prevent rollback; SIGKILL or host failure
+cannot be recovered by a shell trap.
+
+Docker does not share this lock. It can still write between the final comparison
+and the update, or replace hosts after success; in-place writes are not atomic to
+libc readers, and rollback can overwrite an intervening Docker change. The
+agent's periodic native resolver re-verification revokes stale acknowledgement
+and repairs the desired tombstones. This detects and repairs drift, not an
+uninterrupted-protection guarantee during Docker network/hosts reconstruction.
+
 ## How it maps
 
 |Karakoram|Dokploy / Swarm|
@@ -25,11 +48,15 @@ Engine prepare commands use exec-form Dockerfile `RUN` instructions invoking [Ba
 
 Engine preparation still runs as `karakoram` with passwordless sudo during the
 image build. The finished image removes that blanket grant and runs as UID/GID
-10001. A data-bearing image permits only one noninteractive root command:
+10001. A data-bearing image permits the exact noninteractive root command:
 `/usr/bin/chown --no-dereference 10001:10001 -- /var/lib/karakoram/volumes/<volume>`,
 with the validated volume name rendered literally in sudoers (no wildcard).
-The entrypoint uses it only when the mount root has different ownership; a
-stateless image has no runtime sudo rule. See [member privileges](security.md#member-operating-system-privileges)
+The entrypoint uses it only when the mount root has different ownership.
+MySQL images additionally permit only the fixed, argument-free hosts helper;
+stateless non-MySQL images have no runtime sudo rule. Both rules prohibit
+environment overrides. The chown rule uses `NOEXEC`; the shell helper cannot,
+because its fixed implementation must execute coreutils. See
+[member privileges](security.md#member-operating-system-privileges)
 and the [v0.4.10 upgrade note](upgrade.md#upgrading-to-v0410).
 
 ### Platform deployment admission

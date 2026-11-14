@@ -308,7 +308,7 @@ func (a *nodeAgent) applyEngine(ctx context.Context, c agentapi.MemberConfig) ([
 	}
 	c.Maintenance = c.Maintenance || a.controls.Maintenance
 	a.sup.setMaintenance(c.Maintenance)
-	changed, err := a.engine.Apply(ctx, &Node{a: a, applyConfig: &c}, c)
+	changed, err := a.applyEngineWithTombstones(ctx, c)
 	if err != nil {
 		return nil, err
 	}

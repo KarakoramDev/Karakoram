@@ -74,6 +74,12 @@ For a steady cluster, availability renewal makes one **steady attempt** under th
 
 Steady clusters are reconciled every 30 minutes instead of every 5 seconds (or at the provider's timed wake-up if earlier), and the 30-second discovery sweep does not wake a steady cluster whose generation is unchanged and which has no pending or running operation. Reconciles are still triggered immediately by spec changes, operations, a forced reconcile, a non-Ready availability result, a listing change and a new agent session or identity. Clusters that are not steady keep the v0.4.7 cadence and fresh reads; this is the operation burst. 30 minutes is a compromise between the idle budget and repairs that only a full `Sync` performs (drift outside the listing, slow certificate or managed-access repairs); at 10 minutes the MySQL and PostgreSQL topologies below would exceed 0.1 requests per second on every provider (see Consequences). Snapshot entries live 40 minutes so that a steady cluster does not refetch between two deep reconciles.
 
+MySQL resolver-tombstone journals keep the ordinary 2-second convergence cadence
+through the 600-second retirement hold and reduced-set acknowledgement. Only
+clusters with a live journal incur these verification passes; successful release
+removes the journal and immediately restores steady scheduling. Unready peers or
+changed process generations may safely prolong the hold, never shorten it.
+
 Only independent availability renewal uses the steady attempt. Its provider-owned side effects are already discarded and only a fenced availability sample can be published. A Data MCP companion is observed after an accepted provider attempt with its own steady evidence; a rejected companion sample is replaced by a fresh companion observation, and if the provider's snapshot proof became invalid meanwhile, provider and companion are both observed fresh. Accepted companion evidence can only make the published timestamps older. The observations inside a reconcile (before and after `Sync`) feed durable provider state, so they stay fresh; a steady reconcile is also the periodic deep revalidation of everything the listing cannot see.
 
 The steady-entry drift baseline is captured from the successfully resolved backend before convergence evidence is collected; it must not introduce a second namespace lookup that bypasses dependency-failure backoff. API request-caller attribution preserves the router's matched pattern on the original request so access logs retain route templates, including escaped RabbitMQ vhost paths.

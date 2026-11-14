@@ -630,6 +630,104 @@ func TestDeployStreamsArtifactAndLifecycle(t *testing.T) {
 		t.Fatalf("calls %d %d", uploads, lifecycle)
 	}
 }
+
+func TestDeployMySQLTombstoneWriterReachesRuntime(t *testing.T) {
+	for _, engine := range []string{"mysql", "postgres", ""} {
+		t.Run("engine="+engine, func(t *testing.T) {
+			var uploads, deployments int
+			var body map[string]string
+			b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
+				if serviceHandler(t, w, r) {
+					return
+				}
+				switch {
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/process"):
+					fakePage(w, r, []Process{})
+				case strings.HasSuffix(r.URL.Path, "/user-data"):
+					_ = json.NewEncoder(w).Encode(Process{ID: "receipt"})
+				case r.URL.Path == "/process/receipt":
+					_ = json.NewEncoder(w).Encode(Process{ID: "receipt", Status: "FINISHED"})
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/app-version"):
+					fakePage(w, r, []AppVersion{})
+				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/app-version"):
+					reply(t, w, "appVersion")
+				case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/upload"):
+					uploads++
+					data, err := io.ReadAll(r.Body)
+					if err != nil || string(data) != "archive" || r.ContentLength != 7 {
+						t.Errorf("artifact upload: %q, length %d, error %v", data, r.ContentLength, err)
+					}
+					reply(t, w, "upload")
+				case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/deploy"):
+					deployments++
+					if uploads != 1 {
+						t.Error("runtime submitted before artifact upload")
+					}
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Error(err)
+					}
+					reply(t, w, "deploy")
+				default:
+					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+				}
+			})
+			spec := infra.RuntimeSpec{
+				Base:    infra.BaseUbuntu2404,
+				Args:    []string{"agent"},
+				Env:     map[string]string{"KARAKORAM_ENGINE": engine, "UNCHANGED": "value"},
+				Prepare: []string{"prepare-engine"},
+			}
+			// A non-seekable artifact also exercises Deploy's spool before the
+			// receipt, upload and runtime-submission lifecycle.
+			_, err := b.Deploy(context.Background(), "controlplane", infra.Deployment{
+				Artifact: infra.Artifact{Reader: io.LimitReader(strings.NewReader("archive"), 7), Name: "test", Binary: "karakoram"},
+				Runtime:  spec,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if uploads != 1 || deployments != 1 || body["zeropsYamlSetup"] != "controlplane" {
+				t.Fatalf("deployment delivery: uploads=%d deployments=%d setup=%q", uploads, deployments, body["zeropsYamlSetup"])
+			}
+			var doc struct {
+				Zerops []struct {
+					Setup string `yaml:"setup"`
+					Run   struct {
+						Env     map[string]string `yaml:"envVariables"`
+						Prepare []string          `yaml:"prepareCommands"`
+						Start   string            `yaml:"start"`
+					} `yaml:"run"`
+				} `yaml:"zerops"`
+			}
+			if err := yaml.Unmarshal([]byte(body["zeropsYaml"]), &doc); err != nil {
+				t.Fatal(err)
+			}
+			if len(doc.Zerops) != 1 || doc.Zerops[0].Setup != "controlplane" {
+				t.Fatalf("incorrect runtime setup: %+v", doc)
+			}
+			run := doc.Zerops[0].Run
+			if run.Start != "./karakoram agent" || run.Env["KARAKORAM_ENGINE"] != engine ||
+				run.Env["UNCHANGED"] != "value" || len(run.Prepare) == 0 || run.Prepare[0] != "prepare-engine" {
+				t.Fatalf("engine runtime lost during deployment: %+v", run)
+			}
+			if _, changed := spec.Env["KARAKORAM_RESOLVER_TOMBSTONES"]; changed || len(spec.Prepare) != 1 {
+				t.Fatal("deployment mutated caller runtime")
+			}
+			if engine != "mysql" {
+				if _, configured := run.Env["KARAKORAM_RESOLVER_TOMBSTONES"]; configured ||
+					len(run.Prepare) != 1 || strings.Contains(body["zeropsYaml"], "karakoram-hosts-tombstones") {
+					t.Fatal("non-MySQL deployment received tombstone writer")
+				}
+				return
+			}
+			if run.Env["KARAKORAM_RESOLVER_TOMBSTONES"] != "hosts-helper:/usr/local/libexec/karakoram-hosts-tombstones" ||
+				len(run.Prepare) != 2 || run.Prepare[1] != prepareHostsTombstones() {
+				t.Fatal("MySQL writer env/helper installation did not reach deployment")
+			}
+		})
+	}
+}
+
 func TestWaitCancellationAndNullAutoscaling(t *testing.T) {
 	b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
 		if stoppedServiceHandler(t, w, r) {

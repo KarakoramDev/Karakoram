@@ -15,6 +15,9 @@ import (
 // independently; certificate renewal's 30-day horizon tolerates deep resync.
 func steadyResult(rc *engine.Context, s *state) engine.Result {
 	pending := engine.Result{RequeueAfter: 2 * time.Second}
+	if len(s.ResolutionTombstones) > 0 {
+		return pending
+	}
 	if s.Pending != nil || s.Rolling != nil || s.Replacement != nil || s.TLSRotation != nil || s.GaleraTLS != nil || s.Formation.reforming() {
 		return pending
 	}

@@ -74,9 +74,12 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 		return infra.Op{}, err
 	}
 	diskMB := b.allocationDiskMB(d.Runtime)
+	// Freeze the provider's resolver wiring before moving Env out of the spec.
+	// Re-renders after restart must not depend on the removed environment.
+	resolutionTombstones := d.Runtime.Env["KARAKORAM_ENGINE"] == "mysql"
 	// Environment is held only in its dedicated Variable; the saved spec is safe metadata.
 	d.Runtime.Env = nil
-	r.Deployment = &storedDeployment{Runtime: d.Runtime, Source: source, Checksum: checksum, Binary: d.Artifact.Binary, EphemeralDiskMB: diskMB}
+	r.Deployment = &storedDeployment{Runtime: d.Runtime, Source: source, Checksum: checksum, Binary: d.Artifact.Binary, EphemeralDiskMB: diskMB, ResolutionTombstones: resolutionTombstones}
 	r.Desired = "running"
 	return b.begin(ctx, r, "deploy")
 }

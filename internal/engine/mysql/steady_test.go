@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
@@ -80,6 +81,36 @@ func TestSteadyReanchorDue(t *testing.T) {
 			result := steadyResult(rc, s)
 			if result.Steady != tc.steady || result.RequeueAfter != tc.want {
 				t.Fatalf("got %+v, want steady=%t delay=%s", result, tc.steady, tc.want)
+			}
+		})
+	}
+}
+
+func TestSteadyResolutionTombstoneCadence(t *testing.T) {
+	at := time.Date(2026, 11, 16, 2, 0, 0, 0, time.UTC)
+	rc := &engine.Context{Cluster: &domain.Cluster{}, Clock: trafficRenewalClock{at: at}}
+	for _, tc := range []struct {
+		name    string
+		journal resolutionTombstone
+	}{
+		{"holding", resolutionTombstone{ReleaseNotBefore: at.Add(600 * time.Second)}},
+		{"release-due", resolutionTombstone{ReleaseNotBefore: at}},
+		{"release-overdue", resolutionTombstone{ReleaseNotBefore: at.Add(-time.Minute)}},
+		{"awaiting-reduced-set", resolutionTombstone{ReleasePending: true}},
+		{"retirement-in-progress", resolutionTombstone{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &state{ResolutionTombstones: []resolutionTombstone{tc.journal}}
+			result := steadyResult(rc, s)
+			if result.Steady || result.RequeueAfter != 2*time.Second {
+				t.Fatalf("live tombstone must retain verification/release cadence, got %+v", result)
+			}
+			// Release restores the idle request budget immediately; retained
+			// historical state must not keep an otherwise idle cluster polling.
+			s.ResolutionTombstones = nil
+			result = steadyResult(rc, s)
+			if !result.Steady || result.RequeueAfter != 0 {
+				t.Fatalf("released tombstone must restore steady scheduling, got %+v", result)
 			}
 		})
 	}

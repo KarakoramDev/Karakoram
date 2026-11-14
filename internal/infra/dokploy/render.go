@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/hoststombstones"
 )
 
 // Official multi-architecture index, resolved with docker buildx imagetools
@@ -30,6 +31,8 @@ const baseImage = "ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e59
 var layout = infra.Layout{AppDir: "/opt/karakoram", VolumeRoot: "/var/lib/karakoram/volumes", User: "karakoram", PrivateAddressFamily: infra.AddressFamilyIPv4}
 var renderEnvKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var renderFileName = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
+
+var hostsTombstonesHelper = hoststombstones.Script
 
 // renderDeployment consumes the artifact once, streaming it into a private zip.
 // The caller owns the returned file and must remove it after uploading.
@@ -46,7 +49,7 @@ func renderDeployment(d infra.Deployment) (zipPath, digest string, err error) {
 	if !renderFileName.MatchString(d.Artifact.Name) || !renderFileName.MatchString(d.Artifact.Binary) {
 		return reject("artifact archive and binary must be simple file names")
 	}
-	for _, name := range []string{"Dockerfile", "karakoram-entrypoint", "karakoram.env"} {
+	for _, name := range []string{"Dockerfile", "karakoram-entrypoint", "karakoram.env", "karakoram-hosts-tombstones"} {
 		if d.Artifact.Name == name {
 			return reject("artifact archive conflicts with a build context file")
 		}
@@ -67,6 +70,9 @@ func renderDeployment(d infra.Deployment) (zipPath, digest string, err error) {
 	var env strings.Builder
 	for _, k := range keys {
 		fmt.Fprintf(&env, "export %s=%s\n", k, renderShellQuote(d.Runtime.Env[k]))
+	}
+	if d.Runtime.Env["KARAKORAM_ENGINE"] == "mysql" {
+		env.WriteString("export KARAKORAM_RESOLVER_TOMBSTONES='hosts-helper:/usr/local/libexec/karakoram-hosts-tombstones'\n")
 	}
 	file, err := os.CreateTemp("", "karakoram-dokploy-*.zip")
 	if err != nil {
@@ -91,6 +97,13 @@ func renderDeployment(d infra.Deployment) (zipPath, digest string, err error) {
 		{"karakoram-entrypoint", 0755, renderEntrypoint(d.Runtime.Volume)},
 		{"karakoram.env", 0644, env.String()},
 		{d.Artifact.Name, 0600, ""},
+	}
+	if d.Runtime.Env["KARAKORAM_ENGINE"] == "mysql" {
+		entries = append(entries, struct {
+			name string
+			mode os.FileMode
+			text string
+		}{"karakoram-hosts-tombstones", 0644, hostsTombstonesHelper})
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
 	for _, entry := range entries {
@@ -186,8 +199,15 @@ func renderDockerfile(d infra.Deployment) string {
 	fmt.Fprintf(&b, "USER %s\n", layout.User)
 	fmt.Fprintf(&b, "COPY --chown=karakoram:karakoram %s\n", renderJSON([]string{d.Artifact.Name, "/tmp/karakoram-artifact.tar.gz"}))
 	fmt.Fprintf(&b, "RUN tar -xzf /tmp/karakoram-artifact.tar.gz -C %s && chmod +x %s && rm /tmp/karakoram-artifact.tar.gz\n", layout.AppDir, path.Join(layout.AppDir, d.Artifact.Binary))
-	fmt.Fprintf(&b, "COPY --chown=karakoram:karakoram --chmod=0644 [\"karakoram.env\",\"%s/karakoram.env\"]\n", layout.AppDir)
-	b.WriteString("COPY --chown=karakoram:karakoram --chmod=0755 [\"karakoram-entrypoint\",\"/usr/local/bin/karakoram-entrypoint\"]\n")
+	fmt.Fprintf(&b, "COPY --chown=root:root --chmod=0644 [\"karakoram.env\",\"%s/karakoram.env\"]\n", layout.AppDir)
+	b.WriteString("COPY --chown=root:root --chmod=0755 [\"karakoram-entrypoint\",\"/usr/local/bin/karakoram-entrypoint\"]\n")
+	if d.Runtime.Env["KARAKORAM_ENGINE"] == "mysql" {
+		b.WriteString("USER root\n")
+		b.WriteString("COPY --chown=root:root --chmod=0755 [\"karakoram-hosts-tombstones\",\"/usr/local/libexec/karakoram-hosts-tombstones\"]\n")
+		// NOEXEC would prevent this fixed shell helper from running its utilities.
+		b.WriteString("RUN printf '%s\\n' 'Defaults:karakoram !setenv' 'karakoram ALL=(root) NOPASSWD: NOSETENV: /usr/local/libexec/karakoram-hosts-tombstones \"\"' > /etc/sudoers.d/karakoram-hosts-tombstones && chmod 0440 /etc/sudoers.d/karakoram-hosts-tombstones && visudo -cf /etc/sudoers.d/karakoram-hosts-tombstones\n")
+		fmt.Fprintf(&b, "USER %s\n", layout.User)
+	}
 	// Swarm withholds service DNS/VIP membership while tasks are starting a
 	// Docker healthcheck. Engines need that DNS to bootstrap their own readiness,
 	// so mapping deployment readiness here would deadlock startup. Continuous

@@ -47,6 +47,12 @@ type ProxyDeploymentLookup interface {
 	LookupProxyDeployment(context.Context, string, string) (*Op, error)
 }
 
+// ResolutionTombstoneProjector projects the complete desired retired-host set
+// into one surviving member's provider-owned resolver template.
+type ResolutionTombstoneProjector interface {
+	ProjectResolutionTombstones(ctx context.Context, member string, hosts []string) error
+}
+
 // Capabilities declares the optional features a backend provides, so engines
 // can refuse unsupported requests with a clear error and the UI can show what
 // a namespace's backend supports. Every backend provides the core contract

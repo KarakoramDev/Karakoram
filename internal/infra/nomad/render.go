@@ -109,6 +109,11 @@ func (b *Backend) renderJob(ctx context.Context, r *record) (map[string]any, err
 		"Resources":  resources,
 		"KillSignal": "SIGTERM", "KillTimeout": int64(120 * time.Second),
 	}
+	if r.Deployment.ResolutionTombstones {
+		task["Env"] = map[string]string{"KARAKORAM_RESOLVER_TOMBSTONES": "nomad-variable:"}
+		templates := task["Templates"].([]any)
+		templates[2] = renderTemplate("etc/hosts", renderTombstoneHostsTemplate(r.Hostname), "0644")
+	}
 	if r.Pending != nil && r.Pending.Action == "resources" && (r.Volume != "" || len(r.Deployment.Runtime.Args) != 0 && r.Deployment.Runtime.Args[0] == "relay") {
 		// Resource updates use stop/purge/register for stateful members. Make
 		// the operation identity a task-spec change too, so job plan cannot
@@ -279,7 +284,7 @@ func renderEntrypoint(r *record) string {
 
 func renderEnvTemplate(hostname string) string {
 	variable := strconv.Quote("nomad/jobs/" + hostname)
-	return "{{ if nomadVarExists " + variable + " }}{{ with nomadVar " + variable + " }}{{ range .Tuples }}export {{ .K }}='{{ .V | replaceAll \"'\" \"'\\\\''\" }}'\n{{ end }}{{ end }}{{ end }}"
+	return "{{ if nomadVarExists " + variable + " }}{{ with nomadVar " + variable + " }}{{ range .Tuples }}{{ if not (regexMatch \"^karakoram_tombstone_\" .K) }}export {{ .K }}='{{ .V | replaceAll \"'\" \"'\\\\''\" }}'\n{{ end }}{{ end }}{{ end }}{{ end }}"
 }
 
 func renderHostsTemplate() string {

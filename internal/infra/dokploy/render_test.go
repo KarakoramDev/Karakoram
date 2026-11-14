@@ -115,7 +115,7 @@ func TestRenderDockerfile(t *testing.T) {
 		t.Fatalf("zip entries = %d", len(files))
 	}
 	df := string(files["Dockerfile"])
-	ordered := []string{"FROM " + baseImage, `SHELL ["/bin/bash","-o","pipefail","-c"]`, "apt-get install -y --no-install-recommends ca-certificates sudo curl gnupg", "USER karakoram\nWORKDIR /opt/karakoram\n", "RUN " + renderJSON([]string{"/bin/bash", "-o", "pipefail", "-c", d.Runtime.Prepare[0]}) + "\n", "RUN " + renderJSON([]string{"/bin/bash", "-o", "pipefail", "-c", d.Runtime.Prepare[1]}) + "\n", "RUN mkdir -p '/var/lib/karakoram/volumes/data-1'", `COPY --chown=karakoram:karakoram ["karakoram.tar.gz","/tmp/karakoram-artifact.tar.gz"]`, "RUN tar -xzf", `COPY --chown=karakoram:karakoram --chmod=0644 ["karakoram.env","/opt/karakoram/karakoram.env"]`, "STOPSIGNAL SIGTERM", "EXPOSE 9443/tcp", "EXPOSE 53/udp", "ENTRYPOINT ", "CMD "}
+	ordered := []string{"FROM " + baseImage, `SHELL ["/bin/bash","-o","pipefail","-c"]`, "apt-get install -y --no-install-recommends ca-certificates sudo curl gnupg", "USER karakoram\nWORKDIR /opt/karakoram\n", "RUN " + renderJSON([]string{"/bin/bash", "-o", "pipefail", "-c", d.Runtime.Prepare[0]}) + "\n", "RUN " + renderJSON([]string{"/bin/bash", "-o", "pipefail", "-c", d.Runtime.Prepare[1]}) + "\n", "RUN mkdir -p '/var/lib/karakoram/volumes/data-1'", `COPY --chown=karakoram:karakoram ["karakoram.tar.gz","/tmp/karakoram-artifact.tar.gz"]`, "RUN tar -xzf", `COPY --chown=root:root --chmod=0644 ["karakoram.env","/opt/karakoram/karakoram.env"]`, "STOPSIGNAL SIGTERM", "EXPOSE 9443/tcp", "EXPOSE 53/udp", "ENTRYPOINT ", "CMD "}
 	rest := df
 	for _, s := range ordered {
 		i := strings.Index(rest, s)

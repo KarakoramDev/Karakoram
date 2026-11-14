@@ -22,6 +22,9 @@ func envKey(k string) bool {
 }
 func validateEnvironment(values map[string]string) error {
 	for k, v := range values {
+		if strings.HasPrefix(k, tombstoneKeyPrefix) {
+			return reject("environment key prefix is reserved for resolution tombstones")
+		}
 		if !envKey(k) {
 			return reject("environment keys must be shell identifiers")
 		}

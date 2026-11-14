@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/hoststombstones"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,13 +48,74 @@ func RenderYAML(hostname string, layout infra.Layout, binary string, spec infra.
 			"retryPeriod":    fmt.Sprintf("%ds", r.RetryPeriod/time.Second),
 		}
 	}
-	run := map[string]any{"base": base, "ports": ports, "envVariables": spec.Env, "start": "./" + binary + " " + strings.Join(spec.Args, " ")}
-	if len(spec.Prepare) > 0 {
-		run["prepareCommands"] = spec.Prepare
+	env := spec.Env
+	prepare := spec.Prepare
+	if spec.Env["KARAKORAM_ENGINE"] == "mysql" {
+		// Do not mutate the caller's runtime specification or backing slices.
+		env = make(map[string]string, len(spec.Env)+1)
+		for key, value := range spec.Env {
+			env[key] = value
+		}
+		env["KARAKORAM_RESOLVER_TOMBSTONES"] = "hosts-helper:/usr/local/libexec/karakoram-hosts-tombstones"
+		prepare = append(append([]string(nil), spec.Prepare...), prepareHostsTombstones())
+	}
+	run := map[string]any{"base": base, "ports": ports, "envVariables": env, "start": "./" + binary + " " + strings.Join(spec.Args, " ")}
+	if len(prepare) > 0 {
+		run["prepareCommands"] = prepare
 	}
 	if spec.Volume != "" {
 		run["volume"] = map[string]any{"hostname": spec.Volume}
 	}
 	data, err := yaml.Marshal(map[string]any{"zerops": []any{map[string]any{"setup": hostname, "deploy": deploy, "run": run}}})
 	return string(data), err
+}
+
+// The quoted heredoc carries the same fixed helper used by Dokploy. All target
+// paths and policy text are generated constants, never runtime input.
+func prepareHostsTombstones() string {
+	return "/usr/bin/sudo -n /bin/sh <<'KARAKORAM_HOSTS_INSTALL'\n" +
+		"set -eu\n" +
+		"PATH=/usr/sbin:/usr/bin:/sbin:/bin\nexport PATH\numask 077\n" +
+		"helper=/usr/local/libexec/karakoram-hosts-tombstones\n" +
+		"policy=/etc/sudoers.d/karakoram-hosts-tombstones\n" +
+		"helperStage= policyStage= helperBackup= activated=0 committed=0 hadHelper=0\n" +
+		"cleanup() {\n" +
+		"    status=$?\n" +
+		"    trap - EXIT HUP INT TERM\n" +
+		"    if [ \"$activated\" -eq 1 ] && [ \"$committed\" -eq 0 ]; then\n" +
+		"        if [ \"$hadHelper\" -eq 1 ]; then\n" +
+		"            /usr/bin/mv -f -- \"$helperBackup\" \"$helper\" || status=1\n" +
+		"        else\n" +
+		"            /usr/bin/rm -f -- \"$helper\" || status=1\n" +
+		"        fi\n" +
+		"    fi\n" +
+		"    /usr/bin/rm -f -- \"$helperStage\" \"$policyStage\" \"$helperBackup\" || status=1\n" +
+		"    exit \"$status\"\n" +
+		"}\n" +
+		"trap cleanup EXIT\ntrap 'exit 1' HUP INT TERM\n" +
+		"/usr/bin/install -d -o root -g root -m 0755 /usr/local/libexec\n" +
+		"helperStage=$(/usr/bin/mktemp /usr/local/libexec/.karakoram-hosts-tombstones.XXXXXXXX)\n" +
+		"policyStage=$(/usr/bin/mktemp /etc/sudoers.d/.karakoram-hosts-tombstones.XXXXXXXX)\n" +
+		"/usr/bin/cat > \"$helperStage\" <<'KARAKORAM_HOSTS_HELPER'\n" +
+		hoststombstones.Script +
+		"KARAKORAM_HOSTS_HELPER\n" +
+		"/usr/bin/chown root:root \"$helperStage\"\n" +
+		"/usr/bin/chmod 0755 \"$helperStage\"\n" +
+		"/usr/bin/cat > \"$policyStage\" <<'KARAKORAM_HOSTS_POLICY'\n" +
+		"Defaults:zerops !setenv\n" +
+		"zerops ALL=(root) NOPASSWD: NOSETENV: /usr/local/libexec/karakoram-hosts-tombstones \"\"\n" +
+		"KARAKORAM_HOSTS_POLICY\n" +
+		"/usr/bin/chown root:root \"$policyStage\"\n" +
+		"/usr/bin/chmod 0440 \"$policyStage\"\n" +
+		"/usr/sbin/visudo -cf \"$policyStage\"\n" +
+		"if [ -e \"$helper\" ]; then\n" +
+		"    helperBackup=$(/usr/bin/mktemp /usr/local/libexec/.karakoram-hosts-backup.XXXXXXXX)\n" +
+		"    /usr/bin/cp -p -- \"$helper\" \"$helperBackup\"\n" +
+		"    hadHelper=1\n" +
+		"fi\n" +
+		"activated=1\n" +
+		"/usr/bin/mv -f -- \"$helperStage\" \"$helper\"\n" +
+		"/usr/bin/mv -f -- \"$policyStage\" \"$policy\"\n" +
+		"committed=1\n" +
+		"KARAKORAM_HOSTS_INSTALL\n"
 }

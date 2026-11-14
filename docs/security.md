@@ -28,17 +28,31 @@ grant the running agent unrestricted root access:
 
 - **Dokploy:** preparation runs as `karakoram` with build-only blanket sudo.
   Generated images remove that rule after preparation and run as UID/GID 10001.
-  Data-bearing images retain only an exact, noninteractive root `chown` rule for
+  Data-bearing images retain an exact, noninteractive root `chown` rule for
   the fixed mount root, using numeric ownership, `--no-dereference`, `NOEXEC` and
   `NOSETENV`; names cannot contain sudoers separators, escapes or wildcards.
-  Stateless images install no runtime sudo rule. This is not a container escape
-  defense or protection against a malicious platform administrator.
+  MySQL images also allow the root-owned mode-0755 hosts-tombstone helper with
+  no arguments and `NOSETENV`. Its fixed shell implementation requires child
+  utilities, so `NOEXEC` is intentionally absent for that command. Both sudoers
+  fragments are mode 0440 and checked with `visudo`; `!setenv` applies even to
+  MySQL without a volume. The agent invokes `/usr/bin/sudo` with a fixed minimal
+  environment. Generated runtime environment and entrypoint files are root-owned
+  mode 0644 and 0755, respectively; the agent only reads them.
+  Stateless non-MySQL images install no runtime sudo rule. This is not a
+  container escape defense or an integrity boundary against arbitrary code
+  execution as the agent UID: its binary/configuration and authenticated
+  heartbeat remain trusted. Docker's independent hosts writer also prevents
+  atomic or uninterrupted resolver protection; see [Dokploy](dokploy.md).
 - **Nomad:** the entrypoint's blanket sudo grant is temporary and is removed,
   with sudo's setuid bit stripped, before runtime secrets are loaded and the
   agent starts as UID/GID 10001. Preparation remains privileged.
-- **Zerops:** sudo policy belongs to the platform. Karakoram supplies preparation
-  commands but does not install or modify that policy, and its running agent
-  does not invoke sudo.
+- **Zerops:** sudo policy belongs to the platform, which already grants the
+  `zerops` runtime user unrestricted passwordless sudo. Karakoram does not remove
+  that policy. MySQL preparation installs the same root-owned fixed hosts helper
+  and an exact no-argument `NOSETENV` sudoers rule with `!setenv`; the agent invokes
+  it noninteractively at startup and during resolver repair. The narrow rule is
+  not a privilege boundary while the platform blanket grant remains. Other
+  engines add no runtime sudo use. See [Zerops startup replay](zerops.md).
 
 Existing Dokploy members keep their current policy until their next fresh
 Karakoram deployment, such as an agent upgrade, an engine-version or runtime

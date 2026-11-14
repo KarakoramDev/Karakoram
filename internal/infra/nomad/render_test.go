@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os/exec"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"testing/quick"
@@ -247,7 +248,7 @@ func TestRenderTemplatesAndEntrypoint(t *testing.T) {
 	if strings.Contains(renderEntrypoint(&copy), marker) {
 		t.Fatal("prepare hash did not change")
 	}
-	renderJSONEqual(t, templates[1].(map[string]any)["EmbeddedTmpl"], `"{{ if nomadVarExists \"nomad/jobs/examplem0\" }}{{ with nomadVar \"nomad/jobs/examplem0\" }}{{ range .Tuples }}export {{ .K }}='{{ .V | replaceAll \"'\" \"'\\\\''\" }}'\n{{ end }}{{ end }}{{ end }}"`)
+	renderJSONEqual(t, templates[1].(map[string]any)["EmbeddedTmpl"], `"{{ if nomadVarExists \"nomad/jobs/examplem0\" }}{{ with nomadVar \"nomad/jobs/examplem0\" }}{{ range .Tuples }}{{ if not (regexMatch \"^karakoram_tombstone_\" .K) }}export {{ .K }}='{{ .V | replaceAll \"'\" \"'\\\\''\" }}'\n{{ end }}{{ end }}{{ end }}{{ end }}"`)
 	renderJSONEqual(t, templates[2].(map[string]any)["EmbeddedTmpl"], `"127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n{{ $hostname := env \"attr.unique.hostname\" }}{{ $registered := false }}{{ range nomadServices }}{{ $name := .Name }}{{ range nomadService $name }}{{ if eq $name $hostname }}{{ $registered = true }}{{ end }}{{ .Address }} {{ $name }}\n{{ end }}{{ end }}{{ if and $hostname (not $registered) }}127.0.1.1 {{ $hostname }}\n{{ end }}"`)
 }
 
@@ -427,6 +428,7 @@ func TestRenderEnvTemplateQuoteProperty(t *testing.T) {
 	property := func(value string) bool {
 		value = strings.ReplaceAll(value, "\x00", "")
 		functions := template.FuncMap{
+			"regexMatch":     regexp.MatchString,
 			"nomadVarExists": func(name string) bool { return name == "nomad/jobs/examplem0" },
 			"nomadVar": func(name string) any {
 				if name != "nomad/jobs/examplem0" {
@@ -459,6 +461,7 @@ func TestRenderEnvTemplateQuoteProperty(t *testing.T) {
 
 func TestRenderAbsentEnvVariable(t *testing.T) {
 	parsed, err := template.New("env").Funcs(template.FuncMap{
+		"regexMatch":     regexp.MatchString,
 		"nomadVarExists": func(string) bool { return false },
 		"nomadVar":       func(string) any { t.Fatal("absent variable must not be fetched"); return nil },
 		"replaceAll":     func(old, replacement, value string) string { return strings.ReplaceAll(value, old, replacement) },

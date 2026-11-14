@@ -21,7 +21,8 @@ const recordPrefix = "karakoram/services/"
 type storedDeployment struct {
 	Runtime                  infra.RuntimeSpec
 	Source, Checksum, Binary string
-	EphemeralDiskMB          int `json:",omitempty"`
+	EphemeralDiskMB          int  `json:",omitempty"`
+	ResolutionTombstones     bool `json:",omitempty"`
 }
 type record struct {
 	ID, Hostname, Volume, SpreadGroup, Node, VolumeID, VolumeName string

@@ -32,6 +32,10 @@ const ConfigCapabilityPostgresLocalPeer = "postgres-local-peer"
 
 // MemberConfig is the secret-bearing desired configuration pulled by a node agent.
 type MemberConfig struct {
+	ResolutionTombstones []string `json:"resolutionTombstones,omitempty"`
+	// ResolutionTombstonesPresent distinguishes an authoritative empty set from
+	// an older control plane which has no opinion about resolver ownership.
+	ResolutionTombstonesPresent bool `json:"resolutionTombstonesPresent,omitempty"`
 	// PullRevision is an opaque conditional-pull token, not an engine version.
 	PullRevision string `json:"pullRevision,omitempty"`
 	// ChangeRevision is used only for authenticated heartbeat reload notices.
@@ -99,6 +103,8 @@ type Status struct {
 	HostFingerprint string                   `json:"hostFingerprint"`
 	Maintenance     bool                     `json:"maintenance"`
 	UptimeSeconds   int64                    `json:"uptimeSeconds"`
+	// ResolutionTombstones reports retirement-resolution tombstone installation.
+	ResolutionTombstones *ResolutionTombstoneStatus `json:"resolutionTombstones,omitempty"`
 	// PBMRestoreFence advertises supervised stop/wait/start confirmation.
 	PBMRestoreFence bool `json:"pbmRestoreFence,omitempty"`
 	// PBMRestoreIdentity advertises restore-scoped PBM authentication support.

@@ -4,6 +4,52 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading to v0.4.11
+
+Confirmed-lost MySQL Group Replication replacement now retains local resolver
+entries for the retired hostname on surviving data members before withdrawing
+its discovery registration. The fixed rejection addresses are `239.192.0.1`
+and `ff18::4b4b:1`. Agents verify the complete set through libc resolution and
+fast-failing TCP probes independently of native configuration rendering.
+Resolver-only changes do not restart MySQL.
+
+- **Nomad:** the hosts template arrives through controlled job re-registration
+  during the normal agent upgrade roll. Upgrade surviving members before relying
+  on protected retirement; the control-plane upgrade alone does not change
+  existing allocation templates.
+- **Dokploy:** the fixed hosts helper arrives in the member image through the
+  normal agent upgrade roll, not through a control-plane-only upgrade.
+- **Zerops:** the same fixed hosts helper is installed by the member preparation
+  on the next fresh deployment (the normal agent upgrade roll, an upgrade or a
+  replacement). Zerops resets a member's `/etc/hosts` when that member restarts;
+  the agent reinstalls the entries before MySQL starts. See [Zerops](zerops.md).
+
+Use `karactl -n NS clusters upgrade-agents CLUSTER --wait` to roll agents under
+the usual native safety gates. Old agents and unsupported resolver mechanisms
+produce the persistent `RetirementUnprotected` warning condition; replacement
+may proceed, but commits can still stall for roughly five minutes. Supported
+installation or verification failures instead wait for repair.
+
+Retirement holds outlive the replacement operation: entries remain for at least
+600 seconds. A newly verified survivor or MySQL process generation extends,
+never shortens, the hold. Release requires healthy current data members and
+their acknowledgement of the reduced complete resolver set. Partial release
+keeps a durable release-pending journal for retry.
+Old or explicitly unsupported agents are exempt from reduced-set acknowledgements
+because they own no managed entries; unreachable members and supported writers
+with failed installation or verification still block release.
+
+**Control-plane rollback fence:** do not downgrade the control plane below
+v0.4.11, or run an older control-plane writer against its state, while a
+retirement hold is active. Older control planes cannot preserve the journal.
+Check `karactl -n NS clusters status CLUSTER`: the `RetirementHold` condition
+with reason `ResolutionTombstonesRetained` remains present while entries are
+held or release-pending. Wait until that condition is absent before rollback,
+and do not try to clear it manually. New agents treat omitted resolver intent
+from an older control plane as “keep the installed set”, not an instruction to
+remove it; this compatibility behavior does not make an older control plane
+safe to run during a hold.
+
 ## Upgrading to v0.4.10
 
 These instructions apply when upgrading from v0.4.9. The health-observation and

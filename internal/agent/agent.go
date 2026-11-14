@@ -27,6 +27,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agent/tombstone"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	buildversion "github.com/KarakoramDev/Karakoram/internal/version"
 )
@@ -117,6 +118,16 @@ type nodeAgent struct {
 	applyRetry            *agentapi.MemberConfig
 	heartbeatSessionOnce  sync.Once
 	heartbeatSession      string
+
+	// Retirement-resolution tombstones (tombstones.go): resolutionTombstones is
+	// guarded by mu; resolutionMu guards the remaining resolution fields.
+	resolutionTombstones    *agentapi.ResolutionTombstoneStatus
+	resolutionMu            sync.Mutex
+	resolutionDesired       []string
+	resolutionKnown         bool
+	resolutionInstalledHash string
+	resolutionWriter        tombstone.Writer
+	resolutionVerify        func(context.Context, []string) error
 }
 
 func (a *nodeAgent) config() agentapi.MemberConfig { a.mu.RLock(); defer a.mu.RUnlock(); return a.c }
@@ -140,6 +151,7 @@ func (a *nodeAgent) reloadConfig(ctx context.Context) ([]string, bool, error) {
 			a.changeRevision = c.ChangeRevision
 		}
 		a.mu.Unlock()
+		_ = a.refreshResolutionTombstones(ctx)
 		return nil, true, nil
 	}
 	if err == nil {
@@ -201,6 +213,10 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) (changes
 	a.mu.Unlock()
 	defer func() { a.retainApplyRetry(c, applyErr) }()
 	a.acceptedVersion = c.ConfigVersion
+	c = a.preserveResolutionTombstones(c)
+	if err := a.applyResolutionTombstones(ctx, c.ResolutionTombstones); err != nil {
+		return nil, err
+	}
 	if err := a.volumeSafety(ctx, c); err != nil {
 		return nil, err
 	}
@@ -523,8 +539,10 @@ func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
 	}
 }
 
-func (a *nodeAgent) status(ctx context.Context) agentapi.Status {
+func (a *nodeAgent) status(ctx context.Context) (result agentapi.Status) {
 	states, maintenance := a.sup.snapshot()
+	_ = a.refreshResolutionTombstones(ctx)
+	defer a.attachResolutionTombstones(&result)
 	var mongoReady *bool
 	var mongoError string
 	if process := states["mongos"]; process.State == "paused" {

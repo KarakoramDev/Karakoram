@@ -19,6 +19,8 @@ type state struct {
 	NextIndex     int    `json:"nextIndex"`
 	ConfigVersion int64  `json:"configVersion"`
 	ConfigHash    string `json:"configHash,omitempty"`
+	// ResolutionTombstones journals retired names whose resolver tombstones are held.
+	ResolutionTombstones []resolutionTombstone `json:"resolutionTombstones,omitempty"`
 	// NativeConvergedGeneration records applied desired state independently of
 	// health. A history latch must not erase this prerequisite for recovery.
 	NativeConvergedGeneration int64                    `json:"nativeConvergedGeneration,omitempty"`
@@ -43,6 +45,7 @@ type state struct {
 	RestoreGTIDUnavailable    string                   `json:"restoreGTIDUnavailable,omitempty"`
 	GTIDPrefixLag             *gtidPrefixLag           `json:"gtidPrefixLag,omitempty"`
 	ProxyAdmissionWait        string                   `json:"proxyAdmissionWait,omitempty"`
+	RetirementUnprotected     string                   `json:"retirementUnprotected,omitempty"`
 	PITRReanchor              reanchorState            `json:"pitrReanchor,omitempty"`
 }
 

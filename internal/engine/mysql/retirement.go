@@ -275,6 +275,9 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 		m.Retirement = "leave"
 		publishRevision(s)
 	case "runtime-stop":
+		if ready, err := gateResolutionTombstone(ctx, rc, s, m); !ready || err != nil {
+			return false, err
+		}
 		// A cancelled join may never have a reachable MySQL agent. Its exact
 		// runtime stop plus terminal backend evidence fences rescheduling.
 		if err := survivorsOnline(ctx, rc, s, m.Name); err != nil {
@@ -433,6 +436,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 				}
 			}
 		}
+		holdResolutionTombstone(rc, s, m)
 		for i, peer := range s.Members {
 			if peer == m {
 				s.Members = append(s.Members[:i], s.Members[i+1:]...)

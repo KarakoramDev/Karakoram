@@ -300,7 +300,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	if m.Role == "data" && m.VolumeID != "" {
 		volume = &agentapi.VolumeIdentity{ClusterUID: s.UID, Member: m.Name, Volume: m.Volume, VolumeID: m.VolumeID, Initialized: m.Initialized}
 	}
-	return agentapi.MemberConfig{Cluster: rc.Cluster.Name, Member: name, Engine: "mysql", EngineSpec: raw, Role: m.Role, Port: 3306, EngineVersion: version, ConfigVersion: configVersion, DesiredProcesses: desired, Volume: volume, AgentTLS: agentapi.Certificate{CertPEM: agentCert.CertPEM, KeyPEM: agentCert.KeyPEM}}, nil
+	return agentapi.MemberConfig{ResolutionTombstonesPresent: true, ResolutionTombstones: resolutionTombstoneHosts(s, m), Cluster: rc.Cluster.Name, Member: name, Engine: "mysql", EngineSpec: raw, Role: m.Role, Port: 3306, EngineVersion: version, ConfigVersion: configVersion, DesiredProcesses: desired, Volume: volume, AgentTLS: agentapi.Certificate{CertPEM: agentCert.CertPEM, KeyPEM: agentCert.KeyPEM}}, nil
 }
 
 func (*Core) RequiresFreshMemberConfig(_ context.Context, rc *engine.Context, name string) (bool, error) {

@@ -6,6 +6,46 @@
 
 For a provider comparison, see [Providers](providers.md). For engine configuration and supported topologies, start with [MongoDB](mongodb/README.md), [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md), [RabbitMQ](rabbitmq/README.md) or [Elasticsearch](elasticsearch/README.md).
 
+New MySQL deployments install a shared root-owned hosts-tombstone helper during
+`run.prepareCommands`, with mode 0755 and a mode-0440, `visudo`-checked sudoers
+fragment for the `zerops` runtime user. The agent submits validated retired
+hostnames to this fixed, argument-free helper, which overrides them locally in
+`/etc/hosts` with `239.192.0.1` and `ff18::4b4b:1`. Other engines do not configure
+this writer. libc resolution and fast TCP rejection must be acknowledged before
+retiring a lost MySQL member; periodic verification detects and repairs drift.
+
+Preparation stages both files under private, same-directory temporary names;
+the sudoers staging name contains a dot so sudo ignores it. Ownership and modes
+are set and the staged policy passes `visudo -cf` before either file is activated.
+Each activation uses atomic rename, helper first and policy last. A root cleanup
+trap removes staged files and restores the previous helper if policy activation
+fails, avoiding truncation of an active helper or sudoers include.
+
+The platform already grants the runtime user unrestricted passwordless sudo,
+outside Karakoram's control. The added exact `NOSETENV` helper rule and
+`Defaults:zerops !setenv` do **not** establish a privilege boundary against that
+user. The shell helper intentionally cannot use `NOEXEC`, because its fixed
+implementation executes utilities.
+
+Runtime qualification observed `hosts: files dns`, root-owned mode-0644 hosts,
+and local dual-family overrides surviving another service's stop/deletion.
+The member's **own stop/start resets hosts**, while the prepare-installed helper
+and policy survive. The agent therefore reinstalls retained tombstones and
+verifies them **before starting MySQL on every startup**; a supported-writer
+failure blocks startup rather than silently acknowledging protection. A stopped
+Zerops service can retain DNS records whose TCP connections time out, so simply
+keeping the stopped object does not provide fast rejection. These observations
+are not a platform lifetime guarantee or end-to-end native-engine qualification.
+
+Existing members acquire the helper on their next **fresh agent-upgrade
+deployment, engine/runtime redeployment, or replacement**. The provider renders
+preparation commands into the runtime YAML passed to the prebuilt app-version
+deploy API, after artifact allocation/upload; preparation is part of that new
+deployment. Import alone does not deploy code. A control-plane upgrade alone,
+ordinary start/restart, and recovery of an already-submitted old app version do
+not install newly rendered preparation commands. After the first fresh deployment,
+ordinary startup reuses the installed helper and replays the desired tombstones.
+
 ## How it maps
 
 | Karakoram | Zerops |
