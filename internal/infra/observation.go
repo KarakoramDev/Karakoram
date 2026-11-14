@@ -44,6 +44,7 @@ func ObserveParallel(ctx context.Context, count int, observe func(int) error) er
 
 type observationContextKey struct{}
 type observationCacheKey struct{}
+type passObservationCacheKey struct{}
 type freshTaskInventoryKey struct{}
 
 // WithFreshTaskInventory requires task enumeration to bypass sweep snapshots.
@@ -63,6 +64,24 @@ func FreshTaskInventory(ctx context.Context) bool {
 // Live task authorization must still fetch current tasks on every connection.
 func WithObservationCache(ctx context.Context, cache *sync.Map) context.Context {
 	return context.WithValue(ctx, observationCacheKey{}, cache)
+}
+
+// WithPassObservationCache starts one status attempt over a shared descriptive
+// snapshot. Fresh facts are memoized in the attempt-local map; authorization
+// must never consume a fact inherited from the shared snapshot.
+func WithPassObservationCache(ctx context.Context, shared *sync.Map) context.Context {
+	ctx = context.WithValue(ctx, passObservationCacheKey{}, shared)
+	return WithObservationCache(ctx, new(sync.Map))
+}
+
+// PassObservationCache is unavailable to pinned authorization and lifecycle work.
+// Authorization retains only the ordinary, status-attempt-local memo.
+func PassObservationCache(ctx context.Context) *sync.Map {
+	if !IsObservation(ctx) || FreshTaskInventory(ctx) {
+		return nil
+	}
+	cache, _ := ctx.Value(passObservationCacheKey{}).(*sync.Map)
+	return cache
 }
 
 // ObservationCache is deliberately unavailable to lifecycle/mutation reads.
@@ -87,6 +106,9 @@ func WithoutObservation(ctx context.Context) context.Context {
 	ctx = WithoutSteadyObservation(ctx)
 	if cache, _ := ctx.Value(observationCacheKey{}).(*sync.Map); cache != nil {
 		ctx = WithObservationCache(ctx, nil)
+	}
+	if cache, _ := ctx.Value(passObservationCacheKey{}).(*sync.Map); cache != nil {
+		ctx = context.WithValue(ctx, passObservationCacheKey{}, (*sync.Map)(nil))
 	}
 	if !IsObservation(ctx) {
 		return ctx

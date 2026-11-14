@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
@@ -190,5 +191,36 @@ func TestPendingProxyScaleSuccessiveReductionsAndInterruptedPersistence(t *testi
 				t.Fatalf("latest reduction did not complete after reconstruction: %+v", s.Pending)
 			}
 		})
+	}
+}
+
+func TestPendingReceiptCadenceBacksOffAndResets(t *testing.T) {
+	p, rc, base := setup(t, "single")
+	s := converge(t, p, rc)
+	m := s.data()[0]
+	rc.Backend = &pendingProxyScaleBackend{fakeBackend: base}
+	newReceipt := func() {
+		t.Helper()
+		s.Pending = &pending{Action: "resize", Member: m.Name, Op: infra.Op{ID: "held-receipt"}}
+		if err := save(rc.Cluster, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	newReceipt()
+	for _, seconds := range []int{2, 3, 4, 5, 5} {
+		result, err := p.Sync(t.Context(), rc)
+		if err != nil || result.RequeueAfter != time.Duration(seconds)*time.Second {
+			t.Fatalf("pending cadence=%s, want %ds; err=%v", result.RequeueAfter, seconds, err)
+		}
+		// Reconstruct from the durable checkpoint, as after a CP restart.
+		s, err = load(rc.Cluster)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	newReceipt()
+	result, err := p.Sync(t.Context(), rc)
+	if err != nil || result.RequeueAfter != 2*time.Second {
+		t.Fatal("new receipt inherited the previous receipt's backoff", result, err)
 	}
 }

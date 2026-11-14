@@ -297,9 +297,9 @@ retains the fresh path instead of weakening it.
 ### Active PostgreSQL operation cost
 
 The idle and configuration-pull budgets above are **not an end-to-end
-operation budget**. A PostgreSQL proxy-count operation can run a fresh
-reconcile pass about every **two seconds** while a deployment receipt is
-pending. An isolated experiment using the production Manager, native engine
+operation budget**. Before v0.4.10, a PostgreSQL proxy-count operation ran
+a fresh reconcile pass about every **two seconds** while a deployment receipt
+was pending. An isolated experiment using the production Manager, native engine
 provider and fake Dokploy API averaged approximately **100 GETs per PG
 reconcile pass** over 34 attempts:
 pending `Sync` calls cost 12 GETs, transition calls approximately 46–122,
@@ -308,7 +308,7 @@ uncertain results also invoke an immediate second observation with a new
 cache. In that experiment these second attempts added **1,130 GETs**;
 observations together accounted for about 72% of PG reconcile GETs.
 
-Active PG operations can therefore sustain roughly **15–50 GET/s**, rather
+Before this change, active PG operations could sustain roughly **15–50 GET/s**, rather
 than the idle rate. The isolated experiment made **3,721 GETs in 67.2 s**
 (about 55 GET/s including siblings), of which 3,412 belonged to PG.
 A live operation window recorded **2,497 GETs in 110.5 s** (about 23 GET/s).
@@ -332,17 +332,77 @@ It is a **single backend-call scenario**, not a complete PG Manager
 operation budget. It does not account for all repeated lifecycle passes or
 their immediate second observation attempts.
 
-The v0.4.10 plan also includes an operation-pass read budget: avoid an immediate
-second observation while a receipt is pending, deduplicate snapshot reads
-across pre-/post-observations within a pass, slow the pending cadence where
-safe, and add end-to-end per-operation budget tests. These are planned
-changes, not behavior or guarantees implemented in v0.4.9; fresh safety
-decision points remain mandatory.
+v0.4.10 bounds this amplification in three ways:
+
+- PostgreSQL, MySQL and Neo4j skip the immediate second status attempt while
+  their durable infrastructure receipt remains checkpointed. PostgreSQL also
+  recognizes an agent-upgrade deployment receipt. Intermediate degradation is
+  still published; a failed read still withdraws readiness rather than renewing
+  an old lease. A terminal receipt that stays checkpointed while native or
+  configuration readiness completes still suppresses the status retry, but its
+  `Sync` polling returns to the two-second cadence. Idle observations and
+  observations after the receipt is consumed retain the fresh retry that
+  protects against transient false negatives.
+- Dokploy first-attempt platform facts are shared across pre-/post-`Sync`
+  observations within **one reconcile pass**, not between passes. Keys include
+  the shared target mutation epoch, which changes before and after every HTTP
+  mutation, including failed mutations and mutations from another client.
+  Retries discard the earlier platform snapshot. Native probes are not cached
+  by this mechanism and timestamps retain the original pass boundary. Nomad
+  and Zerops do not opt into this pre-/post-observation cache.
+- Unchanged pending PostgreSQL receipts and serving MySQL count-only receipts
+  poll after **2, 3, 4, then 5 seconds** (capped there). New or superseding
+  receipts reset the counter. Poll errors and every terminal platform poll reset it
+  immediately, even if native/configuration readiness still retains the receipt:
+  that readiness is checked again at the ordinary two-second cadence. Scheduled
+  receipt-detection delay is bounded by five seconds
+  (the previous bound was two seconds), excluding platform-call execution and
+  scheduler latency. Deployment itself is not slowed, normal
+  transition passes remain fast, and the Manager's five-second readiness cap
+  remains unchanged.
+
+Fresh safety decision points remain mandatory. These changes reduce request
+pressure; they do not guarantee availability observations cannot time out when
+the platform is slow or overloaded.
+
+The committed native-Manager fixture uses a **20-second task-progression hold**,
+not the historical 60-second hold above. Matched fixture runs on the unmodified
+v0.4.9 base (ordinary tests) and optimized implementation (race-instrumented
+tests) measured these network GET totals:
+
+| Operation | v0.4.9 GETs | Optimized GETs | Enforced ceiling | Optimized completion after enqueue |
+|---|---:|---:|---:|---:|
+| PostgreSQL proxy count 2→3 | 1,572 | 1,038 | 1,250 | 28.678 s |
+| MySQL GR proxy count 3→4 | 1,430 | 1,197 | 1,400 | 38.078 s |
+| PostgreSQL agent roll, including current agents | 704 | 511 | 580 | 25.765 s |
+
+All operations succeeded with zero operation failures. All three ceilings fail
+on the base and pass on the optimized implementation in the targeted race
+tests. Affected race regressions and touched-package `go vet` also pass.
+The ceilings allow approximately 20%, 17% and 14% headroom above the optimized
+measurements. Completion
+includes the artificial hold but excludes fixture warmup and any build/test
+queue. These fixture measurements are request-regression bounds, not a live
+platform completion SLO, and must not be directly divided into the historical
+60-second experiment's totals.
 
 
 ### Safety decision points stay fresh
 
-Writer handoff, retirement and identity gates (MySQL GR UUID-set convergence, PostgreSQL etcd identity, stop proofs), maintenance fences, formation, scale/replace/lost-volume admission, proxy admission (`WithFreshTaskInventory`), pinned dial authorization and every mutation run inside `Sync` or an operation. None of them carries the steady-observation marker, so none can read a pushed sample or a snapshot entry; they keep their v0.4.7 fresh reads. Mutations still strip observation state and revalidate ownership under exclusion.
+Writer handoff, retirement and identity gates (MySQL GR UUID-set convergence,
+PostgreSQL etcd identity, stop proofs), maintenance fences, formation,
+scale/replace/lost-volume admission, proxy admission (`WithFreshTaskInventory`),
+pinned dial authorization and every mutation keep their fresh reads. `Sync`
+and operation contexts never receive the pre-/post-observation platform memo.
+Each status attempt has its own fresh authorization memo. Descriptive cache hits
+from the shared pass snapshot are never promoted into that memo. Pinned
+authorization cannot consult the shared map; application lookups assembled from
+inherited raw records are not memoized as fresh evidence. Fresh reads may still
+be shared inside one attempt, exactly as before this pass-level optimization.
+Safety reads do not carry the steady-observation marker and cannot use pushed
+samples or persistent target snapshots. Pinned connections still enumerate
+current tasks on every authorization; mutations strip observation state,
+invalidate the target epoch, and revalidate ownership under exclusion.
 
 ### Request budget enforced by tests
 
@@ -354,8 +414,19 @@ Each provider package has a request-counting harness (real engine providers and 
 - a simulated idle hour exceeds the idle per-cluster rate;
 - a single backend-call burst scenario exceeds its scenario count, or steady observation fails to resume afterward.
 
-These component/scenario limits, including the 81-request backend-call
-example, do not enforce an end-to-end Manager operation budget.
+These component/scenario limits, including the 81-request backend-call example,
+remain separate from the Manager operation limits. Dokploy's
+`TestManagerOperationRequestBudget` runs the production Manager, queue, native
+providers, configuration rendering and HTTP backend against fake Dokploy and
+TLS agents. It holds platform task progression for 20 seconds and requires a
+successful, zero-failure operation whose recorded completion is within 55 seconds
+of enqueue, even if the polling goroutine discovers completion later. It covers PostgreSQL
+proxy count 2→3, MySQL GR proxy count 3→4, and PostgreSQL `upgrade-agents`
+including current agents, with GET ceilings of **1,250**, **1,400** and **580**
+respectively. The native database processes are simulated; these are bounded
+request-budget regressions, not live deployment-latency SLOs. Companion
+reconciliation and pushed-heartbeat/config-route behavior are outside this
+fixture; their separate budgets above still apply.
 
 The reconciler has simulated-time tests for the steady schedule, discovery skipping and immediate triggers.
 

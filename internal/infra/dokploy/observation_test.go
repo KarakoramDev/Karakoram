@@ -424,3 +424,100 @@ func TestFreshTaskAuthorizationOverlapsOwnershipInspection(t *testing.T) {
 		t.Fatalf("independent authorization prerequisites were serialized: count=%d err=%v", len(containers), err)
 	}
 }
+
+func TestObservationPassMutationInvalidatesMemo(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, runtimeSpec("runtime", ""))
+	deployFake(t, b, "runtime", "")
+	ctx := infra.WithObservationCache(infra.ObservationContext(t.Context()), new(sync.Map))
+	read := func() {
+		t.Helper()
+		if _, err := b.nodes(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read()
+	before := fakeCalls(f, "cluster.getNodes")
+	read()
+	if got := fakeCalls(f, "cluster.getNodes"); got != before {
+		t.Fatal("same-pass snapshot not reused", got, before)
+	}
+	// A different client sharing this target must invalidate the pass too.
+	other := fakeBackend(t, f, nil)
+	op, err := other.SetContainerCount(t.Context(), "runtime", 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	awaitFake(t, other, op)
+	before = fakeCalls(f, "cluster.getNodes")
+	read()
+	if got := fakeCalls(f, "cluster.getNodes"); got != before+1 {
+		t.Fatal("post-mutation observation reused stale platform facts", got, before)
+	}
+}
+
+func TestObservationPassAuthorizationRejectsExternalOwnershipChange(t *testing.T) {
+	f, b, app := markedProxyFake(t, 1)
+	shared := new(sync.Map)
+	pre := infra.WithPassObservationCache(infra.ObservationContext(t.Context()), shared)
+	if _, err := b.GetService(pre, "proxy"); err != nil {
+		t.Fatal(err)
+	}
+	inspections := fakeCalls(f, "docker.getConfig")
+	post := infra.WithPassObservationCache(infra.ObservationContext(t.Context()), shared)
+	if _, err := b.GetService(post, "proxy"); err != nil {
+		t.Fatal(err)
+	}
+	if fakeCalls(f, "docker.getConfig") != inspections {
+		t.Fatal("descriptive post-Sync read did not exercise the inherited service snapshot")
+	}
+	epoch, _, _ := b.c.snapshot.ConfigGeneration()
+	// Simulate an external actor: no client mutation or epoch invalidation.
+	f.mu.Lock()
+	service := f.services[fakeString(app.row, "appName")]
+	service["Spec"].(map[string]any)["TaskTemplate"].(map[string]any)["ContainerSpec"].(map[string]any)["Labels"] = map[string]string{"karakoram.owner": "foreign"}
+	f.mu.Unlock()
+	after, _, _ := b.c.snapshot.ConfigGeneration()
+	if after != epoch {
+		t.Fatal("fixture accidentally invalidated the client snapshot")
+	}
+	environment, application := fakeCalls(f, "environment.one"), fakeCalls(f, "application.one")
+	if _, err := b.Containers(infra.WithFreshTaskInventory(post), "proxy"); !errors.Is(err, infra.ErrConflict) {
+		t.Fatal("pinned authorization trusted the descriptive ownership snapshot", err)
+	}
+	if fakeCalls(f, "docker.getConfig") != inspections+1 ||
+		fakeCalls(f, "environment.one") != environment+1 ||
+		fakeCalls(f, "application.one") != application+1 {
+		t.Fatal("pinned authorization did not freshly resolve the application and owned service")
+	}
+}
+
+func TestObservationPassAuthorizationRejectsInheritedApplicationFacts(t *testing.T) {
+	f, b, app := markedProxyFake(t, 1)
+	shared := new(sync.Map)
+	pre := infra.WithPassObservationCache(infra.ObservationContext(t.Context()), shared)
+	if _, err := b.environment(pre); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.applicationRecord(pre, fakeString(app.row, "applicationId")); err != nil {
+		t.Fatal(err)
+	}
+	post := infra.WithPassObservationCache(infra.ObservationContext(t.Context()), shared)
+	if _, err := b.application(post, "proxy"); err != nil {
+		t.Fatal(err)
+	}
+	// The descriptive lookup above was assembled from inherited raw facts;
+	// it must not become an attempt-local authorization cache entry.
+	f.mu.Lock()
+	f.environments["foreign"] = map[string]any{"environmentId": "foreign", "projectId": "project", "name": "foreign"}
+	app.row["environmentId"] = "foreign"
+	f.mu.Unlock()
+	before := fakeCalls(f, "application.one")
+	if _, err := b.Containers(infra.WithFreshTaskInventory(post), "proxy"); !errors.Is(err, infra.ErrConflict) {
+		t.Fatal("derived descriptive application facts authorized a foreign application", err)
+	}
+	if fakeCalls(f, "application.one") != before+1 {
+		t.Fatal("authorization did not refresh the inherited application record")
+	}
+}

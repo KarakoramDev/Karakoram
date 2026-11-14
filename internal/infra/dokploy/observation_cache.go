@@ -6,6 +6,7 @@ package dokploy
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
@@ -14,6 +15,7 @@ type observationKey struct {
 	backend    *Backend
 	kind, name string
 	steady     bool
+	epoch      uint64
 }
 
 func (b *Backend) readKey(kind, name string) observationKey {
@@ -26,13 +28,24 @@ type observationCall[T any] struct {
 	err   error
 }
 
-// Sweep discovery snapshots are immutable for the pass. Task enumeration for
-// pinned-transport authorization bypasses this cache via WithFreshTaskInventory.
-// Mutation callers use WithoutObservation and always reload authoritative state.
+// ObservationPassSnapshots opts in to pre/post-Sync platform memoization.
+// The shared target epoch changes at both boundaries of every HTTP mutation,
+// including failures, and therefore also invalidates sibling client snapshots.
+func (*Backend) ObservationPassSnapshots() {}
+
+// Descriptive reads may reuse a cross-Sync snapshot. Authorization only uses
+// fresh facts from its current status attempt; task rows remain unconditionally
+// fresh. Mutation callers strip both caches and reload authoritative state.
 func observationValue[T any](ctx context.Context, key observationKey, read func() (T, error)) (T, error) {
 	cache := infra.ObservationCache(ctx)
 	if cache == nil {
 		return read()
+	}
+	if key.backend != nil {
+		if key.backend.c.snapshot == nil {
+			return read()
+		}
+		key.epoch, _, _ = key.backend.c.snapshot.ConfigGeneration()
 	}
 	if infra.SteadyObservation(ctx) {
 		// Fresh discovery may serve either class, but snapshot-eligible facts
@@ -43,6 +56,18 @@ func observationValue[T any](ctx context.Context, key observationKey, read func(
 			key.steady = true
 		}
 	}
+	shared := infra.PassObservationCache(ctx)
+	if shared != nil {
+		if _, fresh := cache.Load(key); !fresh {
+			if _, inherited := shared.Load(key); inherited {
+				return observationMemoValue(ctx, shared, nil, key, read)
+			}
+		}
+	}
+	return observationMemoValue(ctx, cache, shared, key, read)
+}
+
+func observationMemoValue[T any](ctx context.Context, cache, shared *sync.Map, key observationKey, read func() (T, error)) (T, error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			var zero T
@@ -68,9 +93,15 @@ func observationValue[T any](ctx context.Context, key observationKey, read func(
 				return zero, ctx.Err()
 			}
 		}
+		if shared != nil {
+			shared.Store(key, call)
+		}
 		call.value, call.err = read()
 		if call.err != nil {
 			cache.CompareAndDelete(key, call)
+			if shared != nil {
+				shared.CompareAndDelete(key, call)
+			}
 		}
 		close(call.done)
 		return call.value, call.err

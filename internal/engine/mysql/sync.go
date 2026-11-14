@@ -317,7 +317,19 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	// Only the serving count-only receipt gets a slower poll cadence. Native
+	// membership, handoff, stop proofs and rollout transitions stay fast.
+	rollingReceipt := ""
+	if u := s.Rolling; u != nil && u.Stage == "scaled" && u.Op != nil {
+		rollingReceipt = u.Op.ID
+	}
 	if busy, e := p.reconcileRolling(ctx, rc, s); busy || e != nil {
+		if u := s.Rolling; e == nil && rollingReceipt != "" && u != nil && u.Stage == "scaled" && u.Op != nil && u.Op.ID == rollingReceipt && u.platformPending {
+			u.Polls = min(u.Polls+1, 4)
+			result.RequeueAfter = time.Duration(u.Polls+1) * time.Second
+		} else if u != nil {
+			u.Polls = 0
+		}
 		return result, e
 	}
 	raw, e := json.Marshal(rc.Cluster.Spec)

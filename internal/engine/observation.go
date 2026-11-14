@@ -61,9 +61,9 @@ func ObserveAgentStatus(ctx context.Context, client *agentapi.Client, engineName
 	return status, err
 }
 
-// A sweep gets five seconds and one immediate retry. Never carry a failed
-// sample across cycles to suppress flapping: only a successful fresh retry may
-// restore readiness. A stalled reconciliation cannot extend the readiness lease.
+// A sweep gets five seconds and one immediate retry, except while a durable
+// platform receipt is pending. Never carry a failed sample across cycles to
+// suppress flapping: only successful fresh reads may restore readiness.
 const ObservationSweepTimeout = 5 * time.Second
 const ReadinessInterval = 5 * time.Second
 
@@ -355,6 +355,13 @@ func FreshStatus(status domain.ClusterStatus, at time.Time) domain.ClusterStatus
 	return status
 }
 
+// PendingInfrastructureObserver identifies durable, nonterminal platform work.
+// Expected intermediate health does not benefit from an immediate second sweep.
+// Idle and terminal observations retain their fresh retry against false negatives.
+type PendingInfrastructureObserver interface {
+	ObservationReceiptPending(*Context) bool
+}
+
 // ObserveStatus obtains a bounded fresh snapshot independently of recovery work.
 // Providers must honor context cancellation; read-only probes must never inherit
 // the much longer engine-mutation timeout.
@@ -378,12 +385,29 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 		}
 	}
 	ctx = infra.WithoutSteadyObservation(ctx)
-	for attempt := range 2 {
+	attempts := 2
+	if pending, ok := p.(PendingInfrastructureObserver); ok && pending.ObservationReceiptPending(rc) {
+		attempts = 1
+	}
+	for attempt := range attempts {
 		started := clock.Now()
 		probe, cancel := context.WithTimeout(ctx, observationSweepTimeout(clock))
-		// Snapshot only this read-only attempt. A retry without a provider-owned
-		// sample clock must obtain new facts, not relabel an earlier snapshot.
-		probe = infra.WithObservationCache(infra.ObservationContext(probe), new(sync.Map))
+		// First attempts may share platform facts across pre/post Sync. Opted-in
+		// backends invalidate on mutation; retries always obtain a new snapshot.
+		cache := observationPlatformCache(ctx, rc.Backend)
+		shared := cache != nil && attempt == 0
+		if cache == nil || attempt > 0 {
+			if cache != nil {
+				cache.Clear()
+			}
+			cache = new(sync.Map)
+		}
+		if shared {
+			ObservationPassStart(ctx, started)
+			probe = infra.WithPassObservationCache(infra.ObservationContext(probe), cache)
+		} else {
+			probe = infra.WithObservationCache(infra.ObservationContext(probe), cache)
+		}
 		status, err = p.Status(probe, rc)
 		if errors.Is(err, ErrObservationBudgetExhausted) {
 			cancel()
@@ -435,12 +459,12 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 				}
 			}
 		}
-		if !failed && (!retry || attempt == 1) {
+		if !failed && (!retry || attempt == attempts-1) {
 			status.ObservationEpoch = rc.ObservationEpoch
 			ObserveAgentVersions(&status, CurrentAgentBuild(), clock.Now())
 			return status, nil
 		}
-		if attempt == 1 || ctx.Err() != nil {
+		if attempt == attempts-1 || ctx.Err() != nil {
 			if err != nil {
 				// Failure/abort owners may deliberately publish a terminal
 				// lifecycle with an error. Do not turn that safety fence back

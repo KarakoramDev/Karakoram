@@ -119,7 +119,16 @@ func mysqlReadContext(ctx context.Context, rc *engine.Context) (context.Context,
 	deadline := *budget
 	scope.mu.Unlock()
 	probe, cancel := context.WithDeadline(ctx, deadline)
-	return infra.WithObservationCache(infra.ObservationContext(probe), &scope.inventory), cancel
+	inventory := &scope.inventory
+	if _, share := rc.Backend.(interface{ ObservationPassSnapshots() }); share {
+		// Keep the engine's mutation-epoch-protected platform snapshot across
+		// pre/post Status. Native samples still obey this scope's invalidation,
+		// and fresh safety reads above deliberately strip every inventory memo.
+		if cache := infra.ObservationCache(ctx); cache != nil {
+			inventory = cache
+		}
+	}
+	return infra.WithObservationCache(infra.ObservationContext(probe), inventory), cancel
 }
 
 // Invalidation discards in-flight and completed payloads, never the pass budget.

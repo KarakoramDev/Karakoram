@@ -37,10 +37,11 @@ import (
 // only native/generic agent responses; pinned transports still reauthorize each
 // connection against fresh Dokploy task inventory, just like the relay.
 type providerBudgetAgents struct {
-	backend  *Backend
-	endpoint string
-	ca       []byte
-	samples  *agentpush.Store
+	backend   *Backend
+	endpoint  string
+	ca        []byte
+	samples   *agentpush.Store
+	connected func(address, task string)
 }
 
 func (a *providerBudgetAgents) Dial(_ context.Context, ref model.ClusterRef, member string) (*agentapi.Client, error) {
@@ -62,8 +63,12 @@ func (a *providerBudgetAgents) Dial(_ context.Context, ref model.ClusterRef, mem
 				return nil, err
 			}
 			for _, c := range containers {
-				if c.Hostname == instance && c.Status == infra.ContainerRunning {
-					return dial(ctx, network, logical)
+				if (c.Hostname == instance || c.IPv4 == instance || c.IPv6 == instance) && (c.Status == infra.ContainerRunning || c.Status == infra.ContainerStarting) {
+					conn, err := dial(ctx, network, logical)
+					if err == nil && a.connected != nil {
+						a.connected(conn.LocalAddr().String(), c.ID)
+					}
+					return conn, err
 				}
 			}
 			return nil, fmt.Errorf("instance is not in current inventory")
@@ -173,9 +178,30 @@ func providerBudgetSecret(t *testing.T, rc *engine.Context, key string, v any) {
 func providerBudgetRuntime(t *testing.T, b *Backend, name, volume string, count int, proxy bool) string {
 	t.Helper()
 	spec := runtimeSpec(name, volume)
+	var desired model.ClusterSpec
+	if strings.HasPrefix(name, "samplep") {
+		postgres.New(postgres.Options{}).ApplyDefaults(&desired)
+	} else if strings.HasPrefix(name, "samplen") {
+		neo4j.New(neo4j.Options{}).ApplyDefaults(&desired)
+	} else {
+		desired.Components.Engine.Resources = model.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 2, MaxRAM: 2, MinDisk: 5, MaxDisk: 5}
+	}
+	resources := desired.Components.Engine.Resources
+	if proxy {
+		resources = desired.Components.Extra["proxy"].Resources
+		if resources.MinCPU == 0 {
+			resources = model.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1}
+		}
+	}
+	raw, _ := json.Marshal(resources)
+	_ = json.Unmarshal(raw, &spec.Resources)
+	spec.Vars = engine.OwnerVars(name, "sample", name, name)
 	spec.MinContainers, spec.MaxContainers = count, count
 	if volume != "" {
-		importFake(t, b, volumeSpec(volume))
+		v := volumeSpec(volume)
+		v.Resources = spec.Resources
+		v.Vars = engine.OwnerVars(name, "sample", name, volume)
+		importFake(t, b, v)
 	}
 	op := importFake(t, b, spec)
 	d := testDeployment(t, volume)

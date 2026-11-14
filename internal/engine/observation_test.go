@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 type observationProvider struct {
@@ -416,5 +417,110 @@ func TestObservationFailureWithoutHistoricalInventoryRetainsObservedIdentities(t
 	got, err := ObserveStatus(t.Context(), p, rc)
 	if err == nil || got.Phase != domain.PhaseDegraded || len(got.Members) != 1 || got.Members[0].Name != "m0" || got.Members[0].Health || got.Members[0].Agent.Healthy {
 		t.Fatalf("first failed observation lost known identity or retained health: %+v %v", got, err)
+	}
+}
+
+type pendingObservationProvider struct {
+	observationProvider
+	pending bool
+}
+
+func (p pendingObservationProvider) ObservationReceiptPending(*Context) bool {
+	return p.pending
+}
+
+func TestObservationPendingReceiptSkipsOnlyImmediateRetry(t *testing.T) {
+	at := time.Now().UTC()
+	for _, pending := range []bool{false, true} {
+		for _, failed := range []bool{false, true} {
+			calls := 0
+			p := pendingObservationProvider{pending: pending}
+			p.observe = func(context.Context, *Context) (domain.ClusterStatus, error) {
+				calls++
+				status := readyObservation(at)
+				status.Phase = domain.PhaseDegraded
+				if failed {
+					return status, errors.New("read failed")
+				}
+				return status, nil
+			}
+			rc := &Context{Clock: observationClock{at}, Cluster: &domain.Cluster{Status: readyObservation(at.Add(-time.Second))}}
+			status, err := ObserveStatus(WithObservationPass(t.Context()), p, rc)
+			want := 2
+			if pending {
+				want = 1
+			}
+			if calls != want {
+				t.Fatalf("pending=%v failed=%v calls=%d, want %d", pending, failed, calls, want)
+			}
+			if failed && (err == nil || !status.ObservedAt.IsZero() || status.ObservationEpoch != "") {
+				t.Fatal("failed pending observation renewed readiness", status, err)
+			}
+			if !failed && (err != nil || status.Phase != domain.PhaseDegraded) {
+				t.Fatal("intermediate degradation was hidden", status, err)
+			}
+		}
+	}
+}
+
+type passSnapshotBackend struct{ infra.Backend }
+
+func (passSnapshotBackend) ObservationPassSnapshots() {}
+
+func TestObservationPlatformSnapshotSharesOnlyWithinPass(t *testing.T) {
+	at := time.Now().UTC()
+	reads := 0
+	p := observationProvider{observe: func(ctx context.Context, _ *Context) (domain.ClusterStatus, error) {
+		cache := infra.PassObservationCache(ctx)
+		if _, loaded := cache.LoadOrStore("platform", true); !loaded {
+			reads++
+		}
+		return readyObservation(at), nil
+	}}
+	rc := &Context{Clock: observationClock{at}, Cluster: &domain.Cluster{}, Backend: passSnapshotBackend{}}
+	ctx := WithObservationPass(t.Context())
+	for range 2 {
+		if _, err := ObserveStatus(ctx, p, rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if reads != 1 {
+		t.Fatal("pre/post observations did not share platform facts", reads)
+	}
+	if _, err := ObserveStatus(WithObservationPass(t.Context()), p, rc); err != nil {
+		t.Fatal(err)
+	}
+	if reads != 2 {
+		t.Fatal("new pass inherited earlier platform facts", reads)
+	}
+}
+
+func TestObservationRetryDiscardsEarlierPassPlatformFacts(t *testing.T) {
+	at := time.Now().UTC()
+	reads, calls := 0, 0
+	p := observationProvider{observe: func(ctx context.Context, _ *Context) (domain.ClusterStatus, error) {
+		calls++
+		cache := infra.PassObservationCache(ctx)
+		if cache == nil {
+			cache = infra.ObservationCache(ctx)
+		}
+		if _, loaded := cache.LoadOrStore("platform", true); !loaded {
+			reads++
+		}
+		status := readyObservation(at)
+		if calls == 1 {
+			status.Phase = domain.PhaseDegraded
+		}
+		return status, nil
+	}}
+	rc := &Context{Clock: observationClock{at}, Cluster: &domain.Cluster{}, Backend: passSnapshotBackend{}}
+	ctx := WithObservationPass(t.Context())
+	for range 2 {
+		if _, err := ObserveStatus(ctx, p, rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if calls != 3 || reads != 3 {
+		t.Fatalf("retry reused or retained the earlier uncertain snapshot: calls=%d reads=%d", calls, reads)
 	}
 }

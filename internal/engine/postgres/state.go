@@ -102,6 +102,9 @@ type pending struct {
 	Resources domain.Resources `json:"resources"`
 	Replicas  int              `json:"replicas"`
 	Version   string           `json:"version,omitempty"`
+	Polls     int              `json:"polls,omitempty"`
+	// Fresh poll outcome only; never persisted or inferred from receipt retention.
+	platformPending bool
 }
 
 func load(c *domain.Cluster) (*state, error) {

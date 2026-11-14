@@ -6,6 +6,7 @@ package infra
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -44,5 +45,25 @@ func TestObserveParallelPreservesErrorsRetryConstraintsAndCancellation(t *testin
 			t.Fatal("observation reduction lost a completed result", err, RetryAt(err), cancelSweep)
 		}
 		cancel()
+	}
+}
+
+func TestPassObservationCacheIsolatesAuthorizationAndLifecycle(t *testing.T) {
+	shared := new(sync.Map)
+	first := WithPassObservationCache(ObservationContext(t.Context()), shared)
+	second := WithPassObservationCache(ObservationContext(t.Context()), shared)
+	if PassObservationCache(first) != shared || PassObservationCache(second) != shared {
+		t.Fatal("descriptive attempts did not share the pass snapshot")
+	}
+	if ObservationCache(first) == ObservationCache(second) || ObservationCache(first) == shared {
+		t.Fatal("status attempts inherited authorization facts")
+	}
+	authorized := WithFreshTaskInventory(second)
+	if PassObservationCache(authorized) != nil || ObservationCache(authorized) != ObservationCache(second) {
+		t.Fatal("authorization did not retain only the fresh attempt-local memo")
+	}
+	lifecycle := ObservationContext(WithoutObservation(second))
+	if ObservationCache(lifecycle) != nil || PassObservationCache(lifecycle) != nil {
+		t.Fatal("lifecycle re-entry resurrected an observation snapshot")
 	}
 }

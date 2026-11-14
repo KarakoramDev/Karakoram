@@ -37,6 +37,11 @@ func discovery(ctx context.Context, rc *engine.Context, s *state) (domain.Connec
 	}
 	return c, nil
 }
+func (*Provider) ObservationReceiptPending(rc *engine.Context) bool {
+	s, err := load(rc.Cluster)
+	return err == nil && s.Member != nil && s.Member.Pending != nil
+}
+
 func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.ClusterStatus, error) {
 	s, err := load(rc.Cluster)
 	if err != nil {

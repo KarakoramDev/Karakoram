@@ -758,3 +758,57 @@ func TestProxyTerminalScaleFailureReplayAndRevert(t *testing.T) {
 		})
 	}
 }
+
+func TestPendingProxyCountCadenceBacksOff(t *testing.T) {
+	p, rc, base := setup(t, "single")
+	setProxyScaleTarget(rc, 1, false)
+	converge(t, p, rc, base)
+	s, _ := load(rc.Cluster)
+	b, stale := proxyScaleFixture(t, rc, s)
+	setProxyScaleTarget(rc, 2, false)
+	b.pending = true
+	for range 30 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+		base.apply(t, p, rc)
+		s, _ = load(rc.Cluster)
+		if s.Rolling != nil && s.Rolling.Stage == "scaled" {
+			break
+		}
+	}
+	if s.Rolling == nil || s.Rolling.Stage != "scaled" {
+		t.Fatal("scale receipt not checkpointed")
+	}
+	// The generic fixture returns an empty immediate receipt. Give the held
+	// operation the stable identity that real provider receipts carry.
+	s.Rolling.Op.ID = "held-count"
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	for _, seconds := range []int{2, 3, 4, 5, 5} {
+		p = New(Options{Provider: p.Name()})
+		result, err := p.Sync(t.Context(), rc)
+		if err != nil || result.RequeueAfter != time.Duration(seconds)*time.Second {
+			t.Fatalf("count receipt cadence=%s, want %ds; err=%v", result.RequeueAfter, seconds, err)
+		}
+	}
+	// The first terminal poll must immediately reset the old five-second wait,
+	// even while one proxy still has not acknowledged its configuration.
+	b.pending = false
+	stale[1] = true
+	for range 3 {
+		p = New(Options{Provider: p.Name()})
+		result, err := p.Sync(t.Context(), rc)
+		if err != nil || result.RequeueAfter != 2*time.Second {
+			t.Fatal("terminal receipt slowed native readiness", result, err)
+		}
+		s, err = load(rc.Cluster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.Rolling == nil || s.Rolling.Stage != "scaled" || s.Rolling.Polls != 0 {
+			t.Fatal("terminal readiness wait retained backoff or lost its receipt", s.Rolling)
+		}
+	}
+}

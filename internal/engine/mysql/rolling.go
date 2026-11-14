@@ -19,17 +19,20 @@ import (
 // rollingState freezes the desired artifacts/resources and order across CP restarts.
 // Each side effect has a durable preceding stage and an observation checkpoint.
 type rollingState struct {
-	From          string                          `json:"from"`
-	To            string                          `json:"to"`
-	Major         bool                            `json:"major"`
-	RequestedAt   time.Time                       `json:"requestedAt"`
-	Order         []string                        `json:"order"`
-	Index         int                             `json:"index"`
-	Stage         string                          `json:"stage"`
-	Targets       map[string]domain.ComponentSpec `json:"targets"`
-	Op            *infra.Op                       `json:"op,omitempty"`
-	Parameters    map[string]string               `json:"restartParameters,omitempty"`
-	HandoffTarget string                          `json:"handoffTarget,omitempty"`
+	From        string                          `json:"from"`
+	To          string                          `json:"to"`
+	Major       bool                            `json:"major"`
+	RequestedAt time.Time                       `json:"requestedAt"`
+	Order       []string                        `json:"order"`
+	Index       int                             `json:"index"`
+	Stage       string                          `json:"stage"`
+	Targets     map[string]domain.ComponentSpec `json:"targets"`
+	Op          *infra.Op                       `json:"op,omitempty"`
+	Polls       int                             `json:"polls,omitempty"`
+	// Fresh poll outcome only; never persisted or inferred from receipt retention.
+	platformPending bool
+	Parameters      map[string]string `json:"restartParameters,omitempty"`
+	HandoffTarget   string            `json:"handoffTarget,omitempty"`
 
 	ScaleIn bool `json:"scaleIn,omitempty"`
 
@@ -134,6 +137,7 @@ func proxyUpdatesPreserveServing(ctx context.Context, rc *engine.Context, m *mem
 
 func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	if s.Rolling != nil {
+		s.Rolling.platformPending = false
 		ctx = freshMySQLReads(ctx)
 		invalidateMySQLReadObservation(ctx, rc)
 		defer invalidateMySQLReadObservation(ctx, rc)
@@ -388,6 +392,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			return true, engine.Invalid("missing MySQL scale receipt")
 		}
 		status, err := observeProxyRollout(ctx, rc, *u.Op, m)
+		u.platformPending = err == nil && !status.Done && !status.Failed
 		if status.Failed {
 			// A terminal receipt will never become Done. Persist a distinct
 			// checkpoint before attempting any backend-proven recovery.

@@ -306,3 +306,48 @@ func TestPendingProxyScaleConsumesPreviousReceiptBeforeSuperseding(t *testing.T)
 		})
 	}
 }
+
+type cadenceProxyBackend struct {
+	*proxyInventoryBackend
+	done bool
+}
+
+func (b *cadenceProxyBackend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	if op.ID == "cadence-count" {
+		return infra.OpState{Done: b.done}, nil
+	}
+	return b.fakeBackend.OpStatus(ctx, op)
+}
+
+func TestPendingReceiptTerminalReadinessRestoresFastCadence(t *testing.T) {
+	p, rc, inventory, s, _, late := replicatedProxyFixture(t)
+	b := &cadenceProxyBackend{proxyInventoryBackend: inventory}
+	rc.Backend = b
+	m := s.find("demopx")
+	desired := rc.Cluster.Spec.Components.Extra["proxy"]
+	desired.Replicas = 2
+	rc.Cluster.Spec.Components.Extra["proxy"] = desired
+	s.Pending = &pending{Action: "scale", Member: m.Name, Replicas: 2, Polls: 4, Op: infra.Op{ID: "cadence-count"}}
+	late.applied(m.ConfigVersion - 1)
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	result, err := p.Sync(t.Context(), rc)
+	if err != nil || result.RequeueAfter != 5*time.Second {
+		t.Fatal("nonterminal receipt did not exercise backed-off cadence", result, err)
+	}
+	b.done = true
+	for range 3 {
+		result, err = p.Sync(t.Context(), rc)
+		if err != nil || result.RequeueAfter != 2*time.Second {
+			t.Fatal("terminal receipt slowed native readiness", result, err)
+		}
+		s, err = load(rc.Cluster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.Pending == nil || s.Pending.Polls != 0 {
+			t.Fatal("terminal readiness wait retained backoff or lost its receipt", s.Pending)
+		}
+	}
+}

@@ -11,9 +11,10 @@ import (
 type observationPassKey struct{}
 
 type observationPass struct {
-	cache   sync.Map
-	mu      sync.Mutex
-	started time.Time
+	cache    sync.Map
+	platform sync.Map
+	mu       sync.Mutex
+	started  time.Time
 }
 
 // WithObservationPass starts a new, bounded-lifetime observation cache. Call it
@@ -32,6 +33,19 @@ func ObservationPassCache(ctx context.Context) *sync.Map {
 		return nil
 	}
 	return &pass.cache
+}
+
+// observationPlatformCache is separate from provider-owned health samples.
+// Only backends explicitly guaranteeing mutation invalidation may opt in.
+func observationPlatformCache(ctx context.Context, backend any) *sync.Map {
+	if _, ok := backend.(interface{ ObservationPassSnapshots() }); !ok {
+		return nil
+	}
+	pass, _ := ctx.Value(observationPassKey{}).(*observationPass)
+	if pass == nil {
+		return nil
+	}
+	return &pass.platform
 }
 
 // ObservationPassStart opts a provider into same-pass sample reuse. The caller

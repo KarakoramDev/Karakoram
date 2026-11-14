@@ -164,6 +164,12 @@ func (b *Backend) network() string {
 	return defaultNetworkName(b.target.ID)
 }
 func (b *Backend) application(ctx context.Context, hostname string) (*application, error) {
+	// A lookup assembled from inherited listing/record facts is descriptive,
+	// not fresh authorization evidence. Memoize its raw reads, not that derived
+	// result; authorization can still share fresh lookups within its attempt.
+	if infra.PassObservationCache(ctx) != nil {
+		return b.lookupApplication(ctx, hostname)
+	}
 	return observationValue(ctx, b.readKey("application", hostname), func() (*application, error) {
 		return b.lookupApplication(ctx, hostname)
 	})

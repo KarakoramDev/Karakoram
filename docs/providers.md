@@ -232,14 +232,14 @@ probes. Released v0.4.7 agents never send revisions and always receive full
 ### Active PostgreSQL operation cost
 
 The idle-hour figures and proxy-render budgets are **not operation-wide
-limits**. A PostgreSQL proxy-count operation can repeat a fresh reconcile
-pass at the **two-second pending-receipt cadence**. An isolated experiment
+limits**. Before v0.4.10, a PostgreSQL proxy-count operation repeated a fresh
+reconcile pass at the **two-second pending-receipt cadence**. An isolated experiment
 with the production Manager, native engine provider, real Dokploy client and
 fake API averaged approximately **100 GETs per PG pass**: `Sync` cost roughly 12–120 GETs,
 fresh observations before and after it cost about 20 each, and degraded or
 uncertain observations could immediately repeat with a new cache.
 
-Expect **tens of GETs/s during active work**, roughly 15–50 GET/s rather
+Before v0.4.10, expect **tens of GETs/s during active work**, roughly 15–50 GET/s rather
 than the steady idle rate. The isolated experiment recorded **3,721 GETs
 over 67.2 s** (about 55 GET/s including siblings); a live operation window
 recorded **2,497 GETs over 110.5 s** (about 23 GET/s). In the isolated
@@ -257,14 +257,17 @@ The **81-request harness scenario (78 GETs + 3 POSTs)** is one MySQL backend
 count change, completion wait and fresh observation—not a complete PG
 operation budget. Operation duration, phase transitions and retries matter.
 
-For v0.4.10, the operation-pass plan is to avoid the immediate second
-observation while a receipt is pending, deduplicate reads across a pass's
-pre-/post-observations, use a slower pending cadence where safe and enforce
-end-to-end per-operation budget tests. This work is additional to the
-per-cluster notification/listing scoping above and is **not implemented
-in v0.4.9**.
-
-
+v0.4.10 bounds this: while a receipt is pending, PostgreSQL, MySQL and Neo4j
+skip the immediate second observation on every provider; on Dokploy the pre-
+and post-`Sync` observations of one pass also share their first-attempt platform reads; and
+unchanged pending PostgreSQL receipts and serving MySQL count-only receipts
+are polled after 2, 3, 4, then 5 seconds. The
+end-to-end fixture budgets (PostgreSQL proxy count 1,572 → 1,038 GETs, Group
+Replication proxy count 1,430 → 1,197, PostgreSQL agent roll 704 → 511) and
+the safety reads that stay fresh are described in
+[ADR 0070](adr/0070-agent-heartbeats-and-platform-read-budget.md#active-postgresql-operation-cost).
+These are request-regression bounds from simulated database processes, not a
+live completion SLO.
 
 For drift bounds and an immediate fresh pass, see
 [out-of-band platform changes and forcing a reconcile](operations.md#out-of-band-platform-changes-and-forcing-a-reconcile).

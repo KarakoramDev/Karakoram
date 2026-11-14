@@ -57,6 +57,23 @@ func publicConnection(ctx context.Context, rc *engine.Context, conn domain.Conne
 	conn.Endpoints = append(conn.Endpoints, domain.Endpoint{Name: "mysql-public", URL: u.String(), Public: true})
 	return conn, nil
 }
+func (*Core) ObservationReceiptPending(rc *engine.Context) bool {
+	s, err := load(rc.Cluster)
+	if err != nil {
+		return false
+	}
+	if s.Pending != nil {
+		return true
+	}
+	if rolling := s.Rolling; rolling != nil && rolling.Op != nil {
+		switch rolling.Stage {
+		case "scaled", "resource-scaled", "stopped", "disk", "resources", "replicas", "deployed":
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, err error) {
 	ctx = normalMySQLReads(ctx)
 	if engine.ObservationPassCache(ctx) == nil {

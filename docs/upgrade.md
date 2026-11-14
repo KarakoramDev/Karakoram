@@ -6,6 +6,26 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 
 ## Upgrading to v0.4.10
 
+These instructions apply when upgrading from v0.4.9. The health-observation and
+platform-read changes below take effect when the control plane is upgraded; they
+need no agent rollout. Only the Dokploy sudo policy arrives with the member
+images, through the normal agent upgrade roll.
+
+### Fewer platform reads during operations
+
+While a platform receipt is pending, PostgreSQL, MySQL and Neo4j skip the
+immediate second status attempt on every provider. On Dokploy, the pre- and
+post-`Sync` observations of one reconcile pass also share their first-attempt
+platform reads. Unchanged pending PostgreSQL receipts and serving MySQL
+count-only receipts are polled after 2, 3, 4 and then every 5 seconds instead
+of every 2 seconds, so detecting a finished deployment can take up to 5 seconds
+instead of 2. In the offline fixture a PostgreSQL proxy count change fell from
+1,572 to 1,038 Dokploy GETs, a Group Replication proxy count change from 1,430
+to 1,197 and a PostgreSQL agent roll from 704 to 511. Safety decisions
+(writer handoff, retirement, identity, admission and pinned connection
+authorization) keep their fresh reads. See
+[ADR 0070](adr/0070-agent-heartbeats-and-platform-read-budget.md#active-postgresql-operation-cost).
+
 ### Dokploy member sudo policy
 
 Newly generated Dokploy member images no longer grant the `karakoram` agent user

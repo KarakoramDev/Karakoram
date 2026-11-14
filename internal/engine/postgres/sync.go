@@ -109,6 +109,7 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	if q == nil {
 		return false, nil
 	}
+	q.platformPending = false
 	if q.Action == "import" {
 		m := s.find(q.Member)
 		if m == nil {
@@ -119,6 +120,9 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 			return true, err
 		}
 		if op != nil {
+			if q.Op.ID != op.ID {
+				q.Polls = 0
+			}
 			q.Op = *op
 			return true, nil
 		}
@@ -153,6 +157,7 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	if err != nil {
 		return true, err
 	}
+	q.platformPending = !st.Done && !st.Failed
 	// Poll before attempting supersession: some backends retain an exclusive
 	// autoscaling receipt until its terminal status is consumed by OpStatus.
 	// A stateless scale operation must not make an obsolete larger count a
@@ -180,6 +185,7 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 				return true, err
 			}
 			q.Op, q.Replicas = op, replicas
+			q.Polls = 0
 			return true, nil
 		}
 	}
@@ -402,6 +408,21 @@ func readyDesired(ctx context.Context, rc *engine.Context, m *member) (bool, err
 	return memberReady(ctx, rc, m, true)
 }
 
+func (*Core) ObservationReceiptPending(rc *engine.Context) bool {
+	s, err := load(rc.Cluster)
+	if err != nil {
+		return false
+	}
+	if s.Pending != nil {
+		return true
+	}
+	if op := rc.Operation; op != nil && op.Kind == domain.OperationUpgradeAgents && op.CompletedAt == nil {
+		var cp agentUpgradeCheckpoint
+		return json.Unmarshal(op.Checkpoint, &cp) == nil && cp.Waiting && cp.Deploy != nil
+	}
+	return false
+}
+
 // Sync advances durable infrastructure work and rolls one ready member at a time.
 func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
 	if ctx.Value(adminRotationSyncKey{}) == nil {
@@ -533,6 +554,16 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	}
 	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 		rc.SyncWait = "observing pending infrastructure operation"
+		if q := s.Pending; q != nil {
+			if e == nil && q.platformPending {
+				// Only a nonterminal platform poll backs off. Terminal receipts
+				// waiting for native/config readiness retain the fast cadence.
+				q.Polls = min(q.Polls+1, 4)
+				result.RequeueAfter = time.Duration(q.Polls+1) * time.Second
+			} else {
+				q.Polls = 0
+			}
+		}
 		return result, e
 	}
 	if handled, e := p.reconcileCitusScaleDown(ctx, rc, s); handled || e != nil {
