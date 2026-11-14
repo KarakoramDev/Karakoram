@@ -5,6 +5,8 @@ package infra
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"runtime"
 	"sort"
 	"strings"
@@ -208,6 +210,7 @@ type TargetSnapshot struct {
 	checkedAt, attemptedAt               time.Time
 	listingOK, attempted, fingerprintSet bool
 	fingerprint                          string
+	dependencies                         map[string]string
 }
 
 var platformSnapshots = struct {
@@ -284,10 +287,23 @@ type snapshotRegistration struct {
 }
 
 func (s *TargetSnapshot) SetListing(check func(context.Context) (string, error)) {
+	s.setListing(check, false)
+}
+
+// SetDependencyListing registers a listing which also publishes exact service
+// rows. Re-registering a client must not discard a still-current scoped proof.
+func (s *TargetSnapshot) SetDependencyListing(check func(context.Context) (string, error)) {
+	s.setListing(check, true)
+}
+
+func (s *TargetSnapshot) setListing(check func(context.Context) (string, error), dependencies bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.listing = check
 	s.listingVersion++
+	if !dependencies {
+		s.dependencies = nil
+	}
 }
 
 var snapshotClock = struct {
@@ -493,7 +509,21 @@ func (s *TargetSnapshot) BeginMutation(ctx context.Context) (done func()) {
 	s.entryBytes = 0
 	s.mu.Unlock()
 	var once sync.Once
-	return func() { once.Do(func() { s.mu.Lock(); s.epoch++; s.inFlight--; s.mu.Unlock() }) }
+	return func() {
+		once.Do(func() {
+			s.mu.Lock()
+			s.epoch++
+			s.inFlight--
+			// Scoped certificates must not certify pre-mutation dependency
+			// rows. Recheck once, then foreign changes retain the same proof.
+			// Unscoped listings keep their drift-generation proof unchanged.
+			if s.dependencies != nil {
+				s.listingOK = false
+				s.attempted = false
+			}
+			s.mu.Unlock()
+		})
+	}
 }
 
 // ConfigGeneration exposes a stable target baseline without starting a listing.
@@ -517,6 +547,42 @@ func (s *TargetSnapshot) DriftGeneration() uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.drift
+}
+
+// SetDependencies publishes the service identities from the independent listing.
+// Callers must still require ConfigGeneration's valid proof before serving 304.
+func (s *TargetSnapshot) SetDependencies(rows map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dependencies = rows
+}
+
+// DependencyGeneration scopes listing evidence to exact logical service names.
+// Missing services participate too, so removal and later replacement change it.
+func (s *TargetSnapshot) DependencyGeneration(names []string) (uint64, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.dependencies == nil {
+		return 0, false
+	}
+	h := sha256.New()
+	for _, name := range names {
+		fmt.Fprintf(h, "%d:%s%d:%s", len(name), name, len(s.dependencies[name]), s.dependencies[name])
+	}
+	sum := h.Sum(nil)
+	var revision uint64
+	for _, b := range sum[:8] {
+		revision = revision<<8 | uint64(b)
+	}
+	return revision, true
+}
+
+// RuntimeStateReader is an optional fresh routing gate, not lifecycle recovery.
+// Implementations must never serve cached runtime liveness. StatusActive may
+// retain an owned, desired-running peer through its active rolling task gap;
+// it authorizes discovery, not a claim that the peer is currently serving.
+type RuntimeStateReader interface {
+	RuntimeStates(context.Context, []string) (map[string]Service, error)
 }
 
 type PlatformSnapshotter interface{ PlatformSnapshot() *TargetSnapshot }

@@ -28,6 +28,7 @@ func (b *Backend) nowTime() time.Time {
 
 type task struct {
 	ID           string `json:"containerId"`
+	ServiceID    string `json:"serviceId,omitempty"`
 	Name         string `json:"name"`
 	State        string `json:"state"`
 	CurrentState string `json:"currentState"`
@@ -126,9 +127,11 @@ func (b *Backend) tasks(ctx context.Context, appName string) ([]task, error) {
 	})
 }
 
-func (b *Backend) readTasks(ctx context.Context, appName string) ([]task, error) {
+// readTasks accepts a service name or ID; Dokploy's appName wire field is passed
+// directly to docker service ps. Lifecycle callers retain their name lookups.
+func (b *Backend) readTasks(ctx context.Context, service string) ([]task, error) {
 	var ts []task
-	err := b.c.get(ctx, "docker.getServiceContainersByAppName", map[string]string{"appName": appName}, &ts)
+	err := b.c.get(ctx, "docker.getServiceContainersByAppName", map[string]string{"appName": service}, &ts)
 	if errors.Is(err, infra.ErrNotFound) {
 		return nil, nil
 	}

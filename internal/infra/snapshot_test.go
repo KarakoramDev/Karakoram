@@ -547,3 +547,67 @@ func TestSnapshotRegistrySharesLiveClients(t *testing.T) {
 	}
 	runtime.KeepAlive(targets)
 }
+
+func TestDependencyGenerationRequiresPostMutationListing(t *testing.T) {
+	snapshot := &TargetSnapshot{}
+	own, foreign := "initial", "initial"
+	snapshot.SetListing(func(context.Context) (string, error) {
+		snapshot.SetDependencies(map[string]string{"own": own, "foreign": foreign})
+		return own + foreign, nil
+	})
+	if !snapshot.EnsureListing(t.Context()) {
+		t.Fatal("initial proof missing")
+	}
+	before, ok := snapshot.DependencyGeneration([]string{"own"})
+	if !ok {
+		t.Fatal("dependency proof missing")
+	}
+	finish := snapshot.BeginMutation(t.Context())
+	foreign = "changed"
+	finish()
+	if _, _, valid := snapshot.ConfigGeneration(); valid {
+		t.Fatal("pre-mutation rows still certified conditional config")
+	}
+	if !snapshot.EnsureListing(t.Context()) {
+		t.Fatal("post-mutation listing failed")
+	}
+	after, _ := snapshot.DependencyGeneration([]string{"own"})
+	if before != after {
+		t.Fatal("foreign mutation changed own dependency proof")
+	}
+	finish = snapshot.BeginMutation(t.Context())
+	own = "replacement"
+	finish()
+	if !snapshot.EnsureListing(t.Context()) {
+		t.Fatal("own post-mutation listing failed")
+	}
+	replacement, _ := snapshot.DependencyGeneration([]string{"own"})
+	if replacement == before {
+		t.Fatal("own mutation was hidden by a scoped certificate")
+	}
+}
+
+func TestUnscopedListingProofSurvivesMutation(t *testing.T) {
+	snapshot := &TargetSnapshot{}
+	calls := 0
+	snapshot.SetListing(func(context.Context) (string, error) {
+		calls++
+		return "rows", nil
+	})
+	if !snapshot.EnsureListing(t.Context()) {
+		t.Fatal("initial proof missing")
+	}
+	finish := snapshot.BeginMutation(t.Context())
+	if _, _, valid := snapshot.ConfigGeneration(); valid {
+		t.Fatal("conditional config certified during a mutation")
+	}
+	finish()
+	// Nomad and Zerops keep the drift-generation proof; only dependency-scoped
+	// listings must re-list after a mutation (render-cost budget M5).
+	if _, _, valid := snapshot.ConfigGeneration(); !valid {
+		t.Fatal("unscoped listing proof dropped by a finished mutation")
+	}
+	if !snapshot.EnsureListing(t.Context()) || calls != 1 {
+		t.Fatalf("listing calls=%d, want 1", calls)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"slices"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -56,14 +57,52 @@ func StoredConfigNoticeContent(ctx context.Context, source AgentConfigSource, rc
 	return MemberConfigContentRevision(cfg)
 }
 
+// ClusterListingGeneration returns exact persisted PostgreSQL service dependencies.
+// Other providers/backends retain the conservative target-wide proof.
+func ClusterListingGeneration(backend infra.Backend, cluster *domain.Cluster) (uint64, bool) {
+	target, ok := backend.(infra.PlatformSnapshotter)
+	if !ok {
+		return 0, false
+	}
+	var root struct {
+		Postgres *struct {
+			Members []struct {
+				Name string `json:"name"`
+			} `json:"members"`
+		} `json:"postgres"`
+	}
+	if json.Unmarshal(cluster.Internal, &root) != nil || root.Postgres == nil {
+		return 0, false
+	}
+	names := make([]string, 0, len(root.Postgres.Members))
+	for _, member := range root.Postgres.Members {
+		names = append(names, member.Name)
+	}
+	slices.Sort(names)
+	return target.PlatformSnapshot().DependencyGeneration(names)
+}
+
+func configGeneration(rc *Context) (epoch, drift uint64, valid bool) {
+	target, ok := rc.Backend.(infra.PlatformSnapshotter)
+	if !ok {
+		return 0, 0, false
+	}
+	epoch, drift, valid = target.PlatformSnapshot().ConfigGeneration()
+	if dependency, scoped := ClusterListingGeneration(rc.Backend, rc.Cluster); scoped {
+		epoch, drift = 0, dependency
+	}
+	return
+}
+
 // ConfigNoticeRevisions excludes observation journals and phase, retaining
 // listing drift and explicit force intent without target mutation fan-out.
 func ConfigNoticeRevisions(rc *Context, payload string, steady bool) (change, content string) {
-	target, ok := rc.Backend.(infra.PlatformSnapshotter)
+	_, ok := rc.Backend.(infra.PlatformSnapshotter)
 	if !ok || payload == "" {
 		return "", ""
 	}
-	_, drift, _ := target.PlatformSnapshot().ConfigGeneration()
+	_, drift, _ := configGeneration(rc)
+	_, scoped := ClusterListingGeneration(rc.Backend, rc.Cluster)
 	hash := func(force uint64, eligible bool) string {
 		raw, _ := json.Marshal(struct {
 			Payload, Epoch string
@@ -73,17 +112,22 @@ func ConfigNoticeRevisions(rc *Context, payload string, steady bool) (change, co
 		sum := sha256.Sum256(raw)
 		return hex.EncodeToString(sum[:])
 	}
+	if scoped {
+		// Listing drift is content, not force intent. Its reconcile and steady
+		// re-entry must not manufacture a second notification.
+		return hash(rc.ConfigInvalidationGeneration, true), hash(0, true)
+	}
 	return hash(rc.ConfigInvalidationGeneration, steady), hash(0, true)
 }
 
 // ConfigPullRevision binds a configuration to its converged, current baseline.
 // The caller must independently certify that baseline before using the revision.
 func ConfigPullRevision(rc *Context, member string, capabilities []string, secrets [32]byte) string {
-	target, ok := rc.Backend.(infra.PlatformSnapshotter)
+	_, ok := rc.Backend.(infra.PlatformSnapshotter)
 	if !ok {
 		return ""
 	}
-	epoch, drift, valid := target.PlatformSnapshot().ConfigGeneration()
+	epoch, drift, valid := configGeneration(rc)
 	if !valid {
 		return ""
 	}
@@ -93,22 +137,22 @@ func ConfigPullRevision(rc *Context, member string, capabilities []string, secre
 // ConfigChangeRevision is a notification stamp, never permission to serve 304.
 // Loss of a steady baseline changes the stamp, independently of notice scheduling.
 func ConfigChangeRevision(rc *Context, member string, secrets [32]byte, steady bool) string {
-	target, ok := rc.Backend.(infra.PlatformSnapshotter)
+	_, ok := rc.Backend.(infra.PlatformSnapshotter)
 	if !ok {
 		return ""
 	}
-	epoch, drift, _ := target.PlatformSnapshot().ConfigGeneration()
+	epoch, drift, _ := configGeneration(rc)
 	return configRevision(rc, member, nil, secrets, epoch, drift, steady, rc.ConfigInvalidationGeneration)
 }
 
 // ConfigRevisions captures one target proof for the payload validator and its
 // notification acknowledgements. Content excludes force/eligibility changes.
 func ConfigRevisions(rc *Context, member string, capabilities []string, secrets [32]byte, steady bool) (inputs, change, content string) {
-	target, ok := rc.Backend.(infra.PlatformSnapshotter)
+	_, ok := rc.Backend.(infra.PlatformSnapshotter)
 	if !ok {
 		return "", "", ""
 	}
-	epoch, drift, valid := target.PlatformSnapshot().ConfigGeneration()
+	epoch, drift, valid := configGeneration(rc)
 	if valid {
 		inputs = configRevision(rc, member, capabilities, secrets, epoch, drift, true, rc.ConfigInvalidationGeneration)
 	}

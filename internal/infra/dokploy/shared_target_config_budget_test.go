@@ -42,10 +42,14 @@ func (sharedTargetConfigBaseline) SteadyConfigBaseline(_ context.Context, c *dom
 func (sharedTargetConfigBaseline) ConfigInvalidationGeneration(domain.ClusterRef) uint64 { return 0 }
 
 func TestPostgresSharedTargetConfigMutationBudget(t *testing.T) {
-	for _, drifts := range []int{0, 2} {
+	for _, drifts := range []int{0, 2, -2} {
 		t.Run(fmt.Sprintf("listing-drifts-%d", drifts), func(t *testing.T) {
 			p := postgres.New(postgres.Options{})
-			rc, members, advance, mutate, listingDrift, gets := provider.ExportSharedTargetConfigFixture(t, p)
+			rc, members, advance, mutate, listingDrift, gets := provider.ExportSharedTargetConfigFixture(t, p, drifts < 0)
+			ownDrift := drifts < 0
+			if ownDrift {
+				drifts = -drifts
+			}
 			st := rc.Store.(*store.Store)
 			sealer, err := secrets.New(strings.Repeat("x", 32))
 			if err != nil {
@@ -104,8 +108,8 @@ func TestPostgresSharedTargetConfigMutationBudget(t *testing.T) {
 			for _, member := range members {
 				for range 2 {
 					cfg, status, reads := pull(member, "")
-					if status != 200 || cfg.PullRevision == "" || reads != 27 {
-						t.Fatalf("initial three-peer full render: status=%d GETs=%d (want27)", status, reads)
+					if status != 200 || cfg.PullRevision == "" || reads != 11 {
+						t.Fatalf("initial three-peer full render: status=%d GETs=%d (want 11)", status, reads)
 					}
 					instances = append(instances, instance{member, cfg})
 				}
@@ -139,8 +143,10 @@ func TestPostgresSharedTargetConfigMutationBudget(t *testing.T) {
 				case 10, 20, 40, 50, 70, 80, 100, 110:
 					mutate(second)
 				}
-				if drifts == 2 && (second == 60 || second == 120) {
-					listingDrift(second == 60)
+				// Leave room for the next proof renewal: successful mutation-
+				// driven checks also renew the shared listing's minute lease.
+				if drifts == 2 && (second == 30 || second == 90) {
+					listingDrift(second == 30)
 				}
 				if second%5 == 0 && !snapshot.EnsureListing(t.Context()) {
 					t.Fatal("listing renewal failed")
@@ -176,17 +182,18 @@ func TestPostgresSharedTargetConfigMutationBudget(t *testing.T) {
 			if actual := snapshot.DriftGeneration() - startDrift; actual != uint64(drifts) {
 				t.Fatalf("fixture produced %d listing drifts, want %d", actual, drifts)
 			}
-			if reloadNotices != drifts*len(instances) || noticeRequests != drifts*len(instances) {
-				t.Fatal("target mutation epochs caused reload notices/config requests, including unchanged responses", reloadNotices, noticeRequests)
+			wantRenders := 0
+			if ownDrift {
+				wantRenders = drifts * 2 // only this cluster's two proxy instances
 			}
-			if noticeRenders != drifts*len(instances) || noticeGETs != drifts*len(instances)*27 {
-				t.Fatal("target mutation epochs fanned out notices or a stable-baseline listing drift repeated a render")
+			if reloadNotices != wantRenders || noticeRequests != wantRenders {
+				t.Fatal("listing drift escaped its cluster or repeated notification", reloadNotices, noticeRequests, wantRenders)
 			}
-			if drifts == 0 && periodicGETs != 1080 {
-				t.Fatal("mutation evidence stopped invalidating periodic certificates", periodicGETs)
+			if noticeRenders != wantRenders || noticeGETs != wantRenders*11 {
+				t.Fatal("listing drift escaped its cluster or repeated full rendering", noticeRenders, noticeGETs, wantRenders)
 			}
-			if drifts == 2 && periodicGETs != 0 {
-				t.Fatal("fresh listing-notice payload was not reused by minute pulls", periodicGETs)
+			if periodicRenders != 0 || periodicGETs != 0 {
+				t.Fatal("unrelated mutation or settled drift invalidated periodic certificates", periodicRenders, periodicGETs)
 			}
 			for range 3 {
 				_, status, _ := pull(members[0], "")

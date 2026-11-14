@@ -37,6 +37,15 @@ to 1,197 and a PostgreSQL agent roll from 704 to 511. Safety decisions
 authorization) keep their fresh reads. See
 [ADR 0070](adr/0070-agent-heartbeats-and-platform-read-budget.md#active-postgresql-operation-cost).
 
+### PostgreSQL proxy configuration on Dokploy
+
+Rendering a PostgreSQL proxy configuration on Dokploy now costs 3N + 2 GETs
+for N peers (11 for three peers, 8 when Dokploy lists application names),
+formerly 27, and still proves each peer's service ownership with fresh reads.
+Changes to other clusters' services in the same Dokploy environment no longer
+wake or re-render a cluster's proxies. Nomad and Zerops are unchanged; see
+[providers](providers.md).
+
 ### Dokploy member sudo policy
 
 Newly generated Dokploy member images no longer grant the `karakoram` agent user

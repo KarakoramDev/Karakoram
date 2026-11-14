@@ -156,12 +156,12 @@ Updated agents report a content-only stamp in a heartbeat HTTP header, not the
 strict JSON request envelope (older control planes ignore the header). This
 stamp binds canonical config-relevant content, not raw observation journals,
 phase-only changes or unrelated secrets. PostgreSQL proxy notices include
-their own cluster generation but omit the shared target mutation epoch:
-otherwise an operation on one cluster repeatedly reloads every PostgreSQL
-proxy on that target. The **certificate still includes that epoch**, so a
-changed target invalidates the next conditional minute pull. Listing drift
-remains in the notice stamp. PostgreSQL skips live reads only for the
-notification hint; actual full pulls retain mandatory fresh peer resolution.
+their own cluster generation. On Dokploy, notices and certificates additionally
+bind exact member-service listing dependencies rather than the shared target
+mutation epoch. A renewed listing is required after any mutation before
+certifying 304; unrelated clusters cannot invalidate eligible minute pulls.
+Nomad/Zerops retain global platform proofs. PostgreSQL skips live reads only
+for the notification hint; full pulls retain mandatory fresh peer resolution.
 Independent live dependencies and unknown sources fail safe to conservative
 notices. When tracked content is unchanged, pure force notices wait until a
 steady baseline returns: one notice-driven full render per proxy per settled
@@ -212,9 +212,9 @@ rendering. Any potentially changed config or uncertain baseline still resolves
 peers freshly. During membership changes or operations the steady marker is
 cleared and fresh rendering is mandatory; a former peer cannot be admitted from
 a 40-minute platform snapshot. Updated agents also echo a separate successfully
-applied change stamp in heartbeats. A changed dependency, target epoch, health
-phase or lost steady baseline produces an authenticated reload notice on the
-next heartbeat. Each instance coalesces notices into one bounded in-flight
+applied change stamp in heartbeats. A changed own dependency or explicit force/
+health input produces an authenticated reload notice; PostgreSQL listing-driven
+steady transitions are not separate force inputs. Each instance coalesces notices into one bounded in-flight
 reload without blocking heartbeat sampling. The resulting pull is full/fresh
 while nonsteady; it does not wait for another minute ticker after detection.
 
@@ -248,44 +248,74 @@ this chain, including external Dokploy withdrawal before a scheduled 304.
 The base idle projection excludes notice-driven full configuration responses.
 For unchanged tracked content, one settled forced pass requires at most one
 notice-driven full render per updated proxy. In the single-peer reference
-profile the two PostgreSQL proxies together cost 18 Dokploy GETs, or
-0.010 GET/s for one such pass every 30 minutes: 0.180
+profile the two PostgreSQL proxies together now cost 10 Dokploy GETs, or
+0.0056 GET/s for one such pass every 30 minutes: approximately 0.176
 GET/s including the 0.170 base projection. Actual tracked content changes,
 independent minute pulls while nonsteady, failed applies and retries remain
 separately attributed work, not a universal aggregate request cap.
 
-### Remaining shared-target operation cost
+### Cluster-scoped configuration dependencies
 
-Target-epoch-only changes produce no cross-cluster PostgreSQL notices.
-Conditional minute pulls still invalidate on that epoch: full periodic
-renders remain at most one per minute per proxy, excluding independent
-notices, explicit reloads and retries. Target-wide listing fingerprints also
-remain shared. With otherwise eligible baselines, ten PostgreSQL clusters
-with two proxies and three peers each cost **1,080 Dokploy GETs** for two
-listing drifts with one render per drift: 10 × 2 × 3 × 2 × 9.
-The measured cost is **nine GETs per peer per proxy render**, or 27 GETs for
-three peers. Fresh notice payloads can satisfy coincident minute pulls;
-without notices, two mutation-affected minute rounds cost the same 1,080 GETs.
-The existing single-peer reference profile costs 360 GETs for this example.
+On Dokploy, PostgreSQL configuration notices and conditional certificates bind the exact
+persisted member service names, including proxies, rather than the target-wide
+mutation epoch or listing fingerprint. Unrelated cluster mutations and listing
+drift therefore cause **zero additional PostgreSQL renders**, including periodic
+conditional pulls with an otherwise eligible baseline. Target mutations still
+invalidate listing eligibility: the next proof requires a successful independent
+listing check before a 304 can be certified. Own membership, generation, secrets,
+force intent, readiness and deployment failures retain their independent gates.
 
-The real Manager's single-settle scenario typically needs at most two renders
-per proxy per listing drift (initial drift plus trigger/steady re-entry).
-For that ten-cluster, three-peer example this typical two-render scenario is
-approximately **2,160 GETs** per operation with two listing drifts, versus
-**1,080 GETs** for v0.4.7's two unconditional minute rounds over 120 s:
-about **2× the configuration-pull cost during the operation window**.
-This does not include native reconciliation work and is not a hard maximum.
-Idle-hour behavior remains very different: the reference single-peer
-PostgreSQL polling profile falls from about 6.6 GET/s in v0.4.7 to about
-0.063 GET/s steady (roughly **100× fewer**, workload-dependent).
-That is **not a hard cap**: additional health cycles, triggers, changing local
-inputs, retries and independent pulls can add work. Tests exercise repeated
-drift/health cycles and quiescent heartbeat windows to ensure renders grow
-linearly with external triggers, never sustain themselves. The v0.4.10 plan is
-to reduce per-peer rendering cost through targeted reads/shared listings,
-scope mutation and listing dependencies to each cluster's own services, and
-enforce one render per listing drift. None of these additional improvements
-is implemented in v0.4.9.
+A listing-driven wake is classified as content, not force intent. Its reconcile
+does not increment the force generation, and steady re-entry is excluded from
+the scoped notice stamp. Thus a single own-cluster listing drift produces at
+most one notice-driven full render per proxy; genuine additional force, health,
+content changes, independent nonsteady pulls and retries remain separate inputs.
+
+Dokploy full proxy rendering performs one fresh environment GET, one shared
+fresh Swarm inventory GET, and at most three fresh reads per eligible peer:
+application identity when AppName is omitted, service-ID-scoped ownership
+inspection, and actual task state queried by the inspected full service ID.
+The inspected service must satisfy the same `ownsService` predicate as the
+generic GetService path; a foreign replacement at a known AppName cannot lend
+its running tasks to the inspected service. Dokploy v0.30.8 omits AppName
+([pinned source](https://github.com/Dokploy/dokploy/blob/v0.30.8/packages/server/src/services/environment.ts#L34-L65)),
+so three peers cost **11 GETs (3N + 2)**, down from 27. Summaries containing
+AppName cost **8 GETs (2N + 2)**. No prior observation cache authorizes identity,
+ownership or liveness. Missing/foreign runtimes are rejected; genuine owned
+replacements use current identity and logical hostname, bound to the engine's
+persisted application ID. For already eligible, deployed peers with
+desired-running intent, an active deploy, restart or scale receipt also keeps
+the backend in discovery through its rolling task gap. This exception requires
+the receipt's application ID, locator and hostname to match the freshly owned
+service, a positive replicated desired count, and matching task identities.
+The receipt must have a nonfuture issuance time within the existing 15-minute
+task-startup window (plus the six-hour build window for deployments); routing
+cannot extend admission indefinitely if lifecycle polling stops.
+`Active` records that routing intent without claiming a task is Running.
+Cleared, failed, uncertain or other pending receipts, stopped/deleting intent,
+retired members and planned replacements cannot authorize the exception.
+Routing does not poll, complete or clear lifecycle receipts.
+
+Deleting a temporarily absent task from proxy discovery also deletes its local
+postmaster-epoch observation. Even after PostgreSQL becomes ready, the proxy
+then cannot recover until another configuration pull re-admits it. Keeping the
+owned rolling member in discovery lets native monitoring and the agent's
+one-second epoch loop recover independently of pull timing. The old sequential
+GetService path also had this render-to-apply race; baseline rolls that happened
+not to apply during the task gap did not prove otherwise. No cached
+authorization window is introduced.
+Nomad and Zerops retain their existing fresh GetService routing gates **and their
+conservative target-wide listing/epoch fallback**: unrelated target drift still
+notifies those proxies and invalidates their eligible certificates. Cluster
+dependency scoping in this release is Dokploy-only.
+
+The ten-cluster/two-proxy/three-peer fake-API budget covers eight foreign mutation
+events over 120 seconds. Foreign mutations with two foreign listing drifts cost
+zero config renders/GETs; two own-cluster drifts cost four renders and **44 GETs**
+for only that cluster's two proxy instances. The shared listing cadence remains
+separate background traffic. The same new budget rejects the unmodified
+production base's 27-GET initial render. These are configuration-only budgets,
+not end-to-end operation limits.
 
 
 Rejected alternatives: using the 40-minute observation snapshot for config

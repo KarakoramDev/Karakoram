@@ -157,9 +157,8 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	return p.memberConfig(ctx, rc, name, true)
 }
 
-// MemberConfigNoticeContent keeps local generation/content changes prompt
-// without notifying every proxy for unrelated target mutations. Certificates
-// still bind the mutation epoch; listing drift independently changes notices.
+// MemberConfigNoticeContent tracks local generation/content without platform
+// reads. Scoped listing dependencies are added by the notification transport.
 func (p *Core) MemberConfigNoticeContent(ctx context.Context, rc *engine.Context, name string) (string, error) {
 	canonical := *rc
 	canonical.AgentConfigCapabilities = nil
@@ -240,6 +239,22 @@ func (p *Core) memberConfig(ctx context.Context, rc *engine.Context, name string
 		sp.Flavour = p.options.Flavour.Name()
 	}
 	agentCert := cert("agents")
+	var runtimes map[string]infra.Service
+	if targeted, ok := rc.Backend.(infra.RuntimeStateReader); ok && validatePeers && m.Role == "proxy" {
+		var names []string
+		for _, peer := range s.data() {
+			if sp.Topology == "distributed" && peer.Group != 0 {
+				continue
+			}
+			if !peer.Removing && peer.ServiceID != "" && (peer.Stage == "joined" || peer.Stage == "deployed" && peer.ProxyReady) {
+				names = append(names, peer.Name)
+			}
+		}
+		runtimes, err = targeted.RuntimeStates(ctx, names)
+		if err != nil {
+			return agentapi.MemberConfig{}, err
+		}
+	}
 	for _, peer := range s.data() {
 		if sp.Topology == "distributed" && (m.Role == "proxy" && peer.Group != 0 || m.Role == "data" && peer.Group != m.Group) {
 			continue
@@ -253,11 +268,19 @@ func (p *Core) memberConfig(ctx context.Context, rc *engine.Context, name string
 				continue
 			}
 			if validatePeers {
-				runtime, err := rc.Backend.GetService(ctx, peer.Name)
-				if err != nil {
-					return agentapi.MemberConfig{}, err
+				var runtime *infra.Service
+				if runtimes != nil {
+					if current, ok := runtimes[peer.Name]; ok {
+						runtime = &current
+					}
+				} else {
+					runtime, err = rc.Backend.GetService(ctx, peer.Name)
+					if err != nil {
+						return agentapi.MemberConfig{}, err
+					}
 				}
-				if runtime == nil || runtime.Status != infra.StatusRunning && runtime.Status != infra.StatusActive {
+				if runtime == nil || runtimes != nil && runtime.ID != peer.ServiceID ||
+					runtime.Status != infra.StatusRunning && runtime.Status != infra.StatusActive {
 					continue
 				}
 			}

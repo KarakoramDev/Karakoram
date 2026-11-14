@@ -128,6 +128,32 @@ func TestProxyEpochObservations(t *testing.T) {
 	}
 }
 
+func TestProxyEpochAdmissionSurvivesUnchangedServerIntent(t *testing.T) {
+	a := &epochAdmin{status: "ONLINE", configured: "ONLINE", pools: []uint64{0}}
+	flushed, err := flushProxyEpoch(t.Context(), "db", time.Unix(1, 0), time.Unix(2, 0), a.query, epochRecovery(t), epochLog())
+	if err != nil || !flushed || a.status != "ONLINE" {
+		t.Fatal("postmaster epoch recovery failed", flushed, a.status, err)
+	}
+	// Model the native monitor's writer admission after the flush. Apply
+	// compares stable server intent, preserving this observed hostgroup.
+	current := []tableRow{{"hostname": "db", "port": "5432", "hostgroup_id": "10", "max_connections": "100", "use_ssl": "0"}}
+	desired := []tableRow{{"hostname": "db", "port": "5432", "hostgroup_id": "20", "max_connections": "100", "use_ssl": "0"}}
+	columns := []string{"hostname", "port", "hostgroup_id", "max_connections", "use_ssl"}
+	setProxyServerHostgroups(desired, current)
+	if diff := proxyTableDiff("pgsql_servers", "hostname", current, desired, columns); len(diff) != 0 {
+		t.Fatal("unchanged Apply would undo epoch admission", diff)
+	}
+	if !proxyLayerMatches("hostname", current, desired, true) {
+		t.Fatal("unchanged Apply would reload the admitted writer")
+	}
+	// Omission still means removal, even for a backend just proven alive.
+	// Keeping prior agent/runtime peers would break retirement and replacement.
+	diff := proxyTableDiff("pgsql_servers", "hostname", current, nil, columns)
+	if len(diff) != 1 || diff[0] != "DELETE FROM pgsql_servers WHERE hostname='db'" {
+		t.Fatal("Apply retained a backend removed from fresh intent", diff)
+	}
+}
+
 func TestProxyEpochFailureRestoresStatus(t *testing.T) {
 	filter := " WHERE hostname='db' AND port=5432"
 	for _, failure := range []string{"timeout", "cancel", "offline", "load", "pool", "restore", "restore-load"} {

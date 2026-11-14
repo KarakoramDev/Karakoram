@@ -17,6 +17,8 @@ import (
 type steadyState struct {
 	generation int64
 	drift      uint64
+	dependency uint64
+	scoped     bool
 }
 
 type workerContextKey struct{}
@@ -88,7 +90,8 @@ func (m *Manager) finishSteady(ctx context.Context, ref domain.ClusterRef, w *wo
 		return false
 	}
 	if w.steady.Load() == nil {
-		w.steady.Store(&steadyState{generation: generation, drift: drift})
+		dependency, scoped := engine.ClusterListingGeneration(backend, c)
+		w.steady.Store(&steadyState{generation: generation, drift: drift, dependency: dependency, scoped: scoped})
 	}
 	return true
 }
@@ -115,9 +118,25 @@ func (m *Manager) observeSteadyStatus(ctx context.Context, p engine.Provider, rc
 			drift = max(drift, target.PlatformSnapshot().DriftGeneration())
 		}
 		for s := w.steady.Load(); s != nil; s = w.steady.Load() {
-			if drift > s.drift {
+			dependency, scoped := engine.ClusterListingGeneration(rc.Backend, rc.Cluster)
+			changed := drift > s.drift
+			if s.scoped && scoped {
+				changed = dependency != s.dependency
+			}
+			if changed {
 				if w.steady.CompareAndSwap(s, nil) {
-					m.Trigger(rc.Cluster.Ref())
+					if s.scoped && scoped {
+						// A listing-driven content notification already carries this
+						// change. Wake reconciliation without creating force intent.
+						m.mu.Lock()
+						select {
+						case w.trigger <- struct{}{}:
+						default:
+						}
+						m.mu.Unlock()
+					} else {
+						m.Trigger(rc.Cluster.Ref())
+					}
 					break
 				}
 				continue
@@ -155,8 +174,14 @@ func (m *Manager) SteadyConfigBaseline(ctx context.Context, c *domain.Cluster) b
 		return false
 	}
 	target, ok := backend.(infra.PlatformSnapshotter)
-	return ok && target.PlatformSnapshot().DriftGeneration() == s.drift &&
-		w.steady.Load() == s && !w.reconciling.Load()
+	if !ok {
+		return false
+	}
+	unchanged := target.PlatformSnapshot().DriftGeneration() == s.drift
+	if dependency, scoped := engine.ClusterListingGeneration(backend, c); s.scoped && scoped {
+		unchanged = dependency == s.dependency
+	}
+	return unchanged && w.steady.Load() == s && !w.reconciling.Load()
 }
 
 // ConfigInvalidationGeneration makes even a short force/identity/health trigger

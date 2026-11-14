@@ -193,31 +193,38 @@ additional relays are not included in that projection.
 
 Updated agents defer pure force/steady notices until the baseline settles when
 tracked content is unchanged. In the single-peer reference profile, one full
-pull for each of the two PostgreSQL proxies adds 18 Dokploy GETs per settled
-pass, or **0.010 GET/s** for one pass every 30 minutes (**0.180 GET/s**
+pull for each of the two PostgreSQL proxies adds 10 Dokploy GETs per settled
+pass, or **0.0056 GET/s** for one pass every 30 minutes (approximately **0.176 GET/s**
 including the base projection). Changed content
 still notifies immediately. Independent minute pulls while nonsteady, errors
 and retries are separate work; this is not a universal aggregate cap.
 
-An operation on another cluster no longer triggers PostgreSQL notices merely
-by advancing the shared target mutation epoch. The epoch remains in config
-certificates: periodic full pulls can still cost one render/minute/proxy.
-Listing drift still fans out. For ten PostgreSQL clusters with two proxies
-and three peers each, two listing changes cost **1,080 Dokploy GETs** with
-otherwise eligible baselines (10 × 2 × 3 × 2 × 9). The measured fan-out is
-**nine GETs per peer per full proxy render**: three peers cost 27 GETs.
-A real Manager single-settle path typically needs at most two renders per
-proxy per listing drift: approximately **2,160 GETs** for that operation,
-but **not a hard cap**. Health/trigger cycles, explicit reloads and retries
-can add work. Over a 120 s operation window, v0.4.7's unconditional minute
-pulls cost 1,080 GETs for that configuration: the typical two-render case
-can therefore cost about **2× v0.4.7's config-pull work during the operation**.
-Idle-hour behavior remains approximately **100× lower** for the reference
-PostgreSQL polling profile (about 6.6 GET/s before versus 0.063 GET/s steady);
-that workload-dependent comparison is not a configuration-only guarantee.
-For v0.4.10 the plan is targeted reads/shared listing to reduce per-peer
-render cost, per-cluster mutation/listing scoping, and a hard one-render/drift
-bound. Those further improvements are not present in v0.4.9.
+On Dokploy, PostgreSQL notices and conditional certificates scope listing dependencies
+to the cluster's exact persisted member services. Unrelated target mutations and
+listing drift cause **zero extra config renders**, including eligible minute
+pulls. Mutations still require a renewed listing proof before certifying 304.
+An own-cluster drift wakes reconciliation as content, not force; steady re-entry
+cannot produce a second notice-driven render for that same drift.
+
+Dokploy proxy rendering reads a fresh environment and shared Swarm inventory,
+then fresh application detail when AppName is omitted, service-ID-scoped ownership
+inspection and tasks per peer: **3N + 2 GETs**, or **11 for three peers**, formerly
+27. This is the v0.30.8 bound ([pinned summary fields](https://github.com/Dokploy/dokploy/blob/v0.30.8/packages/server/src/services/environment.ts#L34-L65)).
+Summaries containing AppName reduce it to **2N + 2 / 8 GETs**. The existing
+`ownsService` predicate must authorize the inspected service before task liveness
+can admit a peer. Tasks are queried by that full service ID, not the reusable
+AppName; foreign replacements cannot lend their running tasks to the inspected service.
+No prior observation cache authorizes identity, ownership or liveness. Nomad/Zerops retain
+their existing per-peer GetService.
+The ten-cluster/two-proxy budget measures zero renders for foreign mutations/drift;
+two own-cluster drifts cost four renders and **44 GETs**. Shared listing checks
+remain separate background traffic. Explicit force/health/content
+changes, nonsteady periodic pulls and retries are separate inputs, not part of
+the one-notice-render-per-drift bound. This is not an end-to-end operation cap.
+
+The cluster-scoped notice/certificate improvement is **Dokploy-only**.
+Nomad/Zerops keep their conservative target-wide listing/epoch proof: unrelated
+target drift still notifies PostgreSQL proxies and invalidates certificates there.
 
 Own generation/peer/config changes remain prompt. A platform-only change is
 normally detected within the 60 s listing cadence plus up to 5 s listing I/O,

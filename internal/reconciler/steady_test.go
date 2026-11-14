@@ -549,3 +549,70 @@ func TestSteadyDriftAfterFinalObservationKeepsReadinessCadence(t *testing.T) {
 		}
 	})
 }
+
+func TestScopedListingDriftWakesOnlyOwnerWithoutForce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		own, foreign := "initial", "initial"
+		snapshot := &infra.TargetSnapshot{}
+		snapshot.SetListing(func(context.Context) (string, error) {
+			snapshot.SetDependencies(map[string]string{"member": own, "foreign": foreign})
+			return own + foreign, nil
+		})
+		p := &steadyProvider{fakeProvider: &fakeProvider{}, snapshot: snapshot}
+		m, st, c := steadyFixture(t, p)
+		c.Internal = json.RawMessage(`{"postgres":{"members":[{"name":"member"}]}}`)
+		if err := st.UpdateClusterState(t.Context(), c); err != nil {
+			t.Fatal(err)
+		}
+		backend := &steadySnapshotBackend{Backend: infrafake.New(infrafake.Options{}), snapshot: snapshot}
+		m.opts.Namespaces = engine.StaticNamespaces{DefaultBackend: backend}
+		if !snapshot.EnsureListing(t.Context()) {
+			t.Fatal("initial listing failed")
+		}
+		w := &worker{trigger: make(chan struct{}, 1)}
+		m.workers[c.Ref().Key()] = w
+		settle := func() {
+			t.Helper()
+			drift := snapshot.DriftGeneration()
+			if _, err := m.reconcile(t.Context(), c.Ref()); err != nil {
+				t.Fatal(err)
+			}
+			if !m.finishSteady(t.Context(), c.Ref(), w, w.triggers.Load(), c.Generation, drift) {
+				t.Fatal("cluster did not settle")
+			}
+		}
+		settle()
+		rc := &engine.Context{Cluster: c, Backend: backend}
+		before, _ := engine.ConfigNoticeRevisions(rc, "payload", true)
+		foreign = "changed"
+		time.Sleep(infra.SnapshotListingInterval)
+		if !snapshot.EnsureListing(t.Context()) {
+			t.Fatal("foreign listing failed")
+		}
+		if err := m.renewAvailability(t.Context(), c.Ref()); err != nil {
+			t.Fatal(err)
+		}
+		after, _ := engine.ConfigNoticeRevisions(rc, "payload", true)
+		if w.steady.Load() == nil || len(w.trigger) != 0 || before != after {
+			t.Fatal("foreign drift woke or notified this cluster")
+		}
+		own = "changed"
+		time.Sleep(infra.SnapshotListingInterval)
+		if !snapshot.EnsureListing(t.Context()) {
+			t.Fatal("own listing failed")
+		}
+		if err := m.renewAvailability(t.Context(), c.Ref()); err != nil {
+			t.Fatal(err)
+		}
+		notice, _ := engine.ConfigNoticeRevisions(rc, "payload", false)
+		if w.steady.Load() != nil || len(w.trigger) != 1 || w.triggers.Load() != 0 || notice == before {
+			t.Fatal("own drift did not wake exactly once as content")
+		}
+		<-w.trigger
+		settle()
+		settled, _ := engine.ConfigNoticeRevisions(rc, "payload", true)
+		if settled != notice {
+			t.Fatal("drift reconciliation manufactured a second notification")
+		}
+	})
+}

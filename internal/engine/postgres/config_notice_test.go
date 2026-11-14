@@ -80,6 +80,21 @@ func (b *configNoticeLivePeers) GetService(ctx context.Context, name string) (*i
 	return b.Backend.GetService(ctx, name)
 }
 
+func (b *configNoticeLivePeers) RuntimeStates(ctx context.Context, names []string) (map[string]infra.Service, error) {
+	b.reads++
+	states := make(map[string]infra.Service, len(names))
+	for _, name := range names {
+		service, err := b.Backend.GetService(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		if service != nil {
+			states[name] = *service
+		}
+	}
+	return states, nil
+}
+
 func TestConfigNoticeUsesListingAndPullForPlatformOnlyPeers(t *testing.T) {
 	for _, mode := range []string{"recovery-mutation", "recovery-external", "removed-external", "replaced-external"} {
 		t.Run(mode, func(t *testing.T) {
@@ -175,7 +190,9 @@ func TestConfigNoticeUsesListingAndPullForPlatformOnlyPeers(t *testing.T) {
 			after, unchanged, err := engine.PullMemberConfig(oldInputs, currentInputs, func() (agentapi.MemberConfig, error) {
 				return p.MemberConfig(t.Context(), rc, "demopx")
 			})
-			wantPeer := mode != "removed-external"
+			// A new application at the same hostname cannot inherit the
+			// persisted member's admission before lifecycle accepts its ID.
+			wantPeer := recovery
 			if err != nil || unchanged || hasPeer(after) != wantPeer || now.Sub(start) > 2*time.Minute {
 				t.Fatal("listing-plus-pull fallback did not resolve current routing", mode, unchanged, err)
 			}

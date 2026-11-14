@@ -48,7 +48,7 @@ func ExportConfigPullFixture(t *testing.T, kind string) (engine.Provider, *engin
 
 // ExportSharedTargetConfigFixture keeps fake transport internals out of the
 // external-package real HTTP test, matching ExportConfigPullFixture.
-func ExportSharedTargetConfigFixture(t *testing.T, p engine.Provider) (*engine.Context, []string, func(time.Duration), func(int), func(bool), func() int) {
+func ExportSharedTargetConfigFixture(t *testing.T, p engine.Provider, own ...bool) (*engine.Context, []string, func(time.Duration), func(int), func(bool), func() int) {
 	t.Helper()
 	rc, f, b := providerBudgetContext(t, p)
 	st := rc.Store.(*store.Store)
@@ -82,6 +82,9 @@ func ExportSharedTargetConfigFixture(t *testing.T, p engine.Provider) (*engine.C
 			name := fmt.Sprintf("%sp%d", c.Name, peer)
 			id := providerBudgetRuntime(t, b, name, name+"v", 1, false)
 			state = append(state, map[string]any{"name": name, "role": "data", "stage": "joined", "serviceId": id, "version": c.Spec.Version, "configVersion": 1, "replicas": 1})
+			if len(own) != 0 && own[0] && index == 0 && peer == 0 {
+				foreignID = id
+			}
 		}
 		proxy := c.Name + "px"
 		id := providerBudgetRuntime(t, b, proxy, "", 2, true)
@@ -113,6 +116,9 @@ func ExportSharedTargetConfigFixture(t *testing.T, p engine.Provider) (*engine.C
 		defer f.mu.Unlock()
 		if active {
 			f.apps[foreignID].row["applicationStatus"] = "error"
+			if len(own) != 0 && own[0] {
+				f.apps[foreignID].row["applicationStatus"] = "idle"
+			}
 		} else {
 			f.apps[foreignID].row["applicationStatus"] = "done"
 		}

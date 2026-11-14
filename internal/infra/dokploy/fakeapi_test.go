@@ -32,6 +32,7 @@ type fakeAPI struct {
 	mu               sync.Mutex
 	latency          time.Duration
 	requestHook      func(http.ResponseWriter, *http.Request) (bool, func())
+	afterInspect     func(string) // Called under mu after serializing the inspected service.
 	server           *httptest.Server
 	serial           int
 	apps             map[string]*fakeApplication
@@ -50,6 +51,7 @@ type fakeAPI struct {
 	uninspectable    map[string]bool
 	omitApplications map[string]bool
 	omitSearch       map[string]bool
+	summaryAppName   bool
 	deploymentQueue  []map[string]any
 }
 
@@ -184,6 +186,9 @@ func (f *fakeAPI) environmentRow(id string) map[string]any {
 			summary := map[string]any{}
 			for _, key := range []string{"name", "applicationId", "createdAt", "applicationStatus", "description", "serverId", "icon", "server"} {
 				summary[key] = a.row[key]
+			}
+			if f.summaryAppName {
+				summary["appName"] = a.row["appName"]
 			}
 			apps = append(apps, summary)
 		}
@@ -481,6 +486,9 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 					respond(nil)
 				} else {
 					respond(service)
+					if f.afterInspect != nil {
+						f.afterInspect(fakeString(service, "ID"))
+					}
 				}
 				return
 			}
@@ -667,8 +675,16 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		if !required("appName") {
 			return
 		}
+		query := fakeString(body, "appName")
+		name := query
+		for serviceName, service := range f.services {
+			if query == serviceName || query == fakeString(service, "ID") {
+				name = serviceName
+				break
+			}
+		}
 		for _, a := range f.apps {
-			if a.row["appName"] == body["appName"] {
+			if a.row["appName"] == name {
 				f.advanceDeployments(a)
 				if f.services[fakeString(a.row, "appName")] == nil {
 					respond([]any{})

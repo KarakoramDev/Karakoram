@@ -166,6 +166,12 @@ need to finish before the next availability sweep. Status-only publication is
 fenced against concurrent lifecycle checkpoints; the four-second member probe,
 five-second sweep, retry count and fifteen-second lease remain unchanged.
 
+On Dokploy, proxies keep an already admitted PostgreSQL member in discovery
+during its owned rolling restart, including the gap between old and replacement tasks.
+Native monitoring still decides whether it can serve; the agent's postmaster
+epoch check can recover it without waiting for the next configuration pull.
+Retired, replaced, stopped and failed lifecycle identities are not retained.
+
 ## Options
 
 `engineOptions` is a strict object: unknown fields and `null` are rejected. `engineConfig` is not accepted.
