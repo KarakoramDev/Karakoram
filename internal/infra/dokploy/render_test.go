@@ -144,8 +144,69 @@ func TestRenderDockerfile(t *testing.T) {
 		t.Fatal("deployment readiness must not gate Swarm DNS or trigger continuous restarts")
 	}
 	entry := string(files["karakoram-entrypoint"])
-	if !strings.Contains(entry, "sudo chown karakoram:karakoram '/var/lib/karakoram/volumes/data-1'") || strings.Contains(entry, "chown -R") || !strings.HasSuffix(entry, "exec \"$@\"\n") {
+	if !strings.Contains(entry, "/usr/bin/sudo -n -- /usr/bin/chown --no-dereference 10001:10001 -- '/var/lib/karakoram/volumes/data-1'") || strings.Contains(entry, "chown -R") || !strings.HasSuffix(entry, "exec \"$@\"\n") {
 		t.Fatalf("entrypoint:\n%s", entry)
+	}
+}
+
+func TestRenderRuntimeSudoPolicy(t *testing.T) {
+	for _, volume := range []string{"data-1", ""} {
+		t.Run(volume, func(t *testing.T) {
+			d := renderTestDeployment(t)
+			d.Runtime.Volume = volume
+			df := renderDockerfile(d)
+			revoke := "USER root\nRUN rm /etc/sudoers.d/karakoram\n"
+			before, after, ok := strings.Cut(df, revoke)
+			if !ok {
+				t.Fatal("build-only sudo was not revoked as root")
+			}
+			if !strings.Contains(before, "NOPASSWD:ALL") || !strings.Contains(before, "USER karakoram\nWORKDIR /opt/karakoram\n") {
+				t.Fatal("preparation user or build sudo changed")
+			}
+			for _, command := range d.Runtime.Prepare {
+				if !strings.Contains(before, "RUN "+renderJSON([]string{"/bin/bash", "-o", "pipefail", "-c", command})+"\n") {
+					t.Fatal("preparation did not precede sudo revocation")
+				}
+			}
+			if strings.Contains(after, "NOPASSWD:ALL") || strings.LastIndex(df, "USER ") != strings.LastIndex(df, "USER karakoram\n") {
+				t.Fatal("runtime retained blanket sudo or root identity")
+			}
+			entry := renderEntrypoint(volume)
+			if volume == "" {
+				if strings.Contains(after, "sudoers.d/") || strings.Contains(entry, "sudo") {
+					t.Fatal("stateless image grants runtime sudo")
+				}
+				return
+			}
+			rule := `karakoram ALL=(root) NOPASSWD: NOEXEC: NOSETENV: /usr/bin/chown --no-dereference 10001\:10001 -- /var/lib/karakoram/volumes/data-1`
+			want := "RUN printf '%s\\n' 'Defaults:karakoram !setenv' '" + rule + "' > /etc/sudoers.d/karakoram-volume && chmod 0440 /etc/sudoers.d/karakoram-volume && visudo -cf /etc/sudoers.d/karakoram-volume\nUSER karakoram\n"
+			if !strings.HasPrefix(after, want) {
+				t.Fatalf("runtime policy differs from exact validated rule:\n%s", after)
+			}
+			command := strings.ReplaceAll(strings.TrimPrefix(rule, `karakoram ALL=(root) NOPASSWD: NOEXEC: NOSETENV: `), `\:`, ":")
+			command = strings.TrimSuffix(command, layout.VolumePath(volume)) + renderShellQuote(layout.VolumePath(volume))
+			if !strings.Contains(entry, "    /usr/bin/sudo -n -- "+command+"\n") {
+				t.Fatalf("entrypoint does not match sudoers literally:\n%s", entry)
+			}
+		})
+	}
+}
+
+func TestRenderVolumeNameSudoersSafety(t *testing.T) {
+	for _, name := range []string{"data,other", "data:other", "data=other", `data\other`, "data other", "data\tother", "data\nother", "data*", "data?", "data[ab]", "data'other", "data/other", ".", ".."} {
+		t.Run(name, func(t *testing.T) {
+			d := renderTestDeployment(t)
+			d.Runtime.Volume = name
+			p, _, err := renderDeployment(d)
+			if p != "" || !errors.Is(err, infra.ErrRejected) {
+				t.Fatalf("unsafe sudoers volume accepted: path=%q err=%v", p, err)
+			}
+		})
+	}
+	for _, name := range []string{"data-1", "DATA_2.ext", "0", "_data"} {
+		d := renderTestDeployment(t)
+		d.Runtime.Volume = name
+		renderTestZip(t, d)
 	}
 }
 

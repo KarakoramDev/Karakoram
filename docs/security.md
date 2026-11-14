@@ -21,6 +21,32 @@ The model protects normal API reads from accidental secret disclosure, applies o
 
 On the **[Zerops](https://zerops.io/) provider**, public UI/API HTTPS terminates at Zerops L7 and forwards to HTTP 8080. The project-private hop is **not end-to-end browser TLS**; trust the platform/private network and never expose the plaintext listener directly to an untrusted network. [Dokploy](https://dokploy.com/) uses its configured public ingress; [Nomad](https://developer.hashicorp.com/nomad) needs an operator-managed HTTPS proxy. Agent transport has independent end-to-end TLS on every provider.
 
+## Member operating-system privileges
+
+Engine preparation may use passwordless sudo; that preparation contract does not
+grant the running agent unrestricted root access:
+
+- **Dokploy:** preparation runs as `karakoram` with build-only blanket sudo.
+  Generated images remove that rule after preparation and run as UID/GID 10001.
+  Data-bearing images retain only an exact, noninteractive root `chown` rule for
+  the fixed mount root, using numeric ownership, `--no-dereference`, `NOEXEC` and
+  `NOSETENV`; names cannot contain sudoers separators, escapes or wildcards.
+  Stateless images install no runtime sudo rule. This is not a container escape
+  defense or protection against a malicious platform administrator.
+- **Nomad:** the entrypoint's blanket sudo grant is temporary and is removed,
+  with sudo's setuid bit stripped, before runtime secrets are loaded and the
+  agent starts as UID/GID 10001. Preparation remains privileged.
+- **Zerops:** sudo policy belongs to the platform. Karakoram supplies preparation
+  commands but does not install or modify that policy, and its running agent
+  does not invoke sudo.
+
+Existing Dokploy members keep their current policy until their next fresh
+Karakoram deployment, such as an agent upgrade, an engine-version or runtime
+redeployment, or a member replacement; upgrading the control plane alone does
+not remove an old image's sudo grant. Ordinary container/process restarts and
+retained-source recovery keep the previously submitted policy. See
+[upgrading to v0.4.10](upgrade.md#upgrading-to-v0410).
+
 ## Agent access (MCP) security model
 
 The [management MCP server](mcp.md) and the per-cluster [data MCP gateway](data-mcp.md) are additional clients of the same control plane, not a second authorization system. Their controls are credentials, server-side enforcement and human confirmation; the list of what they do not protect against is as important as the list of what they do.

@@ -20,7 +20,8 @@ const (
 
 // Layout describes where a backend's runtimes place the deployed artifact and
 // mounted volumes, and which unprivileged user runs the start command.
-// Prepare commands may use passwordless sudo on every backend.
+// Prepare commands may use passwordless sudo during preparation on every backend;
+// this does not imply unrestricted sudo is available to the running agent.
 type Layout struct {
 	// AppDir is the working directory holding the extracted artifact.
 	AppDir string `json:"appDir"`
@@ -78,7 +79,7 @@ type Readiness struct {
 type RuntimeSpec struct {
 	Base string `json:"base"`
 	// Prepare holds shell commands run, in order, once per deployment before
-	// the start command, as Layout.User with passwordless sudo.
+	// the start command, as Layout.User with passwordless sudo during preparation.
 	Prepare []string          `json:"prepare,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
 	// Args are the arguments of the artifact binary started in AppDir.

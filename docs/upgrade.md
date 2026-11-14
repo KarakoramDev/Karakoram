@@ -4,6 +4,30 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading to v0.4.10
+
+### Dokploy member sudo policy
+
+Newly generated Dokploy member images no longer grant the `karakoram` agent user
+blanket passwordless sudo. Engine preparation keeps its existing build-time user
+and sudo semantics. The finished image allows only ownership correction of its
+one fixed data-volume mount root; images without a volume have no runtime sudo
+rule. Nomad and Zerops behavior is unchanged; see [member privileges](security.md#member-operating-system-privileges).
+
+Upgrading the control plane alone does **not** rebuild or redeploy existing
+members. Each member keeps its current image and sudo policy until its next fresh
+Karakoram deployment, such as the normal agent upgrade roll, an engine-version or
+runtime redeployment, or a member replacement. To apply it deliberately:
+
+```sh
+karactl -n NS clusters upgrade-agents CLUSTER --wait
+```
+
+Use `--include-current` when deliberately rebuilding members already reporting
+the current agent build. Follow the engine's maintenance-window and safety gates.
+Ordinary process/container restarts and recovery from retained Dokploy source
+keep using the previously submitted policy.
+
 ## Upgrading to v0.4.9
 
 These instructions apply when upgrading from v0.4.7 or the v0.4.8 hotfix.

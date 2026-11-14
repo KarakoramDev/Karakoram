@@ -23,6 +23,15 @@ The `dokploy` provider runs Karakoram clusters on a [Dokploy](https://dokploy.co
 
 Engine prepare commands use exec-form Dockerfile `RUN` instructions invoking [Bash](https://cgit.git.savannah.gnu.org/cgit/bash.git/) with `pipefail`; embedded newlines, shell quoting and heredocs are preserved rather than parsed as Dockerfile instructions.
 
+Engine preparation still runs as `karakoram` with passwordless sudo during the
+image build. The finished image removes that blanket grant and runs as UID/GID
+10001. A data-bearing image permits only one noninteractive root command:
+`/usr/bin/chown --no-dereference 10001:10001 -- /var/lib/karakoram/volumes/<volume>`,
+with the validated volume name rendered literally in sudoers (no wildcard).
+The entrypoint uses it only when the mount root has different ownership; a
+stateless image has no runtime sudo rule. See [member privileges](security.md#member-operating-system-privileges)
+and the [v0.4.10 upgrade note](upgrade.md#upgrading-to-v0410).
+
 ### Platform deployment admission
 
 Dokploy queues application deployments and builds uploaded Dockerfiles on its server.

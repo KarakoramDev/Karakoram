@@ -51,6 +51,8 @@ func renderDeployment(d infra.Deployment) (zipPath, digest string, err error) {
 			return reject("artifact archive conflicts with a build context file")
 		}
 	}
+	// This name is also rendered literally in sudoers: no argument separators,
+	// escapes, whitespace or glob metacharacters may enter the runtime rule.
 	if d.Runtime.Volume != "" && (!renderFileName.MatchString(d.Runtime.Volume) || d.Runtime.Volume == "." || d.Runtime.Volume == "..") {
 		return reject("volume must be a simple name")
 	}
@@ -174,6 +176,14 @@ func renderDockerfile(d infra.Deployment) string {
 	if d.Runtime.Volume != "" {
 		fmt.Fprintf(&b, "RUN mkdir -p %s\n", renderShellQuote(layout.VolumePath(d.Runtime.Volume)))
 	}
+	// Preserve preparation as the runtime user with build-only sudo, then revoke
+	// it before producing the runtime image. Only the fixed mount root needs chown.
+	b.WriteString("USER root\nRUN rm /etc/sudoers.d/karakoram\n")
+	if d.Runtime.Volume != "" {
+		rule := `karakoram ALL=(root) NOPASSWD: NOEXEC: NOSETENV: /usr/bin/chown --no-dereference 10001\:10001 -- ` + layout.VolumePath(d.Runtime.Volume)
+		fmt.Fprintf(&b, "RUN printf '%%s\\n' 'Defaults:karakoram !setenv' %s > /etc/sudoers.d/karakoram-volume && chmod 0440 /etc/sudoers.d/karakoram-volume && visudo -cf /etc/sudoers.d/karakoram-volume\n", renderShellQuote(rule))
+	}
+	fmt.Fprintf(&b, "USER %s\n", layout.User)
 	fmt.Fprintf(&b, "COPY --chown=karakoram:karakoram %s\n", renderJSON([]string{d.Artifact.Name, "/tmp/karakoram-artifact.tar.gz"}))
 	fmt.Fprintf(&b, "RUN tar -xzf /tmp/karakoram-artifact.tar.gz -C %s && chmod +x %s && rm /tmp/karakoram-artifact.tar.gz\n", layout.AppDir, path.Join(layout.AppDir, d.Artifact.Binary))
 	fmt.Fprintf(&b, "COPY --chown=karakoram:karakoram --chmod=0644 [\"karakoram.env\",\"%s/karakoram.env\"]\n", layout.AppDir)
@@ -197,7 +207,7 @@ func renderEntrypoint(volume string) string {
 	b.WriteString("#!/bin/sh\nset -eu\n")
 	if volume != "" {
 		p := renderShellQuote(layout.VolumePath(volume))
-		fmt.Fprintf(&b, "if [ \"$(stat -c '%%u:%%g' %s)\" != '10001:10001' ]; then\n    sudo chown karakoram:karakoram %s\nfi\n", p, p)
+		fmt.Fprintf(&b, "if [ \"$(stat -c '%%u:%%g' %s)\" != '10001:10001' ]; then\n    /usr/bin/sudo -n -- /usr/bin/chown --no-dereference 10001:10001 -- %s\nfi\n", p, p)
 		// A deleted Swarm service can leave an old task draining after its
 		// inventory disappears. The descriptor survives exec for that task's
 		// entire lifetime, excluding a restored writer on the same volume.
