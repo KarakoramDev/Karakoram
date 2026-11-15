@@ -78,13 +78,25 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 			return s.failure(engine.ErrNotSupported)
 		}
 		deleteBackup = deleter.DeleteRetainedBackup
+		if preflight, ok := p.(engine.RetainedBackupDeletionPreflight); ok {
+			if err := preflight.ValidateRetainedBackupDeletion(ctx, *storage, *b); err != nil {
+				return s.failure(err)
+			}
+		}
 	}
-	if err := s.Store.MarkRetainedBackupDeleting(ctx, b); err != nil {
+	previousPhase := b.Phase
+	version, err := s.Store.MarkRetainedBackupDeleting(ctx, b)
+	if err != nil {
 		return s.failure(err)
 	}
 	if err := deleteBackup(ctx, *storage, *b); err != nil {
-		// Keep Deleting inventory and recovery credentials for a retry after
-		// cancellation, partial storage failure, or a control-plane restart.
+		var refusal *engine.RetainedBackupDeletionRefusal
+		if previousPhase == domain.PhaseSucceeded && errors.As(err, &refusal) {
+			if rollbackErr := s.Store.RollbackRetainedBackupDeletion(ctx, b, version); rollbackErr != nil {
+				return s.failure(rollbackErr)
+			}
+		}
+		// Ambiguous/partial errors and retries preserve deletion intent.
 		return s.failure(err)
 	}
 	if (b.Provider == "" || b.Provider == "psmdb") && b.RecoveryIdentity != "" {

@@ -41,7 +41,48 @@ func (p *Core) DeleteRetainedBackup(ctx context.Context, storage domain.BackupSt
 	return deleteRetiredBackup(ctx, storage, b, p.options.Store, secretStore)
 }
 
+// ValidateRetainedBackupDeletion rejects deterministic refusals before the
+// server persists deletion intent. Deletion repeats this check before mutation.
+func (p *Core) ValidateRetainedBackupDeletion(_ context.Context, storage domain.BackupStorage, b domain.Backup) error {
+	return retainedBackupDeletionRefusal(storage, b)
+}
+
+func retainedBackupDeletionRefusal(storage domain.BackupStorage, b domain.Backup) error {
+	// Citus PITR points are logical markers, not pgBackRest backup sets.
+	if b.Trigger == "pitr" && b.Postgres != nil && len(b.Postgres.Groups) > 0 {
+		return nil
+	}
+	refusal := func(message string) error {
+		return &engine.RetainedBackupDeletionRefusal{Err: &domain.ResourceError{Resource: "backup", Name: b.Name, Reason: domain.ReasonInvalidState, State: string(b.Phase), Err: engine.ErrConflict, Message: message}}
+	}
+	if b.Postgres == nil || b.Postgres.Label == "" {
+		return refusal("backup lacks pgBackRest snapshot provenance; preserve its record and repair provenance before deletion")
+	}
+	// Repeat the expiration's local provenance checks so a set it would refuse
+	// never reaches Deleting.
+	validate := func(set *domain.PostgresBackup) error {
+		check := b
+		check.Postgres = set
+		if err := backupstorage.ValidatePostgresBackupProvenance(storage, check); err != nil {
+			return refusal(err.Error() + "; preserve its record and repair provenance before deletion")
+		}
+		return nil
+	}
+	if len(b.Postgres.Groups) == 0 {
+		return validate(b.Postgres)
+	}
+	for i := range b.Postgres.Groups {
+		if err := validate(&b.Postgres.Groups[i].Backup); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func deleteRetiredBackup(ctx context.Context, storage domain.BackupStorage, b domain.Backup, store engine.ClusterStore, secretStore engine.SecretStore) error {
+	if err := retainedBackupDeletionRefusal(storage, b); err != nil {
+		return err
+	}
 	if b.Postgres != nil && len(b.Postgres.Groups) > 0 {
 		return deleteRetiredCitusBackup(ctx, storage, b, store, secretStore)
 	}

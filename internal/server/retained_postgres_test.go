@@ -124,3 +124,25 @@ func TestRetainedPostgresProvenanceFailsClosed(t *testing.T) {
 		}
 	}
 }
+
+func TestIncompleteRetainedPostgresDeletionRefusesBeforeMark(t *testing.T) {
+	s, _, token := testServer(t)
+	if err := s.Registry.Register(postgres.New(postgres.Options{Store: s.Store})); err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+	if err := s.Store.CreateBackupStorage(ctx, &domain.BackupStorage{Name: "archive", Type: "s3"}); err != nil {
+		t.Fatal(err)
+	}
+	b := &domain.Backup{Name: "saved", Cluster: "gone", Provider: "postgres", Storage: "archive", Phase: domain.PhaseFailed, Postgres: &domain.PostgresBackup{Repository: "repo"}}
+	if err := s.Store.CreateBackup(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	if w := call(s, "DELETE", "/api/v1/clusters/gone/backups/saved", "", token); w.Code != 409 || !strings.Contains(w.Body.String(), "pgBackRest snapshot provenance") {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	got, err := s.Store.GetBackup(ctx, domain.ClusterRef{Name: b.Cluster}, b.Name)
+	if err != nil || got.Phase != domain.PhaseFailed {
+		t.Fatal("incomplete backup lost its phase", got, err)
+	}
+}

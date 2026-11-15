@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -314,6 +315,43 @@ func TestDeleteBackupAndRetainedUsesRecordedPrefix(t *testing.T) {
 				if got != prefix {
 					t.Fatalf("listed %q want %q", got, prefix)
 				}
+			}
+		})
+	}
+}
+
+func TestRetainedBackupDeletionRefusesChangedStorageBinding(t *testing.T) {
+	for _, field := range []string{"endpoint", "bucket"} {
+		t.Run(field, func(t *testing.T) {
+			endpoint, keys, prefixes := fakeBackupS3(t)
+			f, s, n, b := backupFixture(t, 1)
+			b = completeBackup(t, f, s, n, b)
+			storage, err := f.rc.Store.GetBackupStorage(t.Context(), b.Namespace, b.Storage)
+			if err != nil {
+				t.Fatal(err)
+			}
+			storage.EndpointURL, storage.ForcePathStyle, storage.VerifyTLS = endpoint, true, false
+			b.Weaviate.Endpoint = endpoint
+			b.Location = backupLocation(b.Weaviate)
+			prefix := b.Weaviate.Path + "/" + b.Weaviate.ID + "/"
+			keys[prefix+"backup.json"] = true
+			if field == "endpoint" {
+				storage.EndpointURL = "https://changed.example.invalid"
+			} else {
+				storage.Bucket = "changed"
+			}
+			for _, validate := range []func(context.Context, domain.BackupStorage, domain.Backup) error{
+				f.p.ValidateRetainedBackupDeletion, f.p.DeleteRetainedBackup,
+			} {
+				err := validate(t.Context(), *storage, *b)
+				var refusal *engine.RetainedBackupDeletionRefusal
+				var resource *domain.ResourceError
+				if !errors.As(err, &refusal) || !errors.As(err, &resource) || !strings.Contains(resource.Message, "immutable Weaviate S3 identity") {
+					t.Fatalf("binding change lacks safe public refusal: %v", err)
+				}
+			}
+			if len(keys) != 1 || !keys[prefix+"backup.json"] || len(*prefixes) != 0 {
+				t.Fatal("binding refusal accessed or removed backup objects")
 			}
 		})
 	}

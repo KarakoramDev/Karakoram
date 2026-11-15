@@ -70,6 +70,29 @@ See [PostgreSQL](postgres/backups.md#pitr),
 [MySQL/PXC](mysql/backups.md#binary-log-pitr) and
 [MongoDB](mongodb/backups.md#pitr) for conditions and recovery requirements.
 
+### Retained-backup deletion refusals
+
+The control-plane upgrade validates retained Elasticsearch, Weaviate and
+PostgreSQL backup deletion before recording deletion intent. A proven
+non-destructive refusal leaves a newly requested successful backup restorable;
+transient or partial deletion failures keep `Deleting` for retry. Restore
+dependencies and source-cluster absence remain enforced.
+PostgreSQL and Supabase snapshot preflight checks the native label, storage
+binding and isolated repository path for every Citus group before `Deleting`;
+Citus PITR logical markers do not expire native backup sets.
+
+The upgrade does **not** reset records already stranded in `Deleting` by older
+releases. Preserve their inventory and objects. An affected Elasticsearch
+snapshot can be restored natively from a read-only registered repository.
+For Weaviate, restore the original storage binding and retry deletion; this
+completes deletion rather than restoring Karakoram restore eligibility.
+PostgreSQL records without native snapshot provenance need investigation.
+See [retained backup recovery guidance](backups.md#delete-or-preserve-recovery-objects).
+
+### API
+
+- `deleteBackup` now documents its existing `503 Unavailable` response; runtime behavior is unchanged.
+
 ## Upgrading to v0.4.10
 
 These instructions apply when upgrading from v0.4.9. The health-observation and

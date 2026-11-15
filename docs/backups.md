@@ -368,19 +368,21 @@ with a recorded remote location or [PostgreSQL](https://www.postgresql.org/) rep
 direct retained-object cleanup, never through an operation stranded on the
 absent cluster. Inventory is removed only after remote cleanup succeeds.
 
-**Known issue:** retained deletion marks a record `Deleting` before provider
-validation. Refused deletion can therefore strand Elasticsearch snapshots
-(multiple snapshots in one repository or an edited bucket/prefix), Weaviate
-backups after bucket/endpoint edits, and failed/incomplete PostgreSQL/Supabase
-records, even though no objects were deleted. Karakoram cannot restore from a
-`Deleting` record. Preserve original storage bindings; do not delete individual
-retained Elasticsearch snapshots while other snapshots remain. A stuck
-Elasticsearch snapshot can still be restored natively from a read-only
-repository registration. For Weaviate, restore the original binding and retry
-deletion; restore remains unavailable while `Deleting`. No supported record
-reset exists in these releases; do not delete repository objects by hand.
-See [the retained-backup warning](limitations.md#retained-backup-deletion-stuck);
-a fix is planned for v0.4.11.
+Retained deletion validates provider safety checks before recording `Deleting`.
+A provider-proven refusal that made no destructive changes can restore the
+previous `Succeeded` phase only for that newly started deletion attempt.
+Transient or partial cleanup failures retain deletion intent; records already
+`Deleting` are never automatically reset.
+
+For records stranded by earlier releases, preserve inventory and recovery
+objects. An Elasticsearch snapshot already stuck in `Deleting` remains intact
+and can be restored natively by registering its repository read-only in
+Elasticsearch. For Weaviate, restore the original storage binding and retry
+deletion; it can then complete, but Karakoram restore remains unavailable while
+`Deleting`. No supported record reset exists; do not delete repository objects
+by hand. PostgreSQL records lacking a native backup label need their provenance
+investigated before recovery can be promised. See the
+[retained-deletion known issue](limitations.md#retained-backup-deletion-stuck).
 
 [Cluster deletion](clusters.md#delete-or-suspend) intentionally preserves backups with `--keep-backups`, independently of volumes. MongoDB, [Elasticsearch](https://www.elastic.co/elasticsearch), [RabbitMQ](https://www.rabbitmq.com/) and PostgreSQL/[Supabase](https://supabase.com/) retire runtime writers and delete (or intentionally retain) volumes before control-plane artifact cleanup. Elasticsearch, RabbitMQ and PostgreSQL/Supabase retry artifact access failures within a durable two-minute cleanup window; restarts do not reset that window. If exact owned cleanup cannot finish safely, cluster removal completes with affected inventory retained and a `BackupArtifactsRetained` warning (`SnapshotsRetained` for Elasticsearch). Successful destinations are checkpointed and are not deleted again after restart. Read-only source repositories and other incarnations remain untouched. Dependency admission still returns `409` before destructive intent when another operation needs the backups. Inspect retained-artifact warnings and exact-prefix removal guidance rather than treating terminal cluster success as proof of empty storage. Retained `backups list/get/delete` use the original name/namespace and source `backups/read`/`delete`. Recovery after source deletion is engine driver-specific: use an explicit create file where supported, or restore into an existing target following the engine guide. `--into-new` needs a live source spec.
 Retained listing returns `404` after the deleted source's final backup record is removed.

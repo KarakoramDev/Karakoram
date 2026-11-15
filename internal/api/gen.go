@@ -28325,6 +28325,15 @@ func (response DeleteBackup500JSONResponse) VisitDeleteBackupResponse(w http.Res
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type DeleteBackup503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteBackup503JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetBackupRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Backup  string      `json:"backup"`

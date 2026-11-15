@@ -15,6 +15,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/minio/minio-go/v7"
 )
 
@@ -24,19 +25,25 @@ import (
 // For a multi-snapshot repository, register it in another cluster and delete the
 // snapshot through Elasticsearch instead. No writer may use a retired base path.
 func (p *Provider) DeleteRetainedBackup(ctx context.Context, storage domain.BackupStorage, b domain.Backup) error {
+	return p.retainedBackupDeletion(ctx, storage, b, true)
+}
+
+func (p *Provider) ValidateRetainedBackupDeletion(ctx context.Context, storage domain.BackupStorage, b domain.Backup) error {
+	return p.retainedBackupDeletion(ctx, storage, b, false)
+}
+
+func (p *Provider) retainedBackupDeletion(ctx context.Context, storage domain.BackupStorage, b domain.Backup, remove bool) error {
 	base, _, snapshot, err := recordedSnapshot(&storage, &b)
 	if err != nil {
-		return err
+		return &engine.RetainedBackupDeletionRefusal{Err: &domain.ResourceError{Resource: "backup", Name: b.Name, Reason: domain.ReasonInvalidState, State: string(b.Phase), Err: engine.ErrConflict, Message: err.Error()}}
 	}
-	// Require the complete cluster UID namespace, not merely a storage prefix.
-	storagePrefix := domain.ElasticsearchObjectPrefix(storage.Prefix, "")
-	suffix := strings.TrimPrefix(base, storagePrefix+"/")
-	if storagePrefix == "" {
-		suffix = base
-	}
-	parts := strings.Split(suffix, "/")
-	if len(parts) != 3 || parts[0] != domain.NormalizedNamespace(b.Namespace) || parts[1] != b.Cluster || parts[2] == "" {
-		return operationInvalid("retained snapshot lacks a complete cluster repository namespace")
+	// The immutable recorded base ends in namespace/cluster/incarnation.
+	// Today's storage prefix only controls future repositories and may differ.
+	// Match the complete trailing tuple, never a tuple found inside a broader
+	// path or a namespace derived by stripping the mutable storage prefix.
+	parts := strings.Split(base, "/")
+	if len(parts) < 3 || parts[len(parts)-3] != domain.NormalizedNamespace(b.Namespace) || parts[len(parts)-2] != b.Cluster || parts[len(parts)-1] == "" {
+		return &engine.RetainedBackupDeletionRefusal{Err: &domain.ResourceError{Resource: "backup", Name: b.Name, Reason: domain.ReasonInvalidState, State: string(b.Phase), Err: engine.ErrConflict, Message: "retained snapshot lacks a complete cluster repository namespace; preserve its record and repair provenance before deletion"}}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -89,7 +96,12 @@ func (p *Provider) DeleteRetainedBackup(ctx context.Context, storage domain.Back
 		return closeErr
 	}
 	if err = validateRetainedCatalog(raw, snapshot); err != nil {
-		return err
+		// This attempt has not changed storage. The catalog does not prove
+		// that an earlier attempt could not have partially removed objects.
+		return &engine.RetainedBackupDeletionRefusal{Err: &domain.ResourceError{Resource: "backup", Name: b.Name, Reason: domain.ReasonInvalidState, State: string(b.Phase), Err: engine.ErrConflict, Message: err.Error()}}
+	}
+	if !remove {
+		return nil
 	}
 	// Delete the selected catalog last. A partial deletion remains retryable while
 	// the authoritative last-snapshot check is still available. Shared blobs are

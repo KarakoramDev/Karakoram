@@ -5,7 +5,6 @@ package weaviate
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -16,14 +15,47 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
+func retainedBackupDeletionIdentity(storage domain.BackupStorage, b domain.Backup) (*domain.WeaviateBackup, error) {
+	refuse := func(message string) (*domain.WeaviateBackup, error) {
+		return nil, &engine.RetainedBackupDeletionRefusal{Err: &domain.ResourceError{Resource: "backup", Name: b.Name, Reason: domain.ReasonInvalidState, State: string(b.Phase), Err: engine.ErrConflict, Message: message}}
+	}
+	if b.Phase == domain.PhaseRunning || b.Phase == domain.PhasePending {
+		return refuse("cancel the in-progress backup before deleting its objects")
+	}
+	m, err := recordedBackup(&storage, &b)
+	if err != nil {
+		return refuse(err.Error())
+	}
+	return m, nil
+}
+
+// ValidateRetainedBackupDeletion checks the immutable binding and completes a
+// read-only object listing before the server records destructive cleanup intent.
+func (p *Provider) ValidateRetainedBackupDeletion(ctx context.Context, storage domain.BackupStorage, b domain.Backup) error {
+	m, err := retainedBackupDeletionIdentity(storage, b)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	client, closeClient, err := backupstorage.NewClient(storage, storage.Credentials)
+	if err != nil {
+		return err
+	}
+	defer closeClient()
+	for object := range client.ListObjectsIter(ctx, m.Bucket, minio.ListObjectsOptions{Prefix: m.Path + "/" + m.ID + "/", Recursive: true}) {
+		if object.Err != nil {
+			return object.Err
+		}
+	}
+	return ctx.Err()
+}
+
 // Full backup objects are self-contained: backup-s3/client.go bucketAndPath
 // uses makeObjectName(overridePath, backupID, key), i.e. path/backupID/key.
 // Never derive this prefix from the current storage prefix or cluster state.
 func (p *Provider) DeleteRetainedBackup(ctx context.Context, storage domain.BackupStorage, b domain.Backup) error {
-	if b.Phase == domain.PhaseRunning || b.Phase == domain.PhasePending {
-		return fmt.Errorf("%w: cancel the in-progress backup before deleting its objects", engine.ErrConflict)
-	}
-	m, err := recordedBackup(&storage, &b)
+	m, err := retainedBackupDeletionIdentity(storage, b)
 	if err != nil {
 		return err
 	}

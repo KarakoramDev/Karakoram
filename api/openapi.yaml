@@ -8824,6 +8824,8 @@ paths:
           description: Retained snapshot objects and record removed, or already absent.
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       parameters:
         - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/pitr:

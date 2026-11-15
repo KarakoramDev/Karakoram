@@ -270,13 +270,25 @@ func DeletePostgresBackup(ctx context.Context, s domain.BackupStorage, b domain.
 	return deletePostgresBackup(ctx, s, b, nil)
 }
 
+// ValidatePostgresBackupProvenance performs the local, deterministic checks
+// retained expiration repeats before touching the repository, so callers can
+// refuse before recording deletion intent.
+func ValidatePostgresBackupProvenance(s domain.BackupStorage, b domain.Backup) error {
+	_, err := postgresBackupDirectory(s, b)
+	return err
+}
+
+func postgresBackupDirectory(s domain.BackupStorage, b domain.Backup) (string, error) {
+	if b.Postgres == nil || b.Storage != s.Name || !postgresLabel.MatchString(b.Postgres.Label) {
+		return "", errors.New("backup lacks pgBackRest snapshot provenance")
+	}
+	return PostgresDirectory(s, b.Namespace, b.Cluster, b.Postgres.Repository)
+}
+
 func deletePostgresBackup(ctx context.Context, s domain.BackupStorage, b domain.Backup, transport http.RoundTripper) error {
 	postgresExpireMu.Lock()
 	defer postgresExpireMu.Unlock()
-	if b.Postgres == nil || b.Storage != s.Name || !postgresLabel.MatchString(b.Postgres.Label) {
-		return errors.New("backup lacks pgBackRest snapshot provenance")
-	}
-	directory, err := PostgresDirectory(s, b.Namespace, b.Cluster, b.Postgres.Repository)
+	directory, err := postgresBackupDirectory(s, b)
 	if err != nil {
 		return err
 	}

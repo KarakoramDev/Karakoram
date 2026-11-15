@@ -464,3 +464,72 @@ func TestRetainedBackupDeletionTriggersWorker(t *testing.T) {
 		t.Fatalf("triggered=%v, want %s", spy.names, want)
 	}
 }
+
+type preflightRetainedProvider struct {
+	*retryRetainedProvider
+	check func() error
+}
+
+func (p *preflightRetainedProvider) ValidateRetainedBackupDeletion(context.Context, domain.BackupStorage, domain.Backup) error {
+	return p.check()
+}
+
+func TestRetainedDeletionOnlyRollsBackNewNonDestructiveRefusal(t *testing.T) {
+	refused := &engine.RetainedBackupDeletionRefusal{Err: &domain.ResourceError{Resource: "backup", Name: "saved", Reason: domain.ReasonInvalidState, Err: engine.ErrConflict, Message: "repository requires native deletion"}}
+	for _, tc := range []struct {
+		name         string
+		initial      domain.Phase
+		deleteErr    error
+		preflightErr error
+		want         domain.Phase
+		status       int
+	}{
+		{"preflight", domain.PhaseSucceeded, nil, refused, domain.PhaseSucceeded, 409},
+		{"deterministic", domain.PhaseSucceeded, refused, nil, domain.PhaseSucceeded, 409},
+		{"retry-refusal", domain.PhaseDeleting, refused, nil, domain.PhaseDeleting, 409},
+		{"transient", domain.PhaseSucceeded, engine.ErrUnavailable, nil, domain.PhaseDeleting, 503},
+		{"partial", domain.PhaseSucceeded, errors.New("partial deletion failed"), nil, domain.PhaseDeleting, 500},
+		{"untyped-conflict", domain.PhaseSucceeded, engine.ErrConflict, nil, domain.PhaseDeleting, 409},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, token := testServer(t)
+			ctx := t.Context()
+			calls := 0
+			p := &preflightRetainedProvider{retryRetainedProvider: &retryRetainedProvider{fakeProvider: &fakeProvider{}, name: "retained-test"}, check: func() error { return tc.preflightErr }}
+			p.delete = func(b domain.Backup) error {
+				calls++
+				if b.Phase != domain.PhaseDeleting {
+					t.Fatal("remote deletion preceded durable intent", b.Phase)
+				}
+				return tc.deleteErr
+			}
+			if err := s.Registry.Register(p); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Store.CreateBackupStorage(ctx, &domain.BackupStorage{Name: "archive", Type: "s3"}); err != nil {
+				t.Fatal(err)
+			}
+			b := &domain.Backup{Name: "saved", Cluster: "gone", Provider: p.Name(), Storage: "archive", Phase: tc.initial, Location: "snapshot"}
+			if err := s.Store.CreateBackup(ctx, b); err != nil {
+				t.Fatal(err)
+			}
+			w := call(s, "DELETE", "/api/v1/clusters/gone/backups/saved", "", token)
+			if w.Code != tc.status {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			got, err := s.Store.GetBackup(ctx, domain.ClusterRef{Name: b.Cluster}, b.Name)
+			if err != nil || got.Phase != tc.want {
+				t.Fatal("wrong retained phase", got, err)
+			}
+			if (calls == 0) != (tc.preflightErr != nil) {
+				t.Fatal("preflight did not prevent mutation", calls)
+			}
+			if r := s.retainedRestoreSource(ctx, domain.ClusterRef{Name: b.Cluster}, b.Name); (r == nil) != (tc.want == domain.PhaseSucceeded) {
+				t.Fatal("wrong retained restore admission", r)
+			}
+			if tc.deleteErr == refused && !strings.Contains(w.Body.String(), "repository requires native deletion") {
+				t.Fatal("documented refusal was hidden", w.Body.String())
+			}
+		})
+	}
+}
