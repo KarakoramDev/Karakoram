@@ -1088,14 +1088,13 @@ dispositions identify the required upgrade actions.
   `karactl operations cancel ID` after the new member has joined the group makes
   the rollback wait for the lost member to come back, which never happens.
   The cluster keeps serving, but new replacements and agent upgrades are
-  blocked and there is no supported way to recover in this release. Do not
-  cancel these replacements once they have started; let them finish. If a
-  cluster is already stuck on v0.4.7 or v0.4.8, keep it serving and take a full backup.
-  **Fixed in v0.4.9:** joined confirmed-loss replacement completes forward on
-  cancellation; unjoined work rolls back its allocation and retains loss for a
-  fresh replacement. Existing rollback owners settle after upgrade; cancellation
-  acknowledgement does not mean recovery is finished. See
-  [GR capability and legacy recovery](#gr-capability-and-legacy-recovery).
+  blocked. Fixed in v0.4.9: after upgrading the control plane (agents can stay
+  on the older version), the stuck rollback finishes by itself (Warning event
+  `LegacyGRRetirement`) and a queued `replace-member` then starts and restores
+  the member; if none is queued, run
+  `karactl -n NS clusters replace-member CLUSTER MEMBER --wait`, then
+  `karactl -n NS clusters upgrade-agents CLUSTER --wait`. Do not cancel or
+  re-submit the operation, wipe state, or restart the stopped member by hand.
 - **On Dokploy, a Neo4j cluster created with 1 GiB of memory never becomes ready**
   (v0.4.7). At the documented minimum of 1 GiB, a new single-member Neo4j cluster
   on Dokploy runs out of memory and CPU while starting: it never reports Ready
