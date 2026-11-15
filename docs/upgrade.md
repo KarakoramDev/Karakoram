@@ -349,8 +349,11 @@ still apply to v0.4.9.
   and condition `WALArchive=False` (`ArchiveFailing`), but it is not marked
   `Degraded`, no `ClusterDegraded` warning is emitted and the degraded metric
   stays 0. Unarchived WAL keeps accumulating until the data volume fills, after
-  which the member stops. Point-in-time recovery coverage also stops at the
-  last archived segment. Workaround: alert on the `WALArchive` condition
+  which the member stops. For single and high-availability clusters, while
+  archiving fails, point-in-time restore to a timestamp is refused, even for
+  times before the failure; restoring a named full, differential or incremental
+  backup still works, and point-in-time restore becomes available again after
+  the next successful archive. Workaround: alert on the `WALArchive` condition
   (`karakoram_cluster_condition{type="WALArchive",status="False"}`) and on rising
   `karakoram_postgres_archiver_failed_total` /
   `karakoram_postgres_archive_pending_segments`, and check

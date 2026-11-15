@@ -125,8 +125,11 @@ Enable `spec.backup.pitr.enabled` and configure default storage. `oplogSpanMinut
 **Known issue:** a failing WAL archive reports `Updating`, not `Degraded`, with
 `WALArchive=False` (`ArchiveFailing`); neither the `ClusterDegraded` warning nor
 `karakoram_cluster_degraded` signals this failure. WAL accumulates until the
-data volume fills and the member stops, while PITR coverage stops at the last
-archived segment. Alert on
+data volume fills and the member stops. For single and high-availability
+clusters, while archiving fails, point-in-time restore to a timestamp is
+refused, even for times before the failure; restoring a named full, differential
+or incremental backup still works, and point-in-time restore becomes available
+again after the next successful archive. Alert on
 `karakoram_cluster_condition{type="WALArchive",status="False"}` and rising
 `karakoram_postgres_archiver_failed_total` /
 `karakoram_postgres_archive_pending_segments`; inspect
