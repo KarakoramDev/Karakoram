@@ -77,6 +77,17 @@ Add `--source-namespace NAME` when needed. Preserve its inventory, storage and p
 
 `Backup.location` is `s3://<bucket>/<base_path>?repository=<repo>#<snapshot>`, a repository/snapshot reference shown in Backup details, **not a per-snapshot object prefix**. Snapshots share blobs: delete through Elasticsearch. Direct retained-backup deletion after source deletion is allowed only for the sole snapshot in a retired repository with no writer; otherwise register it elsewhere and use the native snapshot API.
 
+**Known issue:** do not request individual retained-snapshot deletion while
+other snapshots remain in the repository, or after editing the storage
+bucket/prefix. Karakoram marks the record `Deleting` before refusing the
+request (HTTP 500 `internal_error` for multiple snapshots, HTTP 400 for a
+binding mismatch), making it unavailable to Karakoram restore even though
+the snapshot is intact. Restore it natively by registering the repository
+read-only in Elasticsearch. No supported record reset exists in these
+releases; do not delete repository objects by hand. See
+[the retained-backup warning](../limitations.md#retained-backup-deletion-stuck);
+a fix is planned for v0.4.11.
+
 Changing a storage registration's prefix applies to future snapshots. Existing backups and interrupted backups retain their recorded base path for restore, deletion and continued polling; the recorded bucket and storage identity must still match. Keep the original bucket contents and access permissions available. A prefix edit does not migrate or copy objects, and changing a bucket/endpoint requires a separate storage migration plan.
 
 With `keepBackups: false`, whole-cluster cleanup first retires runtime writers and deletes volumes (or records intentional `keepVolumes` retention). It then uses the control-plane S3 binding to remove only complete owned writable repository prefixes, including shared blobs, without contacting Elasticsearch. Read-only source repositories and prior incarnations are untouched. A durable two-minute artifact-cleanup window bounds storage/authentication/binding retries across controller restarts; successful repositories are checkpointed before inventory removal. On exhaustion, `SnapshotsRetained` names the recorded repository prefix and manual-removal guidance; cluster deletion completes while affected inventory remains. Restore the original binding, verify ownership, remove only that complete retired repository prefix, then remove retained inventory. Never delete individual shared snapshot blobs or guess ambiguous ownership. `keepBackups: true` preserves objects and inventory without a failure warning, independently of `keepVolumes`; accepted restore/clone dependencies still fence destructive deletion with `409`. See [deletion choices](../clusters.md#delete-or-suspend).

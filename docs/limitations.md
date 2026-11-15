@@ -77,6 +77,25 @@ These cross-engine constraints define the operating model; engine-specific limit
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+<a id="retained-backup-deletion-stuck"></a>
+
+- **Deleting a retained backup can leave it stuck in `Deleting` and
+  unrestorable** (also present since v0.1.0 for Elasticsearch, v0.4.0 for
+  Weaviate, v0.2.0 for failed PostgreSQL backups). After source deletion with
+  `--keep-backups`, Karakoram marks the record `Deleting` before provider
+  validation; a refusal can leave it there although no objects were deleted.
+  This affects Elasticsearch repositories with multiple snapshots or an edited
+  storage bucket/prefix, Weaviate after storage bucket/endpoint changes, and
+  failed or incomplete PostgreSQL/Supabase records. Workaround: do not delete
+  individual retained Elasticsearch snapshots while other snapshots remain;
+  preserve the original storage binding. A stuck Elasticsearch snapshot is
+  still intact and can be restored natively by registering its repository
+  read-only in Elasticsearch. For Weaviate, restore the original storage
+  binding and retry deletion: deletion can then complete, but Karakoram restore
+  remains unavailable while the record is `Deleting`. There is no supported
+  way to reset a stuck record in these releases; do not delete repository
+  objects by hand. A fix is planned for v0.4.11.
+
 <a id="postgres-wal-archive-not-degraded"></a>
 
 - **A failing PostgreSQL WAL archive is not reported as Degraded** (also present
