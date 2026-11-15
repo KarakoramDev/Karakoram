@@ -122,6 +122,18 @@ the retired incarnation's backups (or vice versa).
 
 Enable `spec.backup.pitr.enabled` and configure default storage. `oplogSpanMinutes` controls [PostgreSQL](https://www.postgresql.org/) `archive_timeout`, defaulting to one minute; the inherited field name does not mean [MongoDB](https://www.mongodb.com/) oplog behavior. Low-activity WAL switching is not an exact commit-time recovery guarantee.
 
+**Known issue:** a failing WAL archive reports `Updating`, not `Degraded`, with
+`WALArchive=False` (`ArchiveFailing`); neither the `ClusterDegraded` warning nor
+`karakoram_cluster_degraded` signals this failure. WAL accumulates until the
+data volume fills and the member stops, while PITR coverage stops at the last
+archived segment. Alert on
+`karakoram_cluster_condition{type="WALArchive",status="False"}` and rising
+`karakoram_postgres_archiver_failed_total` /
+`karakoram_postgres_archive_pending_segments`; inspect
+`karactl clusters get CLUSTER` conditions after configuration changes and
+failovers. See [the known issue and cross-engine alerting guidance](../limitations.md#postgres-wal-archive-not-degraded);
+a fix is planned for v0.4.11.
+
 Restore and clone `pitrTime` inputs use RFC 3339, including `Z` or numeric offsets. Native recovery arguments normalize the instant to UTC with an explicit numeric offset and PostgreSQL's microsecond precision; sub-microsecond fractions are truncated, not rounded forward.
 
 GET `/api/v1/clusters/{cluster}/pitr` reports a conservative interval from the oldest successful consistent base's stop time to a committed primary WAL watermark covered by an archived segment. Archive upload completion time is never treated as WAL-content coverage. Status sampling emits a small committed WAL heartbeat at most every ten seconds, so idle clusters continue advancing with `archive_timeout` (one minute by default). After a member restart or failover, the window remains unavailable until a sample from the current database system and primary timeline is archived. No interval is advertised when disabled or archiving is failing; external removal of repository objects can still invalidate recovery. Without configured storage, the archive command is a no-op and provides no recovery history.

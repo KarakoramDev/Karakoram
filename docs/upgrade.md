@@ -344,6 +344,20 @@ The general [rollback procedure](#rollback) does not override these restrictions
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+- **A failing PostgreSQL WAL archive is not reported as Degraded** (also present
+  in v0.2.0–v0.4.6). When WAL archiving fails, the cluster shows phase `Updating`
+  and condition `WALArchive=False` (`ArchiveFailing`), but it is not marked
+  `Degraded`, no `ClusterDegraded` warning is emitted and the degraded metric
+  stays 0. Unarchived WAL keeps accumulating until the data volume fills, after
+  which the member stops. Point-in-time recovery coverage also stops at the
+  last archived segment. Workaround: alert on the `WALArchive` condition
+  (`karakoram_cluster_condition{type="WALArchive",status="False"}`) and on rising
+  `karakoram_postgres_archiver_failed_total` /
+  `karakoram_postgres_archive_pending_segments`, and check
+  `karactl clusters get CLUSTER` conditions after configuration changes and
+  failovers. MySQL/PXC binlog archive failures and MongoDB PBM inventory failures
+  similarly leave the cluster `Ready`; watch the `BinlogArchive` and `Backup`
+  conditions. A fix is planned for v0.4.11.
 - **After a lost MySQL Group Replication member is replaced, commits can stall
   for several seconds at a time for about five minutes** (also present in
   v0.4.7 and v0.4.8). When
