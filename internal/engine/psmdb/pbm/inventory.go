@@ -45,6 +45,9 @@ type inventoryData struct {
 	} `json:"pitr"`
 }
 type statusData struct {
+	PITR struct {
+		Error string `json:"error"`
+	} `json:"pitr"`
 	Backups struct {
 		Snapshot []snapshot `json:"snapshot"`
 		Chunks   struct {
@@ -52,6 +55,14 @@ type statusData struct {
 		} `json:"pitrChunks"`
 	} `json:"backups"`
 	Running map[string]any `json:"running"`
+}
+
+// PITRArchiveError reports explicit native PBM archive failure without exposing
+// native error text, which can contain storage credentials or connection URIs.
+type PITRArchiveError struct{}
+
+func (*PITRArchiveError) Error() string {
+	return "PBM reports a PITR archive failure; inspect PBM agent diagnostics"
 }
 
 func inventory(ctx context.Context, env Env) (inventoryData, error) {
@@ -175,6 +186,11 @@ func SyncInventory(ctx context.Context, env Env) (domain.BackupStatus, []domain.
 	if len(ranges) > 0 {
 		latest := ranges[len(ranges)-1]
 		summary.PITRWindow = &latest
+	}
+	// A native archive failure does not invalidate successfully read snapshots
+	// or historical recovery intervals.
+	if env.PITR.Enabled && status.PITR.Error != "" {
+		return summary, ranges, &PITRArchiveError{}
 	}
 	return summary, ranges, nil
 }

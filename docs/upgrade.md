@@ -50,6 +50,26 @@ from an older control plane as “keep the installed set”, not an instruction 
 remove it; this compatibility behavior does not make an older control plane
 safe to run during a hold.
 
+### Continuous archive health
+
+The control-plane upgrade fixes archive-health phase reporting for PostgreSQL,
+MySQL/PXC and MongoDB/PSMDB; it does not restart databases or require an agent
+rollout for this reporting change. Current-primary PostgreSQL WAL archive
+failure with backup storage now reports **Degraded**, rather than Updating.
+With PITR enabled, MySQL/PXC binlog errors, gaps or unavailable observations,
+and PSMDB inventory failures or explicit PBM PITR errors, degrade an otherwise
+Ready cluster without changing healthy serving-member status.
+
+An idle MySQL archive awaiting its first transaction and PBM `run=false` alone
+are not failures. Fresh successful archive/inventory observations clear archive
+degradation when native health is ready. PSMDB member-only observations cannot
+clear a known inventory/PITR failure. Existing lifecycle phases remain in
+control during operations. The existing degraded warning and metric now expose
+these failures; no retained recovery objects or historical windows are deleted.
+See [PostgreSQL](postgres/backups.md#pitr),
+[MySQL/PXC](mysql/backups.md#binary-log-pitr) and
+[MongoDB](mongodb/backups.md#pitr) for conditions and recovery requirements.
+
 ## Upgrading to v0.4.10
 
 These instructions apply when upgrading from v0.4.9. The health-observation and

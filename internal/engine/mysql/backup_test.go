@@ -204,62 +204,148 @@ func captureFixtureBackupAccess(ctx context.Context, rc *engine.Context, backup 
 }
 
 func TestBinlogArchiveConditionRequiresArchivedTransaction(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		archive myspec.BinlogArchiveStatus
-		fail    bool
-		want    string
-		reason  string
-	}{
-		{name: "empty", want: "False", reason: "ArchivePending"},
-		{name: "disabled", fail: true, want: "Unknown", reason: "ObservationUnavailable"},
-		{name: "healthy", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0)}, want: "True", reason: "ArchiveObservation"},
-		{name: "gap", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Gap: true}, want: "False", reason: "ArchiveObservation"},
-		{name: "failed-before-upload", archive: myspec.BinlogArchiveStatus{Error: "binlog_decode_failed"}, want: "False", reason: "ArchiveFailed"},
-		{name: "failed-after-upload", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Error: "binlog_decode_failed"}, want: "False", reason: "ArchiveFailed"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			p, rc, b := backupFixture(t, "single")
+	for _, topology := range []string{"single", "pxc"} {
+		t.Run(topology, func(t *testing.T) {
+			for _, tc := range []struct {
+				name    string
+				archive myspec.BinlogArchiveStatus
+				fail    bool
+				want    string
+				reason  string
+				phase   domain.Phase
+			}{
+				{name: "empty", want: "False", reason: "ArchivePending", phase: domain.PhaseReady},
+				{name: "disabled", fail: true, want: "Unknown", reason: "ObservationUnavailable", phase: domain.PhaseDegraded},
+				{name: "healthy", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0)}, want: "True", reason: "ArchiveObservation", phase: domain.PhaseReady},
+				{name: "gap", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Gap: true}, want: "False", reason: "ArchiveObservation", phase: domain.PhaseDegraded},
+				{name: "gap-before-upload", archive: myspec.BinlogArchiveStatus{Gap: true}, want: "False", reason: "ArchivePending", phase: domain.PhaseDegraded},
+				{name: "failed-before-upload", archive: myspec.BinlogArchiveStatus{Error: "binlog_decode_failed"}, want: "False", reason: "ArchiveFailed", phase: domain.PhaseDegraded},
+				{name: "failed-after-upload", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Error: "binlog_decode_failed"}, want: "False", reason: "ArchiveFailed", phase: domain.PhaseDegraded},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					p, rc, b := backupFixture(t, topology)
+					rc.Cluster.Spec.Backup.PITR.Enabled = true
+					events := &gtidEvents{}
+					rc.Events = events
+					priorAction := b.action
+					b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
+						if r.URL.Path != "/v1/mysql/archive-status" {
+							return priorAction != nil && priorAction(w, r, name)
+						}
+						if tc.fail {
+							http.Error(w, "binlog_archiving_disabled", http.StatusConflict)
+						} else {
+							json.NewEncoder(w).Encode(tc.archive)
+						}
+						return true
+					}
+					status := domain.ClusterStatus{Phase: domain.PhaseReady}
+					if err := p.backupStatus(t.Context(), rc, &status); err != nil {
+						t.Fatal(err)
+					}
+					if status.Phase != tc.phase {
+						t.Fatalf("phase = %s, want %s", status.Phase, tc.phase)
+					}
+					for _, condition := range status.Conditions {
+						if condition.Type == "BinlogArchive" {
+							if condition.Status != tc.want || condition.Reason != tc.reason {
+								t.Fatal(condition)
+							}
+							if tc.reason == "ArchiveFailed" {
+								if !strings.Contains(condition.Message, tc.archive.Error) || len(events.events) != 1 || events.events[0].Type != "Warning" || events.events[0].Reason != "ArchiveFailed" {
+									t.Fatalf("missing failure diagnostic/event: %+v %+v", condition, events.events)
+								}
+							} else if len(events.events) != 0 {
+								t.Fatalf("unexpected warning: %+v", events.events)
+							}
+							rc.Cluster.Status = status
+							for _, phase := range []domain.Phase{domain.PhaseReady, domain.PhaseCreating, domain.PhaseInitializing, domain.PhaseUpdating, domain.PhaseScaling, domain.PhaseUpgrading, domain.PhaseRestoring, domain.PhaseDeleting, domain.PhaseSuspended, domain.PhaseError, domain.PhaseDegraded} {
+								repeated := domain.ClusterStatus{Phase: phase, Members: []domain.MemberStatus{{Name: "serving", Health: true}}}
+								if err := p.backupStatus(t.Context(), rc, &repeated); err != nil {
+									t.Fatal(err)
+								}
+								want := phase
+								if phase == domain.PhaseReady {
+									want = tc.phase
+								}
+								if repeated.Phase != want || !repeated.Members[0].Health {
+									t.Fatalf("archive observation changed lifecycle/serving truth: initial=%s status=%+v", phase, repeated)
+								}
+							}
+							if tc.reason == "ArchiveFailed" && len(events.events) != 1 {
+								t.Fatal("repeated observation duplicated warning")
+							}
+							rc.Cluster.Spec.Backup.PITR.Enabled = false
+							disabled := domain.ClusterStatus{Phase: domain.PhaseReady}
+							if err := p.backupStatus(t.Context(), rc, &disabled); err != nil {
+								t.Fatal(err)
+							}
+							if disabled.Phase != domain.PhaseReady || len(disabled.Conditions) != 0 {
+								t.Fatalf("disabled PITR affected health: %+v", disabled)
+							}
+							return
+						}
+					}
+					t.Fatal("missing archive condition")
+				})
+			}
+		})
+	}
+}
+
+func TestBinlogArchiveStatusRecoveryPreservesServingHealth(t *testing.T) {
+	for _, topology := range []string{"single", "pxc"} {
+		t.Run(topology, func(t *testing.T) {
+			p, rc, b := backupFixture(t, topology)
 			rc.Cluster.Spec.Backup.PITR.Enabled = true
-			events := &gtidEvents{}
-			rc.Events = events
-			b.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
+			archive := myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0)}
+			unavailable := false
+			priorAction := b.action
+			b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
 				if r.URL.Path != "/v1/mysql/archive-status" {
-					return false
+					return priorAction != nil && priorAction(w, r, name)
 				}
-				if tc.fail {
-					http.Error(w, "binlog_archiving_disabled", http.StatusConflict)
+				if unavailable {
+					http.Error(w, "observation unavailable", http.StatusServiceUnavailable)
 				} else {
-					json.NewEncoder(w).Encode(tc.archive)
+					json.NewEncoder(w).Encode(archive)
 				}
 				return true
 			}
-			var status domain.ClusterStatus
-			if err := p.backupStatus(t.Context(), rc, &status); err != nil {
-				t.Fatal(err)
-			}
-			for _, condition := range status.Conditions {
-				if condition.Type == "BinlogArchive" {
-					if condition.Status != tc.want || condition.Reason != tc.reason {
-						t.Fatal(condition)
-					}
-					if tc.reason == "ArchiveFailed" {
-						if !strings.Contains(condition.Message, tc.archive.Error) || len(events.events) != 1 || events.events[0].Type != "Warning" || events.events[0].Reason != "ArchiveFailed" {
-							t.Fatalf("missing failure diagnostic/event: %+v %+v", condition, events.events)
+			for _, failure := range []string{"error", "gap", "unknown"} {
+				t.Run(failure, func(t *testing.T) {
+					for _, failing := range []bool{true, false} {
+						archive.Error, archive.Gap, unavailable = "", false, false
+						if failing {
+							switch failure {
+							case "error":
+								archive.Error = "archive_upload_failed"
+							case "gap":
+								archive.Gap = true
+							case "unknown":
+								unavailable = true
+							}
 						}
-						rc.Cluster.Status = status
-						var repeated domain.ClusterStatus
-						if err := p.backupStatus(t.Context(), rc, &repeated); err != nil {
+						status, err := p.Status(t.Context(), rc)
+						if err != nil {
 							t.Fatal(err)
 						}
-						if len(events.events) != 1 {
-							t.Fatal("repeated observation duplicated warning")
+						want := domain.PhaseReady
+						if failing {
+							want = domain.PhaseDegraded
 						}
+						if status.Phase != want || len(status.Members) == 0 {
+							t.Fatalf("failing=%t: phase = %s, want %s; members=%+v", failing, status.Phase, want, status.Members)
+						}
+						for _, member := range status.Members {
+							if !member.Health {
+								t.Fatalf("archive failure changed serving health: %+v", member)
+							}
+						}
+						rc.Cluster.Status = status
 					}
-					return
-				}
+				})
 			}
-			t.Fatal("missing archive condition")
 		})
 	}
 }

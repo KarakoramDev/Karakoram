@@ -122,20 +122,27 @@ the retired incarnation's backups (or vice versa).
 
 Enable `spec.backup.pitr.enabled` and configure default storage. `oplogSpanMinutes` controls [PostgreSQL](https://www.postgresql.org/) `archive_timeout`, defaulting to one minute; the inherited field name does not mean [MongoDB](https://www.mongodb.com/) oplog behavior. Low-activity WAL switching is not an exact commit-time recovery guarantee.
 
-**Known issue:** a failing WAL archive reports `Updating`, not `Degraded`, with
-`WALArchive=False` (`ArchiveFailing`); neither the `ClusterDegraded` warning nor
-`karakoram_cluster_degraded` signals this failure. WAL accumulates until the
-data volume fills and the member stops. For single and high-availability
-clusters, while archiving fails, point-in-time restore to a timestamp is
-refused, even for times before the failure; restoring a named full, differential
-or incremental backup still works, and point-in-time restore becomes available
-again after the next successful archive. Alert on
+From v0.4.11, an observed archive failure on the current primary or standalone
+server with backup storage reports **Degraded**, with
+`WALArchive=False/ArchiveFailing` and Ready reason `ArchiveFailing` unless a
+higher-priority health or proxy problem applies. This describes recovery
+availability, not a database process outage; otherwise healthy members remain
+healthy. A fresh successful archive-health observation clears the archive
+failure. Normal WAL rotation delay alone is not an archive-failure signal.
+The existing `ClusterDegraded` warning and `karakoram_cluster_degraded` gauge
+also reflect this state. Inspect the WALArchive condition and native archiver
+metrics, not only serving-member health. Earlier releases reported `Updating`
+instead ([known issue](../limitations.md#postgres-wal-archive-not-degraded),
+fixed in v0.4.11).
+
+Unarchived WAL accumulates until the data volume fills and the member stops.
+For single and high-availability clusters, while archiving fails, point-in-time
+restore to a timestamp is refused, even for times before the failure; restoring
+a named full, differential or incremental backup still works, and point-in-time
+restore becomes available again after the next successful archive. Alert on
 `karakoram_cluster_condition{type="WALArchive",status="False"}` and rising
 `karakoram_postgres_archiver_failed_total` /
-`karakoram_postgres_archive_pending_segments`; inspect
-`karactl clusters get CLUSTER` conditions after configuration changes and
-failovers. See [the known issue and cross-engine alerting guidance](../limitations.md#postgres-wal-archive-not-degraded);
-a fix is planned for v0.4.11.
+`karakoram_postgres_archive_pending_segments`.
 
 Restore and clone `pitrTime` inputs use RFC 3339, including `Z` or numeric offsets. Native recovery arguments normalize the instant to UTC with an explicit numeric offset and PostgreSQL's microsecond precision; sub-microsecond fractions are truncated, not rounded forward.
 

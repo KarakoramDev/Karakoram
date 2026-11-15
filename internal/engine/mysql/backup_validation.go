@@ -561,6 +561,12 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 				}
 			}
 			status.Conditions = append(status.Conditions, condition)
+			// Archive health is recovery availability, not member serving health.
+			// Unknown cannot certify requested PITR; an idle archive awaiting its
+			// first transaction is only pending, unless a gap or failure is known.
+			if status.Phase == domain.PhaseReady && (condition.Status == "Unknown" || a.Gap || a.Error != "") {
+				status.Phase = domain.PhaseDegraded
+			}
 		}
 	}
 	return nil

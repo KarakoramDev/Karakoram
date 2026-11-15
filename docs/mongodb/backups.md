@@ -49,6 +49,20 @@ Future/outside/gap timestamps return **400**, `details.field: source.pitrTime`, 
 
 Quota, slicing failure, history gaps, base deletion and storage changes affect recovery. After restore, PITR stays disabled until a fresh snapshot on **primary storage** succeeds. The required automatic base cannot be cancelled. If it fails/disappears, at most three replacement attempts are queued with warnings without blocking cluster convergence. After exhaustion, take a successful manual primary-storage backup; a snapshot queued after restore also satisfies the gate. Check the new timeline before trusting recovery.
 
+From v0.4.11, with PITR enabled, unavailable PBM backup inventory or an explicit
+native `pitr.error` makes an otherwise Ready cluster **Degraded**, without
+marking healthy serving members unhealthy. Inspect
+`Backup=False/InventoryUnavailable` or `PITR=False/ArchiveFailed`; native PITR
+error text is omitted because it can contain storage credentials or URIs.
+PBM `run=false` alone is not failure: snapshot work can pause PITR.
+Availability-only member probes retain a known recovery failure until a fresh
+successful PBM inventory clears it, preventing false recovery between inventory
+passes. Explicit lifecycle phases remain authoritative. With PITR disabled,
+inventory failure remains a Backup warning rather than degrading serving health.
+The existing `ClusterDegraded` warning and `karakoram_cluster_degraded` gauge
+reflect the degraded phase. This health classification does not delete retained
+backups or extend observed recovery windows.
+
 ## In-place restore
 
 **Warning:** Stop application writers and plan downtime. Restore overwrites data and may restore application users/roles; preserve a current recovery copy first.

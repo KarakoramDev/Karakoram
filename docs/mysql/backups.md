@@ -146,6 +146,17 @@ recorded Warning; a failed event recording remains retryable.
 Neither a failed attempt nor the writer's current position extends the recovery
 window: only successfully uploaded, contiguous transaction metadata does.
 
+From v0.4.11, when PITR is enabled, a binlog archive error, known gap or
+unavailable archive observation makes an otherwise Ready cluster **Degraded**.
+This applies to MySQL and PXC without marking healthy serving members unhealthy.
+`False/ArchivePending` before the first archived transaction alone does not
+degrade an idle cluster. A fresh successful observation without an error or gap
+allows Ready again when native health is also ready; an upload cannot heal
+missing history. Existing lifecycle phases remain authoritative during work.
+The existing `ClusterDegraded` warning and `karakoram_cluster_degraded` gauge
+reflect the degraded phase; repeated identical archive failures do not repeat
+the `ArchiveFailed` warning.
+
 ### Upgrading an archive stalled after DDL
 
 Older agents can stop archiving at a native tab-separated Query header without

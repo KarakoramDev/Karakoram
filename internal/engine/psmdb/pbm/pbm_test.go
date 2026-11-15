@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -554,6 +555,26 @@ func TestInventoryAdoptsAndMarksMissing(t *testing.T) {
 	got, _ := st.GetBackup(context.Background(), domain.ClusterRef{Name: "target"}, all[0].Name)
 	if got.Phase != domain.PhaseFailed || !strings.Contains(got.Error, "missing") {
 		t.Fatal(got)
+	}
+}
+
+func TestInventoryAdoptsDuringPITRArchiveFailure(t *testing.T) {
+	env, st, fake, _ := setup(t)
+	env.PITR.Enabled = true
+	fake.mu.Lock()
+	fake.backupStatusOutput = strings.Replace(sampleStatus, `"running":{}`, `"pitr":{"error":"https://user:password@storage.invalid"},"running":{}`, 1)
+	fake.mu.Unlock()
+	summary, ranges, err := SyncInventory(t.Context(), env)
+	var archiveErr *PITRArchiveError
+	if !errors.As(err, &archiveErr) {
+		t.Fatalf("missing native archive failure: %v", err)
+	}
+	all, err := st.ListBackups(t.Context(), env.RC.Cluster.Ref())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 || all[0].Phase != domain.PhaseSucceeded || summary.LastBackup == nil || summary.PITRWindow == nil || len(ranges) != 1 {
+		t.Fatalf("archive failure hid valid recovery inventory: backups=%+v status=%+v ranges=%+v", all, summary, ranges)
 	}
 }
 

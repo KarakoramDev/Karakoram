@@ -545,7 +545,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	} else if rc.Cluster.Status.ObservedGeneration > 0 {
 		out.Phase = domain.PhaseUpdating
 	}
-	if s.Formed && (len(proxyIssues) > 0 || len(proxyPlacementIssues) > 0 || len(proxyRolloutIssues) > 0 || len(proxyRolloutFailures) > 0 || healthProbeFailed) {
+	if s.Formed && (len(archiveIssues) > 0 || len(proxyIssues) > 0 || len(proxyPlacementIssues) > 0 || len(proxyRolloutIssues) > 0 || len(proxyRolloutFailures) > 0 || healthProbeFailed) {
 		out.Phase = domain.PhaseDegraded
 	}
 	condition := "False"
@@ -565,6 +565,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	}
 	if s.ExtensionsPending {
 		reason = "ExtensionUpdatePending"
+	}
+	if len(archiveIssues) > 0 {
+		reason = "ArchiveFailing"
 	}
 	if healthProbeFailed {
 		reason = "HealthObservationFailed"

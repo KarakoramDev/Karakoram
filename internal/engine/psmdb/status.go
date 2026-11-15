@@ -61,6 +61,16 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 		return domain.ClusterStatus{}, e
 	}
 	v := domain.ClusterStatus{Phase: phase(s), ObservedGeneration: rc.Cluster.Status.ObservedGeneration, Connection: connection(rc.Cluster, s), Members: []domain.MemberStatus{}, Conditions: []domain.Condition{}}
+	v.Backup = rc.Cluster.Status.Backup
+	observeBackup := !rc.AvailabilityOnly && !s.Suspended && rc.Cluster.Spec.Backup.Storage != "" && s.Phase == "ready"
+	if !observeBackup && rc.Cluster.Spec.Backup.Storage != "" {
+		// Skipped inventory cannot prove recovery, even during lifecycle work.
+		for _, old := range rc.Cluster.Status.Conditions {
+			if old.Status == "False" && (old.Type == "Backup" && old.Reason == "InventoryUnavailable" || rc.Cluster.Spec.Backup.PITR.Enabled && old.Type == "PITR" && old.Reason == "ArchiveFailed") {
+				v.Conditions = append(v.Conditions, old)
+			}
+		}
+	}
 	if s.RestoreConsistency != nil {
 		v.Conditions = append(v.Conditions, domain.Condition{Type: "RestoreConsistency", Status: "False", Reason: "OperatorRecoveryRequired", Message: s.RestoreConsistency.Failure, LastTransitionTime: now(rc)})
 	}
@@ -137,7 +147,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 	var probes sync.WaitGroup
 	backup := rc.Cluster.Status.Backup
 	var backupErr error
-	if !rc.AvailabilityOnly && rc.Cluster.Spec.Backup.Storage != "" && s.Phase == "ready" {
+	if observeBackup {
 		probes.Go(func() {
 			// Backup metadata is independent of member reachability. Give the
 			// entire inventory path its own budget alongside the member probes,
@@ -151,7 +161,8 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 			}
 			summary, _, err := pbm.SyncInventory(probe, env)
 			backupErr = err
-			if err == nil {
+			var archiveErr *pbm.PITRArchiveError
+			if err == nil || errors.As(err, &archiveErr) {
 				backup = summary
 			}
 		})
@@ -404,7 +415,25 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 	}
 	v.Backup = backup
 	if backupErr != nil {
-		v.Conditions = append(v.Conditions, domain.Condition{Type: "Backup", Status: "False", Reason: "InventoryUnavailable", Message: backupErr.Error(), LastTransitionTime: now(rc)})
+		var archiveErr *pbm.PITRArchiveError
+		if errors.As(backupErr, &archiveErr) {
+			v.Conditions = append(v.Conditions, domain.Condition{Type: "PITR", Status: "False", Reason: "ArchiveFailed", Message: archiveErr.Error(), LastTransitionTime: now(rc)})
+		} else {
+			v.Conditions = append(v.Conditions, domain.Condition{Type: "Backup", Status: "False", Reason: "InventoryUnavailable", Message: backupErr.Error(), LastTransitionTime: now(rc)})
+		}
+	}
+	// Database availability and requested continuous recovery are independent.
+	// Inventory failure is a warning without PITR, but prevents Ready when
+	// continuous recovery is requested. Do not overwrite lifecycle phases or
+	// mark otherwise healthy database members unhealthy.
+	if rc.Cluster.Spec.Backup.PITR.Enabled && v.Phase == domain.PhaseReady {
+		for _, condition := range v.Conditions {
+			if condition.Status == "False" && (condition.Type == "Backup" && condition.Reason == "InventoryUnavailable" || condition.Type == "PITR" && condition.Reason == "ArchiveFailed") {
+				v.Phase = domain.PhaseDegraded
+				v.Message = "PITR recovery is degraded; inspect Backup and PITR conditions"
+				break
+			}
+		}
 	}
 	for _, m := range ordered(s) {
 		engine.ApplyRuntimeRecoveryStatus(&v, m.Name, m.Volume, m.RuntimeRecovery, now(rc))

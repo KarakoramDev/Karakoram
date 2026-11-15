@@ -127,8 +127,17 @@ func TestHealthArchiveFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := healthCondition(status, "WALArchive")
-	if status.Phase == domain.PhaseReady || c.Status != "False" || !strings.Contains(c.Message, "archive-store") {
+	if status.Phase != domain.PhaseDegraded || healthCondition(status, "Ready").Reason != "ArchiveFailing" || c.Status != "False" || c.Reason != "ArchiveFailing" || !strings.Contains(c.Message, "archive-store") {
 		t.Fatalf("archive failure hidden: phase=%s condition=%+v", status.Phase, c)
+	}
+	st.ArchiveFailing = false
+	b.statusOverrides["demop0"] = st
+	status, err = p.Status(t.Context(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Phase != domain.PhaseReady || healthCondition(status, "WALArchive").Status != "True" {
+		t.Fatalf("archive recovery remained degraded: %+v", status)
 	}
 }
 
