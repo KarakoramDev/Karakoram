@@ -514,18 +514,24 @@ connection. Reconnect and retry reads. If the connection drops during `COMMIT`,
 the outcome is unknown: check whether the write landed before replaying it.
 Use bounded, idempotent application retry for both errors.
 
-Member replacement can also make commits slow. While a replacement member
-joins, a Group Replication `COMMIT` can occasionally take several seconds.
-After a member whose volume was lost is replaced, commits can also stall for
-4–5 seconds at a time for about five minutes after the lost member is retired;
-replacing a healthy member does not have this window. This is a
-[known issue](../limitations.md#mysql-gr-commit-stalls-after-lost-member-replacement)
-with a fix planned for v0.4.10. A client whose read
-timeout expires during `COMMIT` sees error 2013 ("Lost connection to MySQL
-server during query"), usually without a SQLSTATE, and does not learn the
-outcome. In testing, every commit that timed out this way had been applied.
-Treat a timed-out commit as possibly applied: check whether the write landed
-before retrying it, or use unique request keys so a retry cannot apply it twice.
+Member loss or replacement can make Group Replication commits slow. When a
+member's node or container goes down, or a member whose volume was lost is
+replaced, survivors keep trying to reach it while its name no longer resolves.
+Individual commits can take 2–5 seconds roughly every 12–14 seconds for about
+five to seven minutes, plus one stall of up to about 8 seconds at member loss.
+Writes continue between stalls and no acknowledged write is lost. Replacing
+a healthy member does not have this window. On Dokploy, `replace-member` for a
+member whose node is down stays `Pending` until the node returns.
+See [the known issue](../limitations.md#mysql-gr-commit-stalls-after-lost-member-replacement):
+a fix for confirmed-lost-volume replacements is planned for v0.4.11; stalls
+after node/container failure remain. A client whose read timeout expires
+during `COMMIT` sees error 2013 ("Lost connection to MySQL server during query"),
+usually without a SQLSTATE, and does not learn the outcome. In testing, every
+commit that timed out this way had been applied. Treat a timed-out commit as
+possibly applied: check whether the write landed before retrying it, or use
+unique request keys so a retry cannot apply it twice. A longer client read
+timeout (for example 10 seconds) can turn these errors into slower commits.
+Keep automatic lost-volume replacement disabled.
 
 PXC requires safe GTID-history observations with no latched divergence, and a
 full-size Primary component whose members are all Synced, ready and connected.
@@ -817,8 +823,9 @@ Cancellation acknowledgement is not completed recovery. See
 [current retirement/recovery guidance](#gr-retirement-and-legacy-recovery).
 
 Explicit replacement is unchanged and retains the native safety checks below.
-Expect occasional multi-second commits while the replacement joins and, when
-the replaced member was lost, for about five minutes after it is retired
+Expect occasional multi-second commits while the replacement joins. A node or
+container failure, or withdrawal of a lost member's name during replacement,
+can also cause periodic stalls for about five to seven minutes
 ([known issue](../limitations.md#mysql-gr-commit-stalls-after-lost-member-replacement));
 a commit that times out may still have been applied (see
 [client errors during rollout and replacement](#agent-rollout)).
