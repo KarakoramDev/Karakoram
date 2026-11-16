@@ -77,6 +77,20 @@ These cross-engine constraints define the operating model; engine-specific limit
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+<a id="mysql-proxy-convergence-blocks-operations"></a>
+
+- **A ProxySQL proxy that never joins blocks MySQL operations** (also present
+  in v0.4.0–v0.4.8). If a proxy member of a MySQL Group Replication or PXC
+  cluster never becomes ready (for example, the platform has no capacity for it
+  or its start fails), later operations such as `upgrade-agents`,
+  `replace-member`, restarts, TLS rotation and backups are accepted but stay
+  `Pending` indefinitely while waiting for member convergence. The data
+  members keep serving. Workaround: check the proxy member with
+  `karactl clusters members CLUSTER`, fix the cause so it starts (capacity,
+  image, connectivity); if the cluster reports `DeploymentRetriesExhausted`,
+  run `karactl clusters retry-deployments CLUSTER`. A fix is planned for a later
+  release.
+
 <a id="retained-backup-deletion-stuck"></a>
 
 - **Deleting a retained backup can leave it stuck in `Deleting` and

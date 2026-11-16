@@ -31,6 +31,20 @@ for the first eligible writer. Such members are not a failed infrastructure
 lookup; the cluster stays non-Ready until their runtime and native health are
 observed. This applies to both MySQL and PXC.
 
+**Known issue since v0.4.0:** a proxy that never joins can leave agent upgrades,
+replacement, restart, TLS rotation, backup/restore and active-cluster backup
+deletion `Pending` indefinitely behind the member-convergence gate. Data members
+keep serving; cluster deletion is exempt, but scale convergence can also stall.
+Inspect `karactl clusters members CLUSTER` and repair capacity, image/start,
+agent connectivity or missing ONLINE-writer readiness. If a deployment
+condition reports reason `DeploymentRetriesExhausted`, correct the cause and
+run `karactl clusters retry-deployments CLUSTER`; this grants another deployment
+budget, not a readiness bypass. `karactl clusters reconcile CLUSTER` does not
+bypass the gate. As a last resort, restore a verified backup into a new cluster
+and verify it before migrating clients; do not delete valuable existing data.
+See [the known issue](../limitations.md#mysql-proxy-convergence-blocks-operations);
+a fix is planned for a later release.
+
 Before a runtime is imported and deployed, observation does not dial its agent
 or query Galera: its planned DNS name may not exist yet. PXC keeps these members
 in the quorum comparison as unavailable, without advancing the GTID safe
