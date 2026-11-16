@@ -77,6 +77,19 @@ These cross-engine constraints define the operating model; engine-specific limit
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+<a id="pxc-formation-waits-for-undeployed-proxy"></a>
+
+- **Creating a PXC cluster with ProxySQL can stall** (also present in
+  v0.4.3–v0.4.6). If a proxy is not yet deployed when the new cluster forms,
+  formation waits for it without deploying it: after about five minutes the
+  cluster reports `GTIDMappingCertified=False`
+  (`GTIDMappingCertificationBlocked`) and stays `Degraded` without a proxy,
+  although its database members are running. Workaround: delete the new, empty
+  cluster and create it again; do not delete an existing cluster with valuable
+  data. Neither `karactl clusters retry-deployments CLUSTER` nor
+  `karactl clusters reconcile CLUSTER` clears this formation block. A fix is
+  planned for a later release.
+
 <a id="mysql-proxy-convergence-blocks-operations"></a>
 
 - **A ProxySQL proxy that never joins blocks MySQL operations** (also present

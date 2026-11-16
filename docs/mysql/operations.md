@@ -236,6 +236,20 @@ stalled-join diagnostic and retryable member/proxy fence cleanup. Synced receipt
 survive cleanup, so releasing admission fences does not stop those members on
 configuration reload. Legacy restore follower starts use the same launch barrier.
 
+**Known issue:** birth formation can try to fence an imported but undeployed
+ProxySQL proxy before reaching its deployment step. A DNS error such as
+`no such host` can repeat even while the Galera members are Synced; after about
+five minutes `GTIDMappingCertified=False` reports
+`GTIDMappingCertificationBlocked`. Its message starts “PXC formation GTID
+mapping certification blocked” and can include “PXC join admission made no
+native Synced/certification progress within five minutes”. The new cluster
+stays Degraded without a proxy/client endpoint. `retry-deployments` only re-arms
+exhausted platform deployments, and forced `reconcile` reruns the same persisted
+formation block; neither repairs this dependency cycle. Delete and recreate
+only the new, empty cluster, never an existing cluster with valuable data.
+See [the known issue](../limitations.md#pxc-formation-waits-for-undeployed-proxy);
+a fix is planned for a later release.
+
 Successful certification retires the empty-member erase permission before client
 fence release. Formation certification belongs only to birth, lifecycle-proven
 empty joins, or explicit restore. A new history incident or changed epoch on
