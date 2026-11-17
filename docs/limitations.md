@@ -77,6 +77,18 @@ These cross-engine constraints define the operating model; engine-specific limit
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+<a id="pxc-inconsistent-member-blocks-operations"></a>
+
+- **An inconsistent PXC member blocks all operations** (also present in
+  v0.4.0–v0.4.6). If a PXC member is expelled from the cluster as inconsistent,
+  Karakoram keeps retrying it and every new operation — including
+  `karactl clusters replace-member` — stays `Pending` without a reason. The
+  remaining members keep serving. There is no supported recovery in this
+  release: take a logical dump through the proxy (for example
+  `mysqldump --single-transaction`) and restore it into a new cluster; verify
+  the recovered data before deleting the old one. A fix is planned for a later
+  release.
+
 <a id="pxc-formation-waits-for-undeployed-proxy"></a>
 
 - **Creating a PXC cluster with ProxySQL can stall** (also present in

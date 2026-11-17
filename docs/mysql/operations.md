@@ -610,6 +610,21 @@ or proxy evidence is never permission to advance.
 - Updated MySQL/PXC proxy agents set the monitor DNS-cache TTL to 5 seconds and refresh to 1 second in both startup and runtime configuration, including single-server proxies. A proxy configuration reload converges this policy after the new agent is deployed; a control-plane upgrade alone does not change the old agent's DNS policy. Proxy admission remains required even with the shorter cache.
 - Group primary handoff sends a validated UUID literal to MySQL: parameterized execution is rejected by the native UDF initializer even when a valid UUID is bound. Failed handoffs return bounded, sanitized native diagnostics in operation errors/events; a rejected handoff does not authorize restarting the current primary. This behavior is implemented in the agent, so replacing only the control plane does not update existing agents.
 - PXC maintenance preserves a Primary component, waits for healthy Synced members and avoids intentionally removing a majority. Rejoining members use IST when available, SST otherwise. Do not continue a rolling change while state transfer or quorum health is unresolved. A member whose previous launch never reached Synced (an interrupted IST/SST) waits 130 seconds before relaunching so the previous donor's retries expire; see [hostile cluster traffic](access-and-tls.md#hostile-cluster-traffic). A member evicted by Galera for an inconsistency is not rejoined automatically; replace it.
+  **Known issue since v0.4.0:** an inconsistency-evicted member can instead
+  trigger repeated `galera state reset outside an unfinished join` start
+  refusals, preventing the documented replacement from being claimed.
+  Operators can see `Degraded`, affected members `OFFLINE`,
+  `GTIDHistorySafe=Unknown` (`QuorumComparisonUnavailable`), repeated Warning
+  `ReconcileError` events and a `Pending` operation retaining only its initial
+  “Queued replace-member” message, without a wait reason. Restart, scale and
+  backup work cannot make progress through the failed reconciliation;
+  `recover-quorum` refuses while any Primary component exists. Cluster deletion
+  still works, but do not delete serving data: take a logical dump through the
+  proxy (for example `mysqldump --single-transaction`), restore it into a new
+  cluster and verify recovered data before deleting the old cluster. Do not
+  force bootstrap or edit Galera identity/state to bypass the refusal.
+  See [the known issue](../limitations.md#pxc-inconsistent-member-blocks-operations);
+  a fix is planned for a later release.
 - MySQL allows `single`→`group`, adopting the existing data as the seed; `group`→`single` is rejected. Groups scale 3↔5. PXC remains `cluster`, 3↔5 only. Cross-engine driver conversion is unsupported.
 - Replacement introduces a new member identity before retiring the old one. Use the managed replace action; do not copy data identity or a stale bootstrap flag into another member. Disk shrink is not supported.
 - Suspension with retained volumes preserves the dataset and identities. Resume after all members stop uses the full-outage recovery rules below; it is not an unconditional restart into a writable cluster.
