@@ -183,6 +183,19 @@ CPU-mode rate limits surface `PlatformCooldown` with a persisted retry deadline;
 - **Platform not-found answers:** Karakoram reads the Zerops error code, not the HTTP status, so older (HTTP 400) and current (HTTP 404) answers for a missing entity behave the same. Only a missing service or app version counts as absence, and a missing Process as expiry; another entity's not-found code is a rejection. An HTTP 404 without a known Zerops error code, such as a gateway or unknown-route answer, is handled like a temporary platform outage: reconciliation retries it, a write answered this way has an unknown outcome and is not replayed blindly, and it is never evidence that a service was deleted.
 - **No arbitrary container exec:** node work uses the bounded authenticated agent, not a remote shell API.
 
+**Known issue:** a missing member service can block PostgreSQL HA reconciliation
+(since v0.2.0) and MySQL Group Replication/PXC reconciliation (since v0.4.9),
+with `zerops: service MEMBER not found`. Queued replacements remain `Pending`;
+all agents can appear disconnected even though surviving members keep serving.
+`karactl clusters reconcile CLUSTER` repeats the same failing read. Do not
+delete managed member services by hand. Preserve the serving cluster, take a
+logical dump through its endpoint (`pg_dump` or
+`mysqldump --single-transaction`), restore and verify a new cluster, then delete
+the old one; cluster deletion remains available. Dokploy and Nomad do not have
+this absent-service read behavior. See
+[the known issue](limitations.md#zerops-deleted-member-service); a fix is
+planned for a later release.
+
 See [Limitations](limitations.md) for shared control-plane, security, networking and engine constraints, and [Operations and troubleshooting](operations.md) for recovery procedures.
 
 ## Costs
