@@ -630,6 +630,25 @@ or proxy evidence is never permission to advance.
 - Suspension with retained volumes preserves the dataset and identities. Resume after all members stop uses the full-outage recovery rules below; it is not an unconditional restart into a writable cluster.
 - Resume and runtime recovery restore the previously admitted public TCP policy even while the maintenance window is closed. A pending exposure or allowlist/IP-family change remains deferred and its generation is not acknowledged until the window opens or the generation receives a maintenance override. Admission survives control-plane restarts separately from runtime route receipts. Legacy state migrates acknowledged policy or a matching retained exposure hash; if neither identifies the old policy, recovery stays private until admission.
 
+### Interrupted PXC full state transfer
+
+**Known issue since v0.4.0:** killing or stopping a PXC member during full state
+transfer (SST) can leave `sst-xb-tmpdir` in its data directory. Later SST attempts
+fail with `FATAL: Found existing …/sst-xb-tmpdir` and “Please remove it or specify
+alternative temporary directory location by setting [sst]/tmpdir”. The agent
+can report `MySQL did not accept authenticated local connections before deadline`.
+The restart holdoff described above does not remove this stale directory.
+Other members keep serving.
+
+Recommended recovery is `karactl clusters replace-member CLUSTER MEMBER`,
+which allocates a new member and volume rather than reusing the old SST
+directory. Fresh-volume recovery was verified natively; this is not a claim
+that managed replacement was tested end to end for this failure. If the member
+was also evicted as inconsistent and replacement remains Pending, use the
+[inconsistent-member guidance](../limitations.md#pxc-inconsistent-member-blocks-operations)
+instead. See [the interrupted-SST known issue](../limitations.md#pxc-interrupted-sst-temporary-directory);
+a fix is planned for a later release.
+
 ### GR retirement and legacy recovery
 
 Full-capability Group Replication retirement waits for **identity-set convergence**,

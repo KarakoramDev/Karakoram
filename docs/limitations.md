@@ -77,6 +77,19 @@ These cross-engine constraints define the operating model; engine-specific limit
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+<a id="pxc-interrupted-sst-temporary-directory"></a>
+
+- **A PXC member interrupted during a full state transfer can't rejoin** (also
+  present in v0.4.0–v0.4.6). If a PXC member is killed or stopped while it
+  receives a full state transfer (SST), it leaves a temporary directory behind
+  and every later SST of that member fails; the MySQL log shows
+  `FATAL: Found existing …/sst-xb-tmpdir`. The other members keep serving.
+  Recommended recovery: replace the member with
+  `karactl clusters replace-member CLUSTER MEMBER` — the replacement gets a new
+  volume. If the member was also evicted as inconsistent and replacement stays
+  `Pending`, follow the [inconsistent-member recovery guidance](#pxc-inconsistent-member-blocks-operations).
+  A fix is planned for a later release.
+
 <a id="zerops-deleted-member-service"></a>
 
 - **On Zerops, a deleted member service blocks MySQL and PostgreSQL HA clusters**
