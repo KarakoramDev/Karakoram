@@ -16,7 +16,7 @@ func FromEnv(getenv func(string) string) (Writer, error) {
 		return nil, nil
 	}
 	if value == "nomad-variable:" {
-		return &nomadVariable{hostsPath: "/etc/hosts"}, nil
+		return NewNomadVariableWriter("/etc/hosts"), nil
 	}
 	kind, path, ok := strings.Cut(value, ":")
 	if !ok || kind != "hosts-helper" || !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, "\x00\r\n") {

@@ -111,6 +111,100 @@ func TestNomadVariableAcknowledgement(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNomadVariableInstallAndReleaseWaitForProjection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hosts")
+	project := func(data string) {
+		t.Helper()
+		// A watched projection replaces the complete file; never expose a
+		// truncated file that could look like an acknowledged empty set.
+		next := path + ".next"
+		if err := os.WriteFile(next, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(next, path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	empty := nomadMarker + "\n127.0.0.1 localhost\n"
+	ipv4 := "239.192.0.1 retired\n"
+	ipv6 := "ff18::4b4b:1 retired\n"
+	project(empty)
+	w := &nomadVariable{hostsPath: path}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	const pollers = 4
+	start := func(hosts []string) <-chan error {
+		started := make(chan struct{}, pollers)
+		results := make(chan error, pollers)
+		for range pollers {
+			go func() {
+				started <- struct{}{}
+				results <- w.Install(ctx, hosts)
+			}()
+		}
+		for range pollers {
+			select {
+			case <-started:
+			case <-ctx.Done():
+				t.Fatalf("pollers did not start: %v", ctx.Err())
+			}
+		}
+		return results
+	}
+	assertPending := func(stage string, hosts []string, results <-chan error) {
+		t.Helper()
+		// An independent bounded poll proves the current projection is still
+		// rejected before allowing the next watched update, without sleeps.
+		probe, stop := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer stop()
+		if err := w.Install(probe, hosts); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("%s: unprojected set acknowledged or unexpected error: %v", stage, err)
+		}
+		select {
+		case err := <-results:
+			t.Fatalf("%s: concurrent acknowledgement completed early: %v", stage, err)
+		default:
+		}
+	}
+	assertAcknowledged := func(stage string, results <-chan error, projection string) {
+		t.Helper()
+		for range pollers {
+			select {
+			case err := <-results:
+				if err != nil {
+					t.Fatalf("%s: acknowledgement failed: %v", stage, err)
+				}
+			case <-ctx.Done():
+				t.Fatalf("%s: acknowledgement did not complete: %v", stage, ctx.Err())
+			}
+		}
+		actual, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(actual) != projection {
+			t.Fatalf("%s: acknowledger mutated the watched projection: %q", stage, actual)
+		}
+	}
+
+	installed := start([]string{"retired"})
+	assertPending("install before watched update", []string{"retired"}, installed)
+	project(empty + ipv4)
+	assertPending("install missing IPv6", []string{"retired"}, installed)
+	project(empty + ipv4 + ipv6)
+	assertAcknowledged("install", installed, empty+ipv4+ipv6)
+
+	released := start(nil)
+	assertPending("release with stale dual-stack sentinels", nil, released)
+	project(empty + ipv6)
+	assertPending("release with stale IPv6 sentinel", nil, released)
+	project(empty + ipv4)
+	assertPending("release with stale IPv4 sentinel", nil, released)
+	project(empty)
+	assertAcknowledged("release", released, empty)
+}
 func TestHostsMatch(t *testing.T) {
 	valid := "239.192.0.1 retired\nff18::4b4b:1 retired\n"
 	for _, data := range []string{"", "239.192.0.1 retired\n", valid + "192.0.2.1 retired\n", valid + "239.192.0.1 other\n", strings.ReplaceAll(valid, "retired", "other")} {

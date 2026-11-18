@@ -6,24 +6,42 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 )
 
+type tombstoneCalls struct {
+	mu      sync.Mutex
+	entries []string
+}
+
+func (c *tombstoneCalls) add(entry string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = append(c.entries, entry)
+}
+
+func (c *tombstoneCalls) snapshot() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.entries...)
+}
+
 type testTombstoneWriter struct {
-	calls              *[]string
+	calls              *tombstoneCalls
 	preflight, install error
 	onInstall          func()
 }
 
 func (w testTombstoneWriter) Kind() string { return "hosts-helper" }
 func (w testTombstoneWriter) Preflight(context.Context) error {
-	*w.calls = append(*w.calls, "preflight")
+	w.calls.add("preflight")
 	return w.preflight
 }
 func (w testTombstoneWriter) Install(_ context.Context, hosts []string) error {
-	*w.calls = append(*w.calls, "install")
+	w.calls.add("install")
 	if w.onInstall != nil {
 		w.onInstall()
 	}
@@ -36,7 +54,7 @@ func (w testTombstoneWriter) Install(_ context.Context, hosts []string) error {
 func TestResolutionTombstoneApplication(t *testing.T) {
 	for _, stage := range []string{"success", "preflight", "install", "verify", "unsupported"} {
 		t.Run(stage, func(t *testing.T) {
-			var calls []string
+			var calls tombstoneCalls
 			writer := testTombstoneWriter{calls: &calls}
 			fail := errors.New("blocked")
 			if stage == "preflight" {
@@ -46,7 +64,7 @@ func TestResolutionTombstoneApplication(t *testing.T) {
 				writer.install = fail
 			}
 			verify := func(context.Context, []string) error {
-				calls = append(calls, "verify")
+				calls.add("verify")
 				if stage == "verify" {
 					return fail
 				}
@@ -62,8 +80,8 @@ func TestResolutionTombstoneApplication(t *testing.T) {
 			if status.VerifiedAt.IsZero() != (stage != "success") {
 				t.Fatal(status)
 			}
-			if stage == "success" && !reflect.DeepEqual(calls, []string{"preflight", "install", "verify"}) {
-				t.Fatal(calls)
+			if stage == "success" && !reflect.DeepEqual(calls.snapshot(), []string{"preflight", "install", "verify"}) {
+				t.Fatal(calls.snapshot())
 			}
 			if stage != "success" && len(status.Hosts) > 0 {
 				t.Fatal("failed proof advertised hosts", status)

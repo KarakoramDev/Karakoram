@@ -16,6 +16,11 @@ const nomadMarker = "# karakoram resolution tombstones: enabled"
 
 type nomadVariable struct{ hostsPath string }
 
+// NewNomadVariableWriter acknowledges the watched hosts projection at hostsPath.
+func NewNomadVariableWriter(hostsPath string) Writer {
+	return &nomadVariable{hostsPath: hostsPath}
+}
+
 func (*nomadVariable) Kind() string { return "nomad-variable" }
 func (w *nomadVariable) Preflight(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
@@ -25,12 +30,10 @@ func (w *nomadVariable) Preflight(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if line == nomadMarker {
-			return nil
-		}
+	if !hasNomadMarker(string(data)) {
+		return errors.New("hosts template of this Nomad allocation does not support resolution tombstones")
 	}
-	return errors.New("hosts template of this Nomad allocation does not support resolution tombstones")
+	return nil
 }
 func (w *nomadVariable) Install(ctx context.Context, hosts []string) error {
 	if _, err := hostInput(hosts); err != nil {
@@ -48,6 +51,9 @@ func (w *nomadVariable) Install(ctx context.Context, hosts []string) error {
 		if err != nil {
 			return err
 		}
+		if !hasNomadMarker(string(data)) {
+			return errors.New("hosts template of this Nomad allocation does not support resolution tombstones")
+		}
 		if hostsMatch(string(data), hosts) {
 			return nil
 		}
@@ -57,6 +63,15 @@ func (w *nomadVariable) Install(ctx context.Context, hosts []string) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+func hasNomadMarker(data string) bool {
+	for line := range strings.SplitSeq(data, "\n") {
+		if line == nomadMarker {
+			return true
+		}
+	}
+	return false
 }
 
 func hostsMatch(data string, hosts []string) bool {

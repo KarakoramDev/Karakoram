@@ -18,6 +18,12 @@ ordinary agent upgrade roll), not merely from upgrading the control plane.
 Native libc resolution and fast failed TCP connect verification remain required
 before treating a retirement as protected.
 
+Resolver installation and renewal run independently of status and configuration
+requests. Until the watched projection matches the desired complete set, the
+agent reports pending or failed verification and retries without starting native
+processes or acknowledging that set. Status remains readable during release,
+so the control plane can project the reduced set before waiting for its proof.
+
 ## How it maps
 
 |Karakoram|Nomad|

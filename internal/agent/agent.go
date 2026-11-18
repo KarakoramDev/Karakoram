@@ -121,13 +121,15 @@ type nodeAgent struct {
 
 	// Retirement-resolution tombstones (tombstones.go): resolutionTombstones is
 	// guarded by mu; resolutionMu guards the remaining resolution fields.
-	resolutionTombstones    *agentapi.ResolutionTombstoneStatus
-	resolutionMu            sync.Mutex
-	resolutionDesired       []string
-	resolutionKnown         bool
-	resolutionInstalledHash string
-	resolutionWriter        tombstone.Writer
-	resolutionVerify        func(context.Context, []string) error
+	resolutionTombstones *agentapi.ResolutionTombstoneStatus
+	resolutionMu         controlMutex
+	resolutionDesired    []string
+	resolutionKnown      bool
+	resolutionEpoch      uint64
+	resolutionRunning    bool
+	resolutionWriter     tombstone.Writer
+	resolutionVerify     func(context.Context, []string) error
+	resolutionContext    context.Context
 }
 
 func (a *nodeAgent) config() agentapi.MemberConfig { a.mu.RLock(); defer a.mu.RUnlock(); return a.c }
@@ -374,7 +376,7 @@ func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
 		return err
 	}
 	defer client.Close()
-	a := &nodeAgent{o: o, client: client, sup: newSupervisor(os.Stdout), started: time.Now(), engine: engine}
+	a := &nodeAgent{o: o, client: client, sup: newSupervisor(os.Stdout), started: time.Now(), engine: engine, resolutionContext: ctx}
 	a.sup.ownershipDir = filepath.Join(o.DataDir, "karakoram", "processes")
 	a.sup.beforeStart = func() error {
 		c := a.config()
@@ -431,6 +433,16 @@ func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
 	defer func() {
 		cancelRetries()
 		<-retriesDone
+	}()
+	resolutionCtx, cancelResolution := context.WithCancel(ctx)
+	resolutionDone := make(chan struct{})
+	go func() {
+		defer close(resolutionDone)
+		a.refreshResolutionLoop(resolutionCtx)
+	}()
+	defer func() {
+		cancelResolution()
+		<-resolutionDone
 	}()
 	// Push observations independently, including while the first config is unavailable.
 	heartbeatCtx, cancelHeartbeat := context.WithCancel(ctx)
@@ -541,7 +553,7 @@ func Run(ctx context.Context, o Options, engines ...Engine) (runErr error) {
 
 func (a *nodeAgent) status(ctx context.Context) (result agentapi.Status) {
 	states, maintenance := a.sup.snapshot()
-	_ = a.refreshResolutionTombstones(ctx)
+	// Resolver work runs independently; observations never wait for projection.
 	defer a.attachResolutionTombstones(&result)
 	var mongoReady *bool
 	var mongoError string

@@ -14,11 +14,68 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/infra/hoststombstones"
 )
+
+func awaitTombstoneCondition(t *testing.T, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("resolver operation did not complete")
+}
+
+func tombstoneOperationIdle(a *nodeAgent) bool {
+	a.resolutionMu.Lock()
+	defer a.resolutionMu.Unlock()
+	return !a.resolutionRunning
+}
+
+func awaitTombstoneReason(t *testing.T, a *nodeAgent, reason string) {
+	t.Helper()
+	awaitTombstoneCondition(t, func() bool {
+		status := a.status(t.Context()).ResolutionTombstones
+		return status != nil && strings.Contains(status.Reason, reason) && status.VerifiedAt.IsZero() && status.SetHash == "" && tombstoneOperationIdle(a)
+	})
+}
+
+func retryTombstoneApply(t *testing.T, a *nodeAgent) {
+	t.Helper()
+	awaitTombstoneCondition(t, func() bool {
+		attempted, err := a.retryApply(t.Context())
+		if !attempted {
+			t.Fatal("resolver retry was lost")
+		}
+		if err == nil {
+			return true
+		}
+		var retryable *RetryableApplyError
+		if !errors.As(err, &retryable) {
+			t.Fatal("non-retryable resolver apply failure", err)
+		}
+		return false
+	})
+	awaitTombstoneCondition(t, func() bool { return tombstoneOperationIdle(a) })
+}
+
+func applyTombstonesEventually(t *testing.T, a *nodeAgent, c agentapi.MemberConfig) {
+	t.Helper()
+	_, err := a.apply(t.Context(), c)
+	var retryable *RetryableApplyError
+	if !errors.As(err, &retryable) {
+		t.Fatal("supported resolver apply did not defer completion", err)
+	}
+	retryTombstoneApply(t, a)
+}
 
 func TestResolutionTombstoneApplyReportsWithoutNativeRestart(t *testing.T) {
 	t.Setenv("KARAKORAM_RESOLVER_TOMBSTONES", "")
@@ -74,7 +131,7 @@ func TestResolutionTombstoneSupportedFailureBlocksStartup(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				var calls []string
+				var calls tombstoneCalls
 				writer := testTombstoneWriter{calls: &calls}
 				if failure == "preflight" {
 					writer.preflight = errors.New("transient preflight failure")
@@ -83,9 +140,10 @@ func TestResolutionTombstoneSupportedFailureBlocksStartup(t *testing.T) {
 					writer.install = errors.New("transient installation failure")
 				}
 				a.resolutionWriter = writer
-				fail := true
+				var fail atomic.Bool
+				fail.Store(true)
 				a.resolutionVerify = func(context.Context, []string) error {
-					if fail && failure == "verify" {
+					if fail.Load() && failure == "verify" {
 						return errors.New("transient resolver failure")
 					}
 					return nil
@@ -95,14 +153,17 @@ func TestResolutionTombstoneSupportedFailureBlocksStartup(t *testing.T) {
 				if _, err := a.apply(t.Context(), c); err == nil {
 					t.Fatal("supported failure accepted")
 				}
+				awaitTombstoneReason(t, a, map[string]string{
+					"preflight": "transient preflight failure",
+					"install":   "transient installation failure",
+					"verify":    "transient resolver failure",
+				}[failure])
 				if native != 0 || a.config().ConfigVersion != 0 || a.applyRetry == nil {
 					t.Fatal("failed startup started/acknowledged native config", native, a.config().ConfigVersion)
 				}
-				fail = false
+				fail.Store(false)
 				a.resolutionWriter = testTombstoneWriter{calls: &calls}
-				if attempted, err := a.retryApply(t.Context()); err != nil || !attempted {
-					t.Fatal("normal apply retry did not recover", attempted, err)
-				}
+				retryTombstoneApply(t, a)
 				if native != 1 || a.config().ConfigVersion != 1 {
 					t.Fatal(native, a.config())
 				}
@@ -115,20 +176,18 @@ func TestResolutionTombstoneReload304RepairsAndInvalidates(t *testing.T) {
 	a, c, e := fakeNode(t, "/bin/true")
 	c.ConfigVersion, c.ResolutionTombstonesPresent, c.PullRevision = 1, true, "same"
 	c.ResolutionTombstones = []string{"retired"}
-	var calls []string
+	var calls tombstoneCalls
 	a.resolutionWriter = testTombstoneWriter{calls: &calls}
-	fail := false
+	var fail atomic.Bool
 	a.resolutionVerify = func(context.Context, []string) error {
-		if fail {
+		if fail.Load() {
 			return errors.New("projection disappeared")
 		}
 		return nil
 	}
 	native := 0
 	e.onApply = func(*Node, agentapi.MemberConfig) error { native++; return nil }
-	if _, err := a.apply(t.Context(), c); err != nil {
-		t.Fatal(err)
-	}
+	applyTombstonesEventually(t, a, c)
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("revision") != "same" {
 			t.Error("missing conditional revision")
@@ -143,18 +202,29 @@ func TestResolutionTombstoneReload304RepairsAndInvalidates(t *testing.T) {
 	}
 	defer client.Close()
 	a.client = client
-	fail = true
+	fail.Store(true)
 	if _, err := a.reload(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	if err := a.refreshResolutionTombstones(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	awaitTombstoneReason(t, a, "projection disappeared")
 	status := a.status(t.Context()).ResolutionTombstones
 	if status == nil || status.Reason == "" || !status.VerifiedAt.IsZero() || status.SetHash != "" {
 		t.Fatal("stale proof advertised", status)
 	}
-	fail = false
+	fail.Store(false)
 	if _, err := a.reload(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	if err := a.refreshResolutionTombstones(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	awaitTombstoneCondition(t, func() bool {
+		status := a.status(t.Context()).ResolutionTombstones
+		return status != nil && status.Reason == "" && !status.VerifiedAt.IsZero()
+	})
 	status = a.status(t.Context()).ResolutionTombstones
 	if status.Reason != "" || status.SetHash != agentapi.ResolutionSetHash(c.ResolutionTombstones) || status.Generation == "" {
 		t.Fatal("304 did not retry resolver", status)
@@ -183,29 +253,38 @@ func TestResolutionTombstoneLegacyConfigPreservesSet(t *testing.T) {
 	}
 }
 
-func TestResolutionTombstoneStatusRepairsVanishedProjection(t *testing.T) {
+func TestResolutionTombstoneRefreshRepairsVanishedProjection(t *testing.T) {
 	a, c, e := fakeNode(t, "/bin/true")
 	c.ConfigVersion, c.ResolutionTombstonesPresent = 1, true
 	c.ResolutionTombstones = []string{"retired"}
-	present := false
-	var calls []string
-	a.resolutionWriter = testTombstoneWriter{calls: &calls, onInstall: func() { present = true }}
+	var present atomic.Bool
+	var calls tombstoneCalls
+	a.resolutionWriter = testTombstoneWriter{calls: &calls, onInstall: func() { present.Store(true) }}
 	a.resolutionVerify = func(context.Context, []string) error {
-		if !present {
+		if !present.Load() {
 			return errors.New("hosts block vanished")
 		}
 		return nil
 	}
 	native := 0
 	e.onApply = func(*Node, agentapi.MemberConfig) error { native++; return nil }
-	if _, err := a.apply(t.Context(), c); err != nil {
+	applyTombstonesEventually(t, a, c)
+	initialVerifiedAt := a.status(t.Context()).ResolutionTombstones.VerifiedAt
+	present.Store(false)
+	before := len(calls.snapshot())
+	status := a.status(t.Context()).ResolutionTombstones
+	if present.Load() || len(calls.snapshot()) != before || status.Reason != "" || status.VerifiedAt.IsZero() {
+		t.Fatal("status unexpectedly refreshed resolver projection", present.Load(), calls.snapshot(), status)
+	}
+	if err := a.refreshResolutionTombstones(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	present = false
-	before := len(calls)
-	status := a.status(t.Context()).ResolutionTombstones
-	if !present || len(calls) <= before || status.Reason != "" || status.VerifiedAt.IsZero() {
-		t.Fatal("status did not repair resolver projection", present, calls, status)
+	awaitTombstoneCondition(t, func() bool {
+		status = a.status(t.Context()).ResolutionTombstones
+		return status != nil && status.Reason == "" && status.VerifiedAt.After(initialVerifiedAt)
+	})
+	if !present.Load() || len(calls.snapshot()) <= before || status.VerifiedAt.IsZero() {
+		t.Fatal("refresh did not repair resolver projection", present.Load(), calls.snapshot(), status)
 	}
 	if native != 1 {
 		t.Fatal("resolver repair invoked native renderer", native)
@@ -267,9 +346,9 @@ func TestResolutionTombstoneRestartReplaysBeforeNativeStart(t *testing.T) {
 			if err := os.WriteFile(scriptPath, []byte(script), 0600); err != nil {
 				t.Fatal(err)
 			}
-			var order []string
+			var order tombstoneCalls
 			a.resolutionWriter = restartHostsHelperWriter{run: func(ctx context.Context, hosts []string) error {
-				order = append(order, "install")
+				order.add("install")
 				if !slices.Equal(hosts, []string{"retired"}) {
 					return errors.New("cached complete resolver set was lost")
 				}
@@ -288,12 +367,13 @@ func TestResolutionTombstoneRestartReplaysBeforeNativeStart(t *testing.T) {
 				if !slices.Equal(hosts, []string{"retired"}) || string(data) != original+block {
 					return errors.New("reset hosts file was not repaired before verification")
 				}
-				order = append(order, "verify")
+				order.add("verify")
 				return nil
 			}
 			e.onApply = func(*Node, agentapi.MemberConfig) error {
-				if len(order) < 2 || !slices.Equal(order[len(order)-2:], []string{"install", "verify"}) {
-					t.Fatalf("native runner reached before successful install/verify: %v", order)
+				steps := order.snapshot()
+				if len(steps) < 2 || !slices.Equal(steps[len(steps)-2:], []string{"install", "verify"}) {
+					t.Fatalf("native runner reached before successful install/verify: %v", steps)
 				}
 				a.mu.RLock()
 				proof := a.resolutionTombstones
@@ -301,7 +381,7 @@ func TestResolutionTombstoneRestartReplaysBeforeNativeStart(t *testing.T) {
 				if proof == nil || proof.VerifiedAt.IsZero() || proof.Reason != "" {
 					t.Fatal("native runner reached without successful resolver proof", proof)
 				}
-				order = append(order, "native")
+				order.add("native")
 				return nil
 			}
 			// Mirror cached startup's read/decode/revision clearing and invoke
@@ -317,9 +397,10 @@ func TestResolutionTombstoneRestartReplaysBeforeNativeStart(t *testing.T) {
 			cached.PullRevision, cached.ChangeRevision, cached.ContentRevision = "", "", ""
 			_, err = a.apply(t.Context(), cached)
 			if failInstall {
+				awaitTombstoneReason(t, a, "hosts helper failed")
 				var retryable *RetryableApplyError
-				if !errors.As(err, &retryable) || !slices.Equal(order, []string{"install"}) {
-					t.Fatal("failed install reached verification/native start", err, order)
+				if !errors.As(err, &retryable) || !slices.Equal(order.snapshot(), []string{"install"}) {
+					t.Fatal("failed install reached verification/native start", err, order.snapshot())
 				}
 				a.mu.RLock()
 				pending := a.applyRetry
@@ -333,14 +414,19 @@ func TestResolutionTombstoneRestartReplaysBeforeNativeStart(t *testing.T) {
 				if err := os.Mkdir(lockDir, 0700); err != nil {
 					t.Fatal(err)
 				}
-				if attempted, err := a.retryApply(t.Context()); err != nil || !attempted {
-					t.Fatal("cached startup retry did not recover", attempted, err)
+				retryTombstoneApply(t, a)
+				if !slices.Equal(order.snapshot(), []string{"install", "install", "verify", "native"}) {
+					t.Fatal("incorrect recovery order", order.snapshot())
 				}
-				if !slices.Equal(order, []string{"install", "install", "verify", "native"}) {
-					t.Fatal("incorrect recovery order", order)
+			} else {
+				var retryable *RetryableApplyError
+				if !errors.As(err, &retryable) {
+					t.Fatal("cached startup did not defer native start", err)
 				}
-			} else if err != nil || !slices.Equal(order, []string{"install", "verify", "native"}) {
-				t.Fatal("incorrect cached startup order", err, order)
+				retryTombstoneApply(t, a)
+				if !slices.Equal(order.snapshot(), []string{"install", "verify", "native"}) {
+					t.Fatal("incorrect cached startup order", order.snapshot())
+				}
 			}
 		})
 	}
@@ -351,17 +437,19 @@ func TestResolutionTombstoneFailedReducedInstallCannotRefreshProof(t *testing.T)
 	c.ConfigVersion, c.ResolutionTombstonesPresent = 1, true
 	c.ResolutionTombstones = []string{"retired-a", "retired-b"}
 	var installed []string
-	fail, installs, verifies, native := false, 0, 0, 0
+	var fail atomic.Bool
+	var installs, verifies atomic.Int64
+	native := 0
 	a.resolutionWriter = restartHostsHelperWriter{run: func(_ context.Context, hosts []string) error {
-		installs++
-		if fail {
+		installs.Add(1)
+		if fail.Load() {
 			return errors.New("reduced-set installation failed")
 		}
 		installed = slices.Clone(hosts)
 		return nil
 	}}
 	a.resolutionVerify = func(_ context.Context, hosts []string) error {
-		verifies++
+		verifies.Add(1)
 		// Like getent, this proves each desired name still resolves; it
 		// cannot prove that an omitted managed name has been removed.
 		for _, host := range hosts {
@@ -372,27 +460,31 @@ func TestResolutionTombstoneFailedReducedInstallCannotRefreshProof(t *testing.T)
 		return nil
 	}
 	e.onApply = func(*Node, agentapi.MemberConfig) error { native++; return nil }
-	if _, err := a.apply(t.Context(), c); err != nil {
-		t.Fatal(err)
-	}
-	fail = true
+	applyTombstonesEventually(t, a, c)
+	fail.Store(true)
 	c.ConfigVersion++
 	c.ResolutionTombstones = []string{"retired-b"}
 	if _, err := a.apply(t.Context(), c); err == nil {
 		t.Fatal("failed reduced-set installation was acknowledged")
 	}
-	before := installs
+	awaitTombstoneReason(t, a, "reduced-set installation failed")
+	before := installs.Load()
+	if err := a.refreshResolutionTombstones(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	awaitTombstoneCondition(t, func() bool {
+		status := a.status(t.Context()).ResolutionTombstones
+		return status != nil && strings.Contains(status.Reason, "reduced-set installation failed") && installs.Load() > before
+	})
 	status := a.status(t.Context()).ResolutionTombstones
 	if status == nil || !status.Supported || status.Reason == "" || !status.VerifiedAt.IsZero() || status.SetHash != "" {
 		t.Fatal("lookup-only refresh certified a failed reduced install", status)
 	}
-	if installs <= before || verifies != 1 || !slices.Equal(installed, []string{"retired-a", "retired-b"}) {
-		t.Fatal("refresh bypassed failed Install because retained name resolved", installs, verifies, installed)
+	if installs.Load() <= before || verifies.Load() != 1 || !slices.Equal(installed, []string{"retired-a", "retired-b"}) {
+		t.Fatal("refresh bypassed failed Install because retained name resolved", installs.Load(), verifies.Load(), installed)
 	}
-	fail = false
-	if attempted, err := a.retryApply(t.Context()); err != nil || !attempted {
-		t.Fatal("reduced-set retry did not recover", attempted, err)
-	}
+	fail.Store(false)
+	retryTombstoneApply(t, a)
 	status = a.status(t.Context()).ResolutionTombstones
 	if status.SetHash != agentapi.ResolutionSetHash(c.ResolutionTombstones) || status.Reason != "" || !slices.Equal(installed, []string{"retired-b"}) {
 		t.Fatal("successful reduced installation was not acknowledged", status, installed)

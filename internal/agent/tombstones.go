@@ -53,62 +53,158 @@ func (a *nodeAgent) preserveResolutionTombstones(c agentapi.MemberConfig) agenta
 	return c
 }
 
+const resolutionVerificationTimeout = 3 * time.Second
+
 func (a *nodeAgent) applyResolutionTombstones(ctx context.Context, hosts []string) error {
-	a.resolutionMu.Lock()
-	defer a.resolutionMu.Unlock()
-	a.resolutionDesired, a.resolutionKnown = slices.Clone(hosts), true
-	return a.verifyResolutionTombstones(ctx, true)
+	return a.scheduleResolutionTombstones(ctx, hosts, true)
 }
 
-// Resolver observations are independent of native rendering and conditional pulls.
-// A vanished projection is repaired before a new proof can be advertised.
+// Refresh schedules one bounded attempt, never a writer call on the caller.
 func (a *nodeAgent) refreshResolutionTombstones(ctx context.Context) error {
-	a.resolutionMu.Lock()
+	return a.scheduleResolutionTombstones(ctx, nil, false)
+}
+
+func (a *nodeAgent) scheduleResolutionTombstones(ctx context.Context, hosts []string, apply bool) error {
+	// Include admission in the deadline. No resolver I/O runs under either lock.
+	deadline := time.Now().Add(resolutionVerificationTimeout)
+	lockCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	if err := a.resolutionMu.LockContext(lockCtx); err != nil {
+		return err
+	}
 	defer a.resolutionMu.Unlock()
+	changed := apply && (!a.resolutionKnown || !slices.Equal(hosts, a.resolutionDesired))
+	if changed {
+		a.resolutionDesired, a.resolutionKnown = slices.Clone(hosts), true
+		a.resolutionEpoch++
+	}
 	if !a.resolutionKnown {
 		return nil
 	}
-	return a.verifyResolutionTombstones(ctx, false)
-}
-
-func (a *nodeAgent) verifyResolutionTombstones(ctx context.Context, install bool) error {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
 	writer := a.resolutionWriter
 	var err error
 	if writer == nil {
 		writer, err = tombstone.FromEnv(os.Getenv)
 	}
-	verify := a.resolutionVerify
-	if verify == nil {
-		verify = tombstone.Verify
+	if writer == nil || err != nil {
+		status := agentapi.ResolutionTombstoneStatus{Reason: "no resolver mechanism on this platform"}
+		if err != nil {
+			status.Reason = err.Error()
+		}
+		a.mu.Lock()
+		a.resolutionTombstones = &status
+		a.mu.Unlock()
+		return nil
 	}
-	hosts := a.resolutionDesired
-	desiredHash := agentapi.ResolutionSetHash(hosts)
+	a.mu.Lock()
+	if changed || a.resolutionTombstones == nil {
+		a.resolutionTombstones = &agentapi.ResolutionTombstoneStatus{
+			Supported: true, Writer: writer.Kind(), Reason: "resolver verification pending",
+		}
+	}
+	status := *a.resolutionTombstones
+	a.mu.Unlock()
+	installed := status.Reason == "" && status.SetHash == agentapi.ResolutionSetHash(a.resolutionDesired) && !status.VerifiedAt.IsZero()
+	verified := installed && time.Since(status.VerifiedAt) <= agentapi.ResolutionProofLease
+	if apply && verified {
+		return nil
+	}
+	if !a.resolutionRunning {
+		a.resolutionRunning = true
+		verify := a.resolutionVerify
+		if verify == nil {
+			verify = tombstone.Verify
+		}
+		// The attempt survives its initiating HTTP response, but not shutdown.
+		lifetime := a.resolutionContext
+		if lifetime == nil {
+			lifetime = context.WithoutCancel(ctx)
+		}
+		workCtx, workCancel := context.WithDeadline(lifetime, deadline)
+		go a.runResolutionTombstones(workCtx, workCancel, a.resolutionEpoch, a.resolutionDesired, installed, writer, verify)
+	}
+	if apply {
+		reason := status.Reason
+		if reason == "" {
+			reason = "resolver verification pending"
+		}
+		return &RetryableApplyError{Err: fmt.Errorf("resolver tombstones: %s", reason), MaxDelay: time.Second}
+	}
+	return nil
+}
+
+func (a *nodeAgent) runResolutionTombstones(ctx context.Context, cancel context.CancelFunc, epoch uint64, hosts []string, installed bool, writer tombstone.Writer, verify func(context.Context, []string) error) {
+	defer cancel()
+	result := make(chan agentapi.ResolutionTombstoneStatus, 1)
+	go func() {
+		var status agentapi.ResolutionTombstoneStatus
+		if installed && len(hosts) > 0 && verify(ctx, hosts) == nil {
+			status = agentapi.ResolutionTombstoneStatus{Supported: true, Writer: writer.Kind(), Hosts: slices.Clone(hosts), VerifiedAt: time.Now().UTC()}
+		} else {
+			status = installResolutionTombstones(ctx, writer, hosts, verify)
+		}
+		if !status.VerifiedAt.IsZero() {
+			status.SetHash = agentapi.ResolutionSetHash(hosts)
+			states, _ := a.sup.snapshot()
+			status.ProcessGeneration = agentapi.ResolutionProcessGeneration(states["mysqld"])
+			status.Generation = fmt.Sprintf("%s/%s", a.started.UTC().Format(time.RFC3339Nano), status.ProcessGeneration)
+		}
+		result <- status
+	}()
 	var status agentapi.ResolutionTombstoneStatus
-	if err != nil {
-		status.Reason = err.Error()
-	} else if !install && a.resolutionInstalledHash == desiredHash && writer != nil && len(hosts) > 0 && verify(ctx, hosts) == nil {
-		status = agentapi.ResolutionTombstoneStatus{Writer: writer.Kind(), Supported: true, Hosts: slices.Clone(hosts), VerifiedAt: time.Now().UTC()}
-	} else {
-		status = installResolutionTombstones(ctx, writer, hosts, verify)
+	select {
+	case status = <-result:
+		if ctx.Err() != nil {
+			status = agentapi.ResolutionTombstoneStatus{Supported: true, Writer: writer.Kind(), Reason: "resolver verification deadline exceeded"}
+		}
+		a.publishResolutionTombstones(epoch, status)
+	case <-ctx.Done():
+		a.publishResolutionTombstones(epoch, agentapi.ResolutionTombstoneStatus{
+			Supported: true, Writer: writer.Kind(), Reason: "resolver verification deadline exceeded",
+		})
+		// A writer that ignores cancellation must not accumulate more flights.
+		// Keep admission occupied until it actually exits; status stays readable.
+		<-result
 	}
-	if !status.VerifiedAt.IsZero() {
-		status.SetHash = desiredHash
-		states, _ := a.sup.snapshot()
-		status.ProcessGeneration = agentapi.ResolutionProcessGeneration(states["mysqld"])
-		status.Generation = fmt.Sprintf("%s/%s", a.started.UTC().Format(time.RFC3339Nano), status.ProcessGeneration)
+	a.resolutionMu.Lock()
+	a.resolutionRunning = false
+	superseded := a.resolutionEpoch != epoch
+	a.resolutionMu.Unlock()
+	if superseded {
+		lifetime := a.resolutionContext
+		if lifetime == nil {
+			lifetime = context.Background()
+		}
+		_ = a.refreshResolutionTombstones(lifetime)
 	}
-	// A lookup proves presence of desired names, not absence of removed names.
-	// Never let refresh certify a complete set whose last Install failed.
-	a.resolutionInstalledHash = status.SetHash
+}
+
+func (a *nodeAgent) publishResolutionTombstones(epoch uint64, status agentapi.ResolutionTombstoneStatus) {
+	a.resolutionMu.Lock()
+	defer a.resolutionMu.Unlock()
+	if epoch != a.resolutionEpoch {
+		// Never advertise an old set after a newer config was accepted.
+		if status.Reason == "" {
+			return
+		}
+		status = agentapi.ResolutionTombstoneStatus{Supported: status.Supported, Writer: status.Writer, Reason: "previous resolver verification failed; waiting to retry current set: " + status.Reason}
+	}
 	a.mu.Lock()
 	a.resolutionTombstones = &status
 	a.mu.Unlock()
-	if status.Supported && status.Reason != "" {
-		return &RetryableApplyError{Err: fmt.Errorf("resolver tombstones: %s", status.Reason)}
+}
+
+func (a *nodeAgent) refreshResolutionLoop(ctx context.Context) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_ = a.refreshResolutionTombstones(ctx)
+		}
 	}
-	return nil
 }
 
 func (a *nodeAgent) attachResolutionTombstones(status *agentapi.Status) {
