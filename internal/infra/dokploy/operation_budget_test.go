@@ -4,11 +4,15 @@
 package dokploy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -28,6 +32,40 @@ type operationBudgetRequestKey struct{}
 type operationBudgetUnit struct {
 	pass   *sync.Map
 	caller string
+}
+
+type operationBudgetReceipt struct {
+	app, action string
+	issued      time.Time
+}
+
+type operationBudgetRecovery struct {
+	pass      *sync.Map
+	receipt   operationBudgetReceipt
+	endpoints map[string]int
+	completed bool
+	wrote     bool
+}
+
+// Recovery's initial application reload runs on the caller's goroutine; later
+// reads may run in ObserveParallel workers with the same stripped context.
+// Recognize that context before applying its separate transaction budget. Other
+// uncached availability reads keep their zero allowance. Resolve the full name
+// from the method expression so a rename cannot silently disable attribution;
+// CallersFrames handles inlining.
+func operationBudgetRecoveryRead() bool {
+	want := runtime.FuncForPC(reflect.ValueOf((*Backend).reconcileObservedService).Pointer()).Name()
+	var pcs [32]uintptr
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs[:])])
+	for {
+		frame, more := frames.Next()
+		if frame.Function == want {
+			return true
+		}
+		if !more {
+			return false
+		}
+	}
 }
 
 // Exercise the real worker, queue, provider and backend; only platform task
@@ -186,6 +224,8 @@ func TestManagerOperationRequestBudget(t *testing.T) {
 			f.mu.Unlock()
 			var sweepsMu sync.Mutex
 			sweeps := make(map[*sync.Map]map[string]int)
+			receipts := make(map[*sync.Map]map[string]operationBudgetReceipt)
+			recoveries := make(map[context.Context]*operationBudgetRecovery)
 			uncached := make(map[operationBudgetUnit]map[string]int)
 			uncachedCallers := make(map[string]int)
 			rolloutHeld, heldSweeps := false, 0
@@ -194,10 +234,25 @@ func TestManagerOperationRequestBudget(t *testing.T) {
 				transport = http.DefaultTransport
 			}
 			b.c.http.Transport = clientRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+				endpoint := strings.TrimPrefix(r.URL.Path, "/api/")
+				pass := engine.ObservationPassCache(r.Context())
+				cache := infra.ObservationCache(r.Context())
+				availability := infra.RequestCaller(r.Context()) == infra.CallerAvailability
+				sweepsMu.Lock()
+				recovery := recoveries[r.Context()]
+				if recovery != nil && r.Method != http.MethodGet {
+					recovery.wrote = true
+				}
 				if r.Method == http.MethodGet {
-					sweepsMu.Lock()
-					endpoint := strings.TrimPrefix(r.URL.Path, "/api/")
-					if cache := infra.ObservationCache(r.Context()); cache != nil {
+					if availability && cache == nil && recovery == nil && endpoint == "application.one" && operationBudgetRecoveryRead() {
+						if receipt, ok := receipts[pass][r.URL.Query().Get("applicationId")]; ok {
+							recovery = &operationBudgetRecovery{pass: pass, receipt: receipt, endpoints: make(map[string]int)}
+							recoveries[r.Context()] = recovery
+						}
+					}
+					if recovery != nil {
+						recovery.endpoints[endpoint]++
+					} else if cache != nil {
 						if sweeps[cache] == nil {
 							sweeps[cache] = make(map[string]int)
 							if rolloutHeld {
@@ -206,7 +261,6 @@ func TestManagerOperationRequestBudget(t *testing.T) {
 						}
 						sweeps[cache][endpoint]++
 					} else {
-						pass := engine.ObservationPassCache(r.Context())
 						if pass == nil {
 							pass, _ = r.Context().Value(operationBudgetRequestKey{}).(*sync.Map)
 						}
@@ -217,9 +271,39 @@ func TestManagerOperationRequestBudget(t *testing.T) {
 						uncached[unit][endpoint]++
 						uncachedCallers[unit.caller]++
 					}
-					sweepsMu.Unlock()
 				}
-				return transport.RoundTrip(r)
+				sweepsMu.Unlock()
+				response, err := transport.RoundTrip(r)
+				if err != nil || !availability || endpoint != "application.one" || response.StatusCode != http.StatusOK {
+					return response, err
+				}
+				// Inspect only synthetic application metadata, then replay the body
+				// unchanged. Recovery must be justified by a receipt this availability
+				// pass actually observed, not merely by the recovery function's name.
+				data, err := io.ReadAll(response.Body)
+				response.Body.Close()
+				if err != nil {
+					return nil, err
+				}
+				response.Body = io.NopCloser(bytes.NewReader(data))
+				var app application
+				if json.Unmarshal(data, &app) == nil {
+					if metadata, ok := parseMetadata(app.Description); ok {
+						sweepsMu.Lock()
+						if cache != nil && metadata.Pending != nil {
+							if receipts[pass] == nil {
+								receipts[pass] = make(map[string]operationBudgetReceipt)
+							}
+							pending := metadata.Pending
+							receipts[pass][app.ID] = operationBudgetReceipt{app.ID, pending.Action, pending.Issued}
+						}
+						if recovery != nil && app.ID == recovery.receipt.app && metadata.Pending == nil {
+							recovery.completed = true
+						}
+						sweepsMu.Unlock()
+					}
+				}
+				return response, nil
 			})
 			reg, err := engine.NewRegistry(x.p)
 			if err != nil {
@@ -252,6 +336,8 @@ func TestManagerOperationRequestBudget(t *testing.T) {
 			clear(sweeps)
 			clear(uncached)
 			clear(uncachedCallers)
+			clear(receipts)
+			clear(recoveries)
 			rolloutHeld = true
 			sweepsMu.Unlock()
 			f.mu.Lock()
@@ -368,6 +454,71 @@ func TestManagerOperationRequestBudget(t *testing.T) {
 				}
 			}
 			t.Logf("GETs=%d elapsed=%s sweeps=%d held=%d per-sweep GETs:count=%v", total, time.Since(started), len(sweeps), heldSweeps, histogram)
+			// The engine pass identifies one availability renewal tick, including
+			// its retry. Repeated ticks may legitimately poll a still-pending
+			// receipt; a tick may recover it once pending and once on completion.
+			type recoveryTick struct {
+				pass    *sync.Map
+				receipt operationBudgetReceipt
+			}
+			ticks := make(map[recoveryTick][2]int)
+			distinctReceipts := make(map[operationBudgetReceipt]bool)
+			recoveryGETs := 0
+			for _, recovery := range recoveries {
+				key := recoveryTick{recovery.pass, recovery.receipt}
+				counts := ticks[key]
+				stage := 0
+				if recovery.completed {
+					stage = 1
+				}
+				counts[stage]++
+				ticks[key] = counts
+				if counts[stage] > 1 {
+					t.Errorf("availability receipt recovery contexts in one tick=%d exceeds 1 (completed=%t)", counts[stage], recovery.completed)
+				}
+				distinctReceipts[recovery.receipt] = true
+				endpoints := recovery.endpoints
+				// Pending receipt: reload + receipt application, tasks, inventory,
+				// inspect. A concurrently cleared receipt instead reads deployments.
+				budget := map[string]int{"application.one": 2, "deployment.all": 1,
+					"docker.getServiceContainersByAppName": 1, "swarm.getNodeApps": 1, "docker.getConfig": 1}
+				limit := 5
+				if recovery.wrote {
+					// Completing our own receipt also reloads/persists metadata,
+					// inspects the applied image and then observes the runtime fresh.
+					budget["application.one"], budget["deployment.all"] = 4, 2
+					budget["swarm.getNodeApps"], budget["docker.getConfig"] = 3, 3
+					budget["docker.getServiceContainersByAppName"] = 2
+					limit = 14
+					if scenario.operation == "upgrade-agents" {
+						// A data runtime additionally validates its retained volume.
+						budget["application.one"], budget["environment.one"], budget["cluster.getNodes"] = 5, 1, 1
+						limit = 17
+					}
+				}
+				if !recovery.wrote && recovery.completed && scenario.operation == "upgrade-agents" {
+					budget["application.one"], budget["environment.one"], budget["cluster.getNodes"] = 3, 1, 1
+					limit = 8
+				}
+				n := requestTotal(endpoints)
+				recoveryGETs += n
+				if n > limit {
+					t.Errorf("availability recovery GETs=%d exceeds %d: %v", n, limit, endpoints)
+				}
+				for endpoint, count := range endpoints {
+					if count > budget[endpoint] {
+						t.Errorf("availability recovery GET %s=%d exceeds %d: %v", endpoint, count, budget[endpoint], endpoints)
+					}
+				}
+			}
+			maxReceipts := 1
+			if scenario.operation == "upgrade-agents" {
+				maxReceipts = 2 // One data runtime and one proxy runtime.
+			}
+			if len(distinctReceipts) > maxReceipts {
+				t.Errorf("availability recovery receipts=%d exceeds %d", len(distinctReceipts), maxReceipts)
+			}
+			t.Logf("availability recovery passes=%d receipts=%d GETs=%d (separately bounded)", len(recoveries), len(distinctReceipts), recoveryGETs)
 			t.Logf("per-sweep peak=%v budget=%v", peak, scenario.budget)
 			uncachedTotal := 0
 			uncachedPeak := make(map[string]int)

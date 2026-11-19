@@ -416,8 +416,13 @@ platform completion SLO, and must not be directly divided into the historical
 
 The operation-wide totals above depended on how many timer-driven observation
 sweeps fired during the hold, so the committed test does not enforce
-operation totals. It asserts cached reads per observation sweep and uncached reads per
-reconcile or operation attempt and per configuration request, bounds held
+operation totals. It asserts ordinary reads per observation sweep and bounds
+availability's serialized receipt-recovery transactions separately, by exact
+request context and endpoint. Each recovery requires a pending receipt observed
+in that availability pass; a pass permits one recovery while pending and one
+on completion, with a deterministic receipt count per operation. Unrelated
+uncached availability reads have zero allowance. Other uncached reads are bounded
+per reconcile or operation attempt and per configuration request. The test bounds held
 proxy sweeps by the startup ramp and the five-second receipt backoff, and stops
 at a steady fence. An extra provider GET per member per sweep, or a backoff
 pinned to two seconds, fails it.
