@@ -75,6 +75,19 @@ karactl -n NS clusters members appdb -o json
 karactl -n NS operations list
 ```
 
+**Known issue since v0.2.0:** a new HA cluster can remain `Creating` if a
+configuration refresh arrives between the first member's initdb and Patroni's
+post-bootstrap step. The refresh removes the bootstrap section and reloads
+Patroni too early. The first member's Patroni log repeats
+`KeyError: 'bootstrap'`; other members report “waiting for leader to bootstrap”,
+and agents can report configuration-pull HTTP 502 errors. No pgBackRest stanza
+is established, so backups do not run. This is a narrow initialization race,
+not an instruction to edit Patroni configuration on a running cluster.
+Delete and recreate only the stuck new cluster, which has no data yet; never
+delete an existing data-bearing cluster for this symptom. See
+[the known issue](../limitations.md#postgres-ha-bootstrap-configuration-race);
+a fix is planned for a later release.
+
 Inspect the current primary, replica streaming/replay distance, [etcd](https://etcd.io/) quorum and **each local voter**, member conditions and archive state. Status flags stopped/non-streaming replicas, replay distance above 16 MiB and loss of linearizable etcd access; those thresholds are not application-specific SLOs. Replica distance compares the primary's current LSN with the replica's replay LSN only on matching system IDs and timelines. Missing/incompatible samples are unknown, not zero. The replica-local `replay_backlog_bytes` metric measures received-but-not-replayed WAL and deliberately does not claim to measure transport lag. The primary's `replication_lag_bytes` measures its maximum downstream replay distance.
 
 Members advertise each implemented health observation independently of whether

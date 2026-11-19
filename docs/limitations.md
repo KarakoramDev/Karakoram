@@ -77,6 +77,14 @@ These cross-engine constraints define the operating model; engine-specific limit
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+<a id="postgres-ha-bootstrap-configuration-race"></a>
+
+- **A new PostgreSQL HA cluster can occasionally stay `Creating`** (also
+  present in v0.2.0–v0.4.6). If the first member's Patroni log repeats
+  `KeyError: 'bootstrap'` and the other members wait for the leader to
+  bootstrap, the cluster won't finish creating. It holds no data yet: delete
+  it and create it again. A fix is planned for a later release.
+
 <a id="pxc-withdrawn-upstream-download"></a>
 
 - **New PXC members can't be prepared: the pinned PXC 8.4.11-11.1 download was
