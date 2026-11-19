@@ -77,6 +77,18 @@ These cross-engine constraints define the operating model; engine-specific limit
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+<a id="mysql-service-and-volume-loss"></a>
+
+- **A MySQL member whose service and volume are both lost blocks all
+  operations.** If a Group Replication or PXC member's platform service
+  disappears and its volume is then lost too, the recreated member never
+  rejoins and every operation on the cluster — including
+  `karactl clusters replace-member` and backups — stays `Pending` indefinitely
+  behind the member-convergence gate. The remaining members keep serving. Take
+  a logical dump through the proxy (for example `mysqldump --single-transaction`)
+  or use an existing backup, restore it into a new cluster and verify it, then
+  delete the old cluster. A fix is planned for a later release.
+
 <a id="pxc-ist-gtid-accounting"></a>
 
 - **PXC incremental backups can stop after a member recovers from a crash**

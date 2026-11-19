@@ -854,6 +854,22 @@ and a message directing the operator to verify healthy surviving members, then r
 karactl clusters replace-member CLUSTER MEMBER --wait
 ```
 
+**Known issue in v0.4.7–v0.4.9:** if the runtime service disappears, is imported
+again, and the initialized member's volume is also lost, the recovered member
+can remain at an unjoined stage while the loss fence skips further
+provisioning. The all-members-joined claim gate then blocks even explicit
+replacement. Backups, restarts and upgrades stay Pending without an execution
+timeout; scale changes can also fail to converge. In v0.4.9 the operation can
+show “Waiting for member convergence or rollout drain to finish”. Cancelling
+and submitting another operation does not repair the member.
+
+The cluster is Degraded, but surviving members keep serving. Take a logical
+dump through the proxy (`mysqldump --single-transaction`) or use an existing
+backup, restore into a new cluster and verify recovered data before deleting
+the old cluster. Cluster deletion remains available. See
+[the known issue](../limitations.md#mysql-service-and-volume-loss); a fix is
+planned for a later release.
+
 A queued `replace-member` waits for the current replacement or other native
 maintenance to settle; queue admission does not interrupt that owner. Inspect
 the operation's message for the waiting reason (including the replacement owner
