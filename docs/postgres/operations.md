@@ -424,6 +424,19 @@ During single-to-HA conversion, only the original member may initialize the
 [Patroni](https://patroni.readthedocs.io/) scope. Empty new replicas wait for that member instead of racing to
 bootstrap an unrelated database while its runtime is preparing.
 
+Converting a single PostgreSQL member to HA3 interrupts writes while the
+original member is switched from standalone PostgreSQL to etcd/Patroni and its
+existing PGDATA is adopted. Writes resume after the original member is ready as
+the Patroni writer and the serving ProxySQL instances have an `ONLINE` writer
+route; no fixed recovery time is guaranteed. The original volume is reused
+rather than copied. The new replicas are seeded from that member afterward:
+basebackup and catch-up time scale with database size and storage/network
+throughput, and may keep the operation or full-cluster readiness pending after
+writes return. With strict synchronous mode, writes may also remain blocked
+until a qualifying standby is available. Plan the conversion in a maintenance
+window; in a small Dokploy test, writes were unavailable for about three
+minutes.
+
 HA requires at least one proxy; only single permits zero. Multiple stateless proxy replicas require provider horizontal scaling. Resource changes use replica-first ordering. Persistent disks only grow, and growth needs provider `diskGrowth`; requested size is not a quota on providers without quota enforcement.
 
 **Known issue since v0.2.0:** confirmed loss of an HA member's initialized
@@ -550,8 +563,10 @@ A data provider is published to ProxySQL only after it has joined successfully
 and its runtime has an operational `ACTIVE` or `RUNNING` status. Planned,
 placement-blocked and deploying identities
 are not monitored by the proxy. Each successful data-member join publishes a new
-proxy configuration version. During initial bootstrap or single-to-HA conversion,
-the proxy may temporarily run with no published provider until a data member joins.
+proxy configuration version. During initial bootstrap the proxy may temporarily
+run with no published provider until a data member joins; for single-to-HA
+conversion, see the write interruption described under
+[scale and replace](#scale-and-replace).
 
 ProxySQL places newly discovered providers in its reader hostgroup until the
 native role monitor identifies the writer. Server-list reloads preserve existing

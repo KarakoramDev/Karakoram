@@ -72,6 +72,50 @@ These cross-engine constraints define the operating model; engine-specific limit
 - Result/rate/concurrency bounds are not query-cost guarantees. Stored data can inject prompts; confirmations do not provide rollback. RabbitMQ peeking consumes/requeues and therefore needs write access. Elasticsearch hidden/system/dot indices and streams backed by them are refused.
 - PostgreSQL's companion connects to the first scoped database (default `postgres`); existing PUBLIC grants are not revoked and can weaken scope isolation. See [scope and identity caveats](data-mcp.md#managed-identities-and-rotation).
 
+## Known issues in v0.4.10
+
+The [known issues in v0.4.9](#known-issues-in-v049) that are not marked fixed
+still apply to v0.4.10.
+
+<a id="postgres-operations-slower-in-v0410"></a>
+
+- **PostgreSQL proxy count changes and agent rolls take longer than in
+  v0.4.9.** They take roughly 15–20 seconds longer (Dokploy measurements: proxy
+  count 2→3 114.9 s instead of 100.2 s; agent roll with
+  `upgrade-agents --include-current` 111.9 s instead of 91.6 s). The extra time
+  is spent after the proxies have been rolled, while the cluster still reports
+  `Updating`. A PostgreSQL agent roll also uses about 35 % more platform reads
+  than in v0.4.9, while proxy count changes use about 15–25 % fewer.
+  Workaround: allow for the longer `Updating` phase in operation timeouts.
+
+<a id="cross-cluster-degraded-during-postgres-operations"></a>
+
+- **Other clusters can briefly show Degraded during a PostgreSQL operation**
+  (status only; also present in v0.4.9). On Dokploy, while a PostgreSQL
+  operation is running, health observation of other clusters on the same
+  Dokploy server can time out under the shared platform read load; those
+  clusters then briefly show `Healthy=Unknown`, `AgentsCurrent=Unknown` and
+  phase Degraded (about eight seconds in one observation) although they keep
+  serving. Workaround: confirm serving with
+  `karactl clusters members` and client checks; the status clears on the next
+  successful observation.
+
+<a id="status-during-own-rolling-restart"></a>
+
+- **A member or proxy restarted by its own rolling operation shows as
+  unhealthy** (status only). On Dokploy, during an agent upgrade roll or a
+  proxy roll, the member being restarted can report `health=false` (about
+  20 seconds per data member and about a minute per ProxySQL proxy in one
+  measurement) and the cluster phase can show Degraded instead of Updating,
+  although the remaining members keep serving. A few failed observations in a
+  row can also show every agent as disconnected. Workaround: follow the
+  operation with `karactl operations get` and check serving with client
+  checks; the status clears when the roll finishes.
+
+See also the PostgreSQL write gap during rolling restarts behind ProxySQL in
+[PostgreSQL](postgres/README.md) and the write interruption during
+[single-to-HA conversion](postgres/operations.md#scale-and-replace).
+
 ## Known issues in v0.4.9
 
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
@@ -179,7 +223,7 @@ still apply to v0.4.9.
 <a id="zerops-deleted-member-service"></a>
 
 - **On Zerops, a deleted member service blocks MySQL and PostgreSQL HA clusters**
-  (PostgreSQL HA since v0.2.0; MySQL Group Replication and PXC since v0.4.9).
+  (PostgreSQL HA since v0.2.0; MySQL Group Replication and PXC since v0.4.0).
   If the Zerops service of one member of a MySQL Group Replication, PXC or
   PostgreSQL HA cluster no longer exists — for example, it was deleted outside
   Karakoram — every reconcile of that cluster fails with
@@ -305,8 +349,9 @@ still apply to v0.4.9.
   operation ends. Workaround: check serving directly with
   `karactl clusters members` and client checks, and the operation's progress
   with `karactl operations get`; resolve the stalled rollout (for example, free
-  scheduler capacity) rather than restarting members or the control plane. A
-  fix is planned for v0.4.10.
+  scheduler capacity) rather than restarting members or the control plane.
+  **Fixed in v0.4.10:** health observation keeps running during these
+  operations; see the [v0.4.10 upgrade notes](upgrade.md#health-observation-during-long-operations).
 
 ## Known issues in v0.4.8
 

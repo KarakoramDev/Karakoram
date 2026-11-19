@@ -50,7 +50,10 @@ no longer turns `Healthy=Unknown`, `AgentsCurrent=Unknown` and Degraded only
 because such an operation is long; a member that genuinely fails is still
 reported within the normal readiness lease. Restore, credential and TLS
 rotation, quorum recovery and unknown operation kinds keep the previous
-exclusive behavior.
+exclusive behavior. This fixes the v0.4.9 known issue
+[status during long operations](limitations.md#status-during-long-operations).
+A member or proxy that the operation itself is restarting can still show as
+unhealthy for a short time; see [known issues in v0.4.10](#known-issues-in-v0410).
 
 ### Fewer platform reads during operations
 
@@ -60,9 +63,10 @@ post-`Sync` observations of one reconcile pass also share their first-attempt
 platform reads. Unchanged pending PostgreSQL receipts and serving MySQL
 count-only receipts are polled after 2, 3, 4 and then every 5 seconds instead
 of every 2 seconds, so detecting a finished deployment can take up to 5 seconds
-instead of 2. In the offline fixture a PostgreSQL proxy count change fell from
-1,572 to 1,038 Dokploy GETs, a Group Replication proxy count change from 1,430
-to 1,197 and a PostgreSQL agent roll from 704 to 511. Safety decisions
+instead of 2. In Dokploy measurements, proxy count changes used about 15–25 %
+fewer platform reads than in v0.4.9, but a PostgreSQL agent roll used about
+35 % more and took about 20 seconds longer; see
+[known issues in v0.4.10](#known-issues-in-v0410). Safety decisions
 (writer handoff, retirement, identity, admission and pinned connection
 authorization) keep their fresh reads. See
 [ADR 0070](adr/0070-agent-heartbeats-and-platform-read-budget.md#active-postgresql-operation-cost).
@@ -97,6 +101,29 @@ Use `--include-current` when deliberately rebuilding members already reporting
 the current agent build. Follow the engine's maintenance-window and safety gates.
 Ordinary process/container restarts and recovery from retained Dokploy source
 keep using the previously submitted policy.
+
+### Known issues in v0.4.10
+
+The [known issues in v0.4.9](#known-issues-in-v049) that are not marked fixed
+still apply to v0.4.10. New in v0.4.10 (details and workarounds in
+[limitations](limitations.md#known-issues-in-v0410)):
+
+- PostgreSQL proxy count changes and agent rolls take roughly 15–20 seconds
+  longer than in v0.4.9, and a PostgreSQL agent roll uses about 35 % more
+  platform reads; allow for the longer `Updating` phase.
+- On Dokploy, other clusters can still briefly show Degraded while a
+  PostgreSQL operation is running (status only; also present in v0.4.9).
+- On Dokploy, a member or proxy restarted by its own rolling operation can
+  report `health=false` and the cluster Degraded until the roll finishes
+  (status only).
+
+During a PostgreSQL rolling restart behind ProxySQL (agent upgrade,
+configuration restart), expect a write gap of a few seconds; set the client
+connect timeout to several seconds and retry. Converting a single PostgreSQL
+member to HA3 interrupts writes until the original member is the Patroni
+writer and the proxies route to it (about three minutes in a small Dokploy
+test); plan it in a maintenance window. See
+[scale and replace](postgres/operations.md#scale-and-replace).
 
 ## Upgrading to v0.4.9
 
@@ -436,7 +463,8 @@ The general [rollback procedure](#rollback) does not override these restrictions
 ### Known issues in v0.4.9
 
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
-still apply to v0.4.9.
+still apply to v0.4.9. The complete list, including issues found after the
+release, is in [known issues in v0.4.9](limitations.md#known-issues-in-v049).
 
 - **A failing PostgreSQL WAL archive is not reported as Degraded** (also present
   in v0.2.0–v0.4.6). When WAL archiving fails, the cluster shows phase `Updating`
@@ -455,23 +483,26 @@ still apply to v0.4.9.
   failovers. MySQL/PXC binlog archive failures and MongoDB PBM inventory failures
   similarly leave the cluster `Ready`; watch the `BinlogArchive` and `Backup`
   conditions. A fix is planned for v0.4.11.
-- **After a lost MySQL Group Replication member is replaced, commits can stall
-  for several seconds at a time for about five minutes** (also present in
-  v0.4.7 and v0.4.8). When
-  `karactl clusters replace-member` replaces a member whose volume was lost, the
-  remaining members keep trying to reach the removed member for about five
-  minutes after its name is withdrawn. During that time a single commit can
-  take 4–5 seconds roughly every 14 seconds; writes continue between the stalls
-  and no acknowledged write is lost. A client with a short read timeout can get
-  error 2013 (`Lost connection to MySQL server`) at COMMIT even though the
-  transaction was committed. Replacing a healthy member is not affected.
+- **After a MySQL Group Replication member is lost or replaced, commits can stall
+  for several seconds at a time for several minutes** (also present in
+  v0.4.7 and v0.4.8). When a member fails (its node or container goes down) or a
+  member whose volume was lost is replaced, the remaining members keep trying
+  to reach it while its name no longer resolves. A single commit can take
+  2–5 seconds roughly every 12–14 seconds for about five to seven minutes, plus
+  one longer stall of up to about 8 seconds when the member fails; writes
+  continue between the stalls and no acknowledged write is lost. A client with
+  a short read timeout can get error 2013 (`Lost connection to MySQL server`)
+  at COMMIT even though the transaction was committed. Replacing a healthy
+  member is not affected. On Dokploy, `replace-member` for a member whose node
+  is down stays `Pending` until the node returns.
   Workaround: treat a timeout or error 2013 at COMMIT as an unknown outcome —
   check whether the write was applied before retrying, or make writes
   idempotent; a longer client read timeout (for example 10 seconds) can turn
   these errors into slower commits; expect slower commits for about five
   minutes after a lost-member replacement; keep automatic replacement of lost
-  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled. A fix is
-  planned for v0.4.10.
+  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled. A fix for
+  replacements of members whose volume was confirmed lost is planned for
+  v0.4.11; stalls after a node or container failure remain.
 - **During a long operation, status can report a serving cluster as
   Degraded** (status only; also present in v0.4.7 and v0.4.8). While
   `karactl clusters upgrade-agents`, `karactl clusters replace-member` or a
@@ -483,8 +514,9 @@ still apply to v0.4.9.
   operation ends. Workaround: check serving directly with
   `karactl clusters members` and client checks, and the operation's progress
   with `karactl operations get`; resolve the stalled rollout (for example, free
-  scheduler capacity) rather than restarting members or the control plane. A
-  fix is planned for v0.4.10.
+  scheduler capacity) rather than restarting members or the control plane.
+  **Fixed in v0.4.10:** health observation keeps running during these
+  operations; see [health observation during long operations](#health-observation-during-long-operations).
 
 ## Upgrading to v0.4.8
 
@@ -552,22 +584,26 @@ v0.4.8 changes nothing else. The
 [known issues in v0.4.7](#known-issues-in-v047) remain present, and their
 workarounds still apply.
 
-- **After a lost MySQL Group Replication member is replaced, commits can stall
-  for several seconds at a time for about five minutes**. When
-  `karactl clusters replace-member` replaces a member whose volume was lost, the
-  remaining members keep trying to reach the removed member for about five
-  minutes after its name is withdrawn. During that time a single commit can
-  take 4–5 seconds roughly every 14 seconds; writes continue between the stalls
-  and no acknowledged write is lost. A client with a short read timeout can get
+- **After a MySQL Group Replication member is lost or replaced, commits can stall
+  for several seconds at a time for several minutes**. When a member fails
+  (its node or container goes down) or a member whose volume was lost is
+  replaced, the remaining members keep trying to reach it while its name no
+  longer resolves. A single commit can take 2–5 seconds roughly every
+  12–14 seconds for about five to seven minutes, plus one longer stall of up to
+  about 8 seconds when the member fails; writes continue between the stalls and
+  no acknowledged write is lost. A client with a short read timeout can get
   error 2013 (`Lost connection to MySQL server`) at COMMIT even though the
-  transaction was committed. Replacing a healthy member is not affected.
+  transaction was committed. Replacing a healthy member is not affected. On
+  Dokploy, `replace-member` for a member whose node is down stays `Pending`
+  until the node returns.
   Workaround: treat a timeout or error 2013 at COMMIT as an unknown outcome —
   check whether the write was applied before retrying, or make writes
   idempotent; a longer client read timeout (for example 10 seconds) can turn
   these errors into slower commits; expect slower commits for about five
   minutes after a lost-member replacement; keep automatic replacement of lost
-  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled. A fix is
-  planned for v0.4.10.
+  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled. A fix for
+  replacements of members whose volume was confirmed lost is planned for
+  v0.4.11; stalls after a node or container failure remain.
 
 ## Upgrading to v0.4.7
 

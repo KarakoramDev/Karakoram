@@ -400,21 +400,32 @@ not the historical 60-second hold above. Matched fixture runs on the unmodified
 v0.4.9 base (ordinary tests) and optimized implementation (race-instrumented
 tests) measured these network GET totals:
 
-| Operation | v0.4.9 GETs | Optimized GETs | Enforced ceiling | Optimized completion after enqueue |
+| Operation | v0.4.9 GETs | Optimized GETs | Former ceiling (historical) | Optimized completion after enqueue |
 |---|---:|---:|---:|---:|
 | PostgreSQL proxy count 2→3 | 1,572 | 1,038 | 1,250 | 28.678 s |
 | MySQL GR proxy count 3→4 | 1,430 | 1,197 | 1,400 | 38.078 s |
 | PostgreSQL agent roll, including current agents | 704 | 511 | 580 | 25.765 s |
 
-All operations succeeded with zero operation failures. All three ceilings fail
-on the base and pass on the optimized implementation in the targeted race
-tests. Affected race regressions and touched-package `go vet` also pass.
-The ceilings allow approximately 20%, 17% and 14% headroom above the optimized
-measurements. Completion
+All operations succeeded with zero operation failures. These operation-total
+ceilings were used during development; they are not enforced by the committed
+test (see below). Completion
 includes the artificial hold but excludes fixture warmup and any build/test
-queue. These fixture measurements are request-regression bounds, not a live
+queue. These fixture measurements are not a live
 platform completion SLO, and must not be directly divided into the historical
 60-second experiment's totals.
+
+The operation-wide totals above depended on how many timer-driven observation
+sweeps fired during the hold, so the committed test does not enforce
+operation totals. It asserts cached reads per observation sweep and uncached reads per
+reconcile or operation attempt and per configuration request, bounds held
+proxy sweeps by the startup ramp and the five-second receipt backoff, and stops
+at a steady fence. An extra provider GET per member per sweep, or a backoff
+pinned to two seconds, fails it.
+
+Live Dokploy measurements of the released change differ from these fixture
+figures: proxy count changes used about 15–25 % fewer platform reads than
+v0.4.9, while a PostgreSQL agent roll (`upgrade-agents --include-current`) used
+about 35 % more and took about 20 seconds longer.
 
 
 ### Safety decision points stay fresh
@@ -452,8 +463,10 @@ TLS agents. It holds platform task progression for 20 seconds and requires a
 successful, zero-failure operation whose recorded completion is within 55 seconds
 of enqueue, even if the polling goroutine discovers completion later. It covers PostgreSQL
 proxy count 2→3, MySQL GR proxy count 3→4, and PostgreSQL `upgrade-agents`
-including current agents, with GET ceilings of **1,250**, **1,400** and **580**
-respectively. The native database processes are simulated; these are bounded
+including current agents. It bounds GETs per endpoint in each observation
+sweep, uncached GETs per reconcile pass, operation attempt and configuration
+request, and the number of sweeps during the 20-second hold, instead of
+operation-wide totals. The native database processes are simulated; these are bounded
 request-budget regressions, not live deployment-latency SLOs. Companion
 reconciliation and pushed-heartbeat/config-route behavior are outside this
 fixture; their separate budgets above still apply.

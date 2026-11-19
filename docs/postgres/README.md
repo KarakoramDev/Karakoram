@@ -172,6 +172,11 @@ Native monitoring still decides whether it can serve; the agent's postmaster
 epoch check can recover it without waiting for the next configuration pull.
 Retired, replaced, stopped and failed lifecycle identities are not retained.
 
+During a PostgreSQL rolling restart behind ProxySQL (agent upgrade,
+configuration restart), expect a write gap of a few seconds when the writer
+restarts or moves. Set the client connect timeout to several seconds and retry
+failed writes.
+
 ## Options
 
 `engineOptions` is a strict object: unknown fields and `null` are rejected. `engineConfig` is not accepted.

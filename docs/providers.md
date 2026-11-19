@@ -269,12 +269,15 @@ skip the immediate second observation on every provider; on Dokploy the pre-
 and post-`Sync` observations of one pass also share their first-attempt platform reads; and
 unchanged pending PostgreSQL receipts and serving MySQL count-only receipts
 are polled after 2, 3, 4, then 5 seconds. The
-end-to-end fixture budgets (PostgreSQL proxy count 1,572 → 1,038 GETs, Group
+end-to-end fixture measurements (PostgreSQL proxy count 1,572 → 1,038 GETs, Group
 Replication proxy count 1,430 → 1,197, PostgreSQL agent roll 704 → 511) and
 the safety reads that stay fresh are described in
 [ADR 0070](adr/0070-agent-heartbeats-and-platform-read-budget.md#active-postgresql-operation-cost).
-These are request-regression bounds from simulated database processes, not a
-live completion SLO.
+These are request-regression measurements from simulated database processes,
+not a live completion SLO. In Dokploy measurements of v0.4.10, proxy count
+changes used about 15–25 % fewer platform reads than v0.4.9, but a PostgreSQL
+agent roll used about 35 % more; see
+[known issues in v0.4.10](limitations.md#postgres-operations-slower-in-v0410).
 
 For drift bounds and an immediate fresh pass, see
 [out-of-band platform changes and forcing a reconcile](operations.md#out-of-band-platform-changes-and-forcing-a-reconcile).
