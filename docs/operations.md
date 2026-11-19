@@ -784,7 +784,16 @@ Use its terminal prompt or protected `KARAKORAM_RESET_PASSWORD` environment, nev
 
 ## Externally stopped or deleted member services
 
-Karakoram reconciles deployed member services against the cluster's running intent. An externally stopped runtime is started again. A confirmed-deleted logical runtime is imported with the same hostname and member identity, then deployed through the normal engine workflow, **without creating a new data volume**. Its original retained volume must still have the recorded identity. This applies to [MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/), [Elasticsearch](https://www.elastic.co/elasticsearch), [PostgreSQL](https://www.postgresql.org/) and the stateless Elastic Stack/[Supabase](https://supabase.com/) components; Supabase's database storage follows PostgreSQL rules.
+For the engines listed below, Karakoram reconciles deployed member services against the cluster's running intent. An externally stopped runtime is started again. A confirmed-deleted logical runtime is imported with the same hostname and member identity, then deployed through the normal engine workflow, **without creating a new data volume**. Its original retained volume must still have the recorded identity. This applies to [MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/), [Elasticsearch](https://www.elastic.co/elasticsearch), [PostgreSQL](https://www.postgresql.org/) and the stateless Elastic Stack/[Supabase](https://supabase.com/) components; Supabase's database storage follows PostgreSQL rules.
+
+**MySQL/PXC exception:** this is not a full-outage restart guarantee for these
+engines. A PXC cluster can remain down after every member stops or restarts:
+stopped runtimes are not started again and returning members abort ordinary
+joins without a Primary component. Do not bootstrap manually or use
+`karactl mysql recover-quorum` for this case; restore a backup into a new
+cluster and preserve the original data. Group Replication re-forms once its
+runtimes are started again. See [the PXC full-outage warning](limitations.md#pxc-full-outage-does-not-recover)
+and [engine-specific recovery limits](mysql/operations.md#full-outage-recovery).
 
 Recovery records an infrastructure operation and a `RuntimeRecovery` event. Failed or ambiguous submissions have a one-minute per-member cooldown, extended by any later provider `Retry-After` deadline and retained across control-plane restarts. Accepted recovery work must drain before MongoDB, RabbitMQ or Elasticsearch cleanup/suspension or a queued imperative operation can take ownership. Absent or stale inventory does not release an accepted import handle. Runtime imports first persist their exact secret-free batch; incomplete provider reservations resume that original batch, not a new subset or changed resource request. Deliberate cluster cleanup/suspension, removal and restore/maintenance workflows retain ownership of their stops; a stopped service is not a supported way to suspend an otherwise desired-running cluster.
 

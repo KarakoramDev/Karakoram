@@ -960,6 +960,22 @@ See [ADR 0067](../adr/0067-mysql-lost-volume-replacement.md).
 
 All members must be stopped/fenced before choosing a seed. Recovery fails closed if evidence is missing or incompatible; do not choose the first reachable member.
 
+**Known issue since v0.4.0:** PXC does not automatically recover after all its
+members stop together. Platform-stopped runtimes can remain stopped; restarted
+members try ordinary joins without a Primary component and repeatedly abort.
+Status can show every member `UNREACHABLE`; MySQL logs can repeat
+`[WSREP] Starting replication` followed by `[MY-010119] Aborting`, and the agent
+can report `MySQL did not accept authenticated local connections before deadline`.
+Repeated identical reconciliation errors are deduplicated, so missing repeated
+events do not establish progress. Data on the members is not changed by this.
+
+Avoid simultaneous PXC member stops. Do not run `karactl mysql recover-quorum`
+or bootstrap a member by hand for this full-outage case: choosing an older
+position can discard recent transactions. Restore the latest backup into a
+new cluster instead. A tested recovery procedure for the existing cluster will
+be added to [the known issue](../limitations.md#pxc-full-outage-does-not-recover).
+The internal selection rules below are not an operator workaround for it.
+
 For a previously formed GR cluster with equal GTID histories and complete,
 valid stopped-member identity evidence, the control plane automatically re-forms
 the group after a whole-group outage, such as power loss or all nodes rebooting.
@@ -968,8 +984,8 @@ volumes (`karactl clusters delete --keep-volumes` + `karactl clusters resume`).
 The v0.4.3 correction to the offline-probe timeout is control-plane-side, with
 no agent change required. Whole-group recovery and retained-volume suspend/resume
 were live-verified on Nomad with three GR members and exact data checks.
-The PXC/Galera re-formation path is verified by tests only; no general
-recovery-time guarantee follows from the GR measurements.
+The PXC/Galera re-formation path has test coverage, but that does not establish
+automatic recovery from this full-outage failure or a recovery-time guarantee.
 
 | MySQL Group Replication | PXC / Galera |
 | --- | --- |

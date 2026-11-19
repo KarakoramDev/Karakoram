@@ -77,6 +77,20 @@ These cross-engine constraints define the operating model; engine-specific limit
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+<a id="pxc-full-outage-does-not-recover"></a>
+
+- **A PXC cluster doesn't recover by itself after all its members stop** (also
+  present in v0.4.0–v0.4.6). If every member stops at once — for example the
+  platform stops or restarts all of them — Karakoram doesn't start them again,
+  and members that come back keep trying to join a cluster that has no primary
+  (`[WSREP] Starting replication` followed by `Aborting` in the MySQL log).
+  Avoid stopping all PXC members at the same time. Don't run
+  `karactl mysql recover-quorum` or bootstrap a member by hand: picking the
+  wrong member can discard recent transactions. If it has happened, restore
+  your latest backup into a new cluster; a tested recovery procedure for the
+  existing cluster will be added to this note. Group Replication clusters
+  re-form once their members are started again.
+
 <a id="mysql-service-and-volume-loss"></a>
 
 - **A MySQL member whose service and volume are both lost blocks all
