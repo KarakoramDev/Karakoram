@@ -95,6 +95,23 @@ Resolution order is:
 
 A development build needs a mirror or an explicit published artifact release for Karakoram-built files. The typed `MissingMirrorError` names the artifact and configuration choices. Configure these variables on the control plane; resolved URLs are rendered into member preparation commands. Both choices must serve the exact locked bytes. Production mirrors should use HTTPS.
 
+<a id="withdrawn-pxc-download"></a>
+
+**Urgent known issue:** the upstream
+`Percona-XtraDB-Cluster_8.4.11-11.1_Linux.x86_64.glibc2.35-minimal.tar.gz`
+download pinned by v0.4.0–v0.4.9 now returns 404. PXC preparation on all providers
+depends on it; Nomad also prepares existing members again on a new allocation.
+An existing running container/allocation does not redownload it on a process
+restart. There is no generally available workaround:
+`KARAKORAM_ARTIFACT_MIRROR` helps only if you retained the exact original archive,
+SHA-256 `739c4a5ff8a356760e370a1d487aa2587eabca31a452b22e8c320af69416f8b0`.
+Do not substitute the new archive under the old filename or weaken checksum
+verification. PXC 8.0 cannot be freshly created, and Percona `.deb` packages do
+not implement this tarball preparation path. ProxySQL and plain MySQL are not
+affected. Avoid creating or rescheduling PXC data members and keep backups
+current; see [the affected operations](limitations.md#pxc-withdrawn-upstream-download).
+Fixed in the next release (re-pinned to 8.4.11-12.1).
+
 `git describe` versions such as `v1.2.3-4-gabcdef0` (including a trailing
 `-dirty`) identify development builds, not published native-asset releases.
 They require an explicit artifact source even though their suffix resembles a SemVer prerelease.
