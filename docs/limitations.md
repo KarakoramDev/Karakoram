@@ -82,9 +82,11 @@ still apply to v0.4.9.
 - **A MySQL member whose service and volume are both lost blocks all
   operations.** If a Group Replication or PXC member's platform service
   disappears and its volume is then lost too, the recreated member never
-  rejoins and every operation on the cluster — including
-  `karactl clusters replace-member` and backups — stays `Pending` indefinitely
-  behind the member-convergence gate. The remaining members keep serving. Take
+  rejoins. Queued operations — including `karactl clusters replace-member`,
+  manual and scheduled backups, restore, TLS rotation, restarts and agent
+  upgrades — stay `Pending` indefinitely and never time out; accepted scale,
+  version and configuration changes never complete. The remaining members keep
+  serving, and cluster deletion still works. Take
   a logical dump through the proxy (for example `mysqldump --single-transaction`)
   or use an existing backup, restore it into a new cluster and verify it, then
   delete the old cluster. A fix is planned for a later release.

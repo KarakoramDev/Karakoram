@@ -858,10 +858,12 @@ karactl clusters replace-member CLUSTER MEMBER --wait
 again, and the initialized member's volume is also lost, the recovered member
 can remain at an unjoined stage while the loss fence skips further
 provisioning. The all-members-joined claim gate then blocks even explicit
-replacement. Backups, restarts and upgrades stay Pending without an execution
-timeout; scale changes can also fail to converge. In v0.4.9 the operation can
-show “Waiting for member convergence or rollout drain to finish”. Cancelling
-and submitting another operation does not repair the member.
+replacement. Queued replacements, manual and scheduled backups, restore, TLS
+rotation, restarts and agent upgrades stay Pending indefinitely and never time
+out. Accepted scale, version and configuration changes never complete. In
+v0.4.9 the operation can show “Waiting for member convergence or rollout drain
+to finish”. Cancelling and submitting another operation does not repair the
+member.
 
 The cluster is Degraded, but surviving members keep serving. Take a logical
 dump through the proxy (`mysqldump --single-transaction`) or use an existing
