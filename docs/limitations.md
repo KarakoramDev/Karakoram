@@ -77,6 +77,18 @@ These cross-engine constraints define the operating model; engine-specific limit
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+<a id="postgres-ha-lost-volume-replacement"></a>
+
+- **A PostgreSQL HA member whose volume is lost can't be replaced** (also
+  present in v0.2.0–v0.4.6). The automatic replacement, and
+  `karactl clusters replace-member`, try to add the new member to etcd before
+  removing the lost one, which etcd refuses; the operation retries indefinitely
+  (`etcd-member: HTTP 409`) and other operations on the cluster wait behind it.
+  The remaining members keep serving, but a second member failure makes the
+  cluster read-only. Take a logical dump (`pg_dump`) through the cluster
+  endpoint, restore it into a new cluster and verify it, then delete the old
+  cluster. A fix is planned for a later release.
+
 <a id="postgres-ha-bootstrap-configuration-race"></a>
 
 - **A new PostgreSQL HA cluster can occasionally stay `Creating`** (also

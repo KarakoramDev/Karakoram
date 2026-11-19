@@ -426,6 +426,24 @@ bootstrap an unrelated database while its runtime is preparing.
 
 HA requires at least one proxy; only single permits zero. Multiple stateless proxy replicas require provider horizontal scaling. Resource changes use replica-first ordering. Persistent disks only grow, and growth needs provider `diskGrowth`; requested size is not a quota on providers without quota enforcement.
 
+**Known issue since v0.2.0:** confirmed loss of an HA member's initialized
+volume can leave both automatic and explicit replacement retrying
+`POST /v1/postgres/etcd-member: HTTP 409`. The new member is added as an etcd
+learner before it is provisioned, while the lost voter is removed only after
+the replacement joins and fencing completes. With strict reconfiguration
+checks enabled, etcd refuses the attempted change. Cancelling and submitting
+`karactl clusters replace-member CLUSTER MEMBER` again does not repair this
+ordering. Backups, upgrades and further replacements wait behind it.
+
+The remaining members keep serving, but a three-member etcd cluster now has
+one dead voter: another failure loses quorum and makes the database read-only.
+Keep the survivors running. Take a logical dump through the cluster endpoint
+with `pg_dump`, restore it into a new cluster, verify the recovered data and
+client access, then delete the old cluster; cluster deletion remains available.
+Do not change etcd membership or disable its safety checks by hand. See
+[the known issue](../limitations.md#postgres-ha-lost-volume-replacement);
+a fix is planned for a later release.
+
 If resource bounds prevent a runtime from starting, correct the bounds through
 the cluster spec. Reconciliation supersedes a failed obsolete resize and applies
 the latest requested resources to a runtime the provider reports as failed,
