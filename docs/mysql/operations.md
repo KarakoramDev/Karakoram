@@ -971,10 +971,36 @@ events do not establish progress. Data on the members is not changed by this.
 
 Avoid simultaneous PXC member stops. Do not run `karactl mysql recover-quorum`
 or bootstrap a member by hand for this full-outage case: choosing an older
-position can discard recent transactions. Restore the latest backup into a
-new cluster instead. A tested recovery procedure for the existing cluster will
-be added to [the known issue](../limitations.md#pxc-full-outage-does-not-recover).
-The internal selection rules below are not an operator workaround for it.
+position can discard recent transactions. For this outage with the original
+data volumes intact, use the tested retained-volume recovery:
+
+1. Suspend the cluster, retaining its data volumes and backups:
+
+   ```sh
+   karactl -n NS clusters delete CLUSTER --keep-volumes --keep-backups --wait --yes
+   ```
+
+   Confirm the cluster is `Suspended` before continuing. Do not omit
+   `--keep-volumes`.
+2. Resume it:
+
+   ```sh
+   karactl -n NS clusters resume CLUSTER --wait
+   ```
+
+   Karakoram stops every member, recovers each member's position, bootstraps
+   the most advanced member and rejoins the others. In the test, every member
+   was stopped about two minutes after resume and end-to-end recovery took
+   about ten minutes. These measurements are not timing guarantees.
+3. Confirm the cluster is `Ready` and verify your data before returning normal
+   application traffic.
+
+This recovery was tested with real PXC 8.4.11-11.1 agents after a graceful
+whole-cluster stop reproduced the join crash loop, and with the control-plane
+cleanup/resume path. Restoring the latest backup into a new cluster remains
+the fallback. See [the known issue](../limitations.md#pxc-full-outage-does-not-recover).
+The internal selection rules below explain the managed recovery; they do not
+authorize manually choosing a bootstrap member.
 
 For a previously formed GR cluster with equal GTID histories and complete,
 valid stopped-member identity evidence, the control plane automatically re-forms

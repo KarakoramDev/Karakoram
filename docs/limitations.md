@@ -86,10 +86,17 @@ still apply to v0.4.9.
   (`[WSREP] Starting replication` followed by `Aborting` in the MySQL log).
   Avoid stopping all PXC members at the same time. Don't run
   `karactl mysql recover-quorum` or bootstrap a member by hand: picking the
-  wrong member can discard recent transactions. If it has happened, restore
-  your latest backup into a new cluster; a tested recovery procedure for the
-  existing cluster will be added to this note. Group Replication clusters
-  re-form once their members are started again.
+  wrong member can discard recent transactions. If it has happened, suspend the
+  cluster with
+  `karactl -n NS clusters delete CLUSTER --keep-volumes --keep-backups --wait --yes`
+  and confirm it is `Suspended`; then run
+  `karactl -n NS clusters resume CLUSTER --wait`. Karakoram stops every member,
+  recovers their positions, bootstraps the most advanced member and rejoins the
+  others. In the test, all members were stopped about two minutes after resume
+  and recovery took about ten minutes end to end; these are not timing
+  guarantees. Check the cluster is `Ready` and verify your data. Restoring the
+  latest backup into a new cluster remains the fallback. Group Replication
+  clusters re-form once their members are started again.
 
 <a id="mysql-service-and-volume-loss"></a>
 

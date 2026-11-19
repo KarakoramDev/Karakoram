@@ -790,10 +790,12 @@ For the engines listed below, Karakoram reconciles deployed member services agai
 engines. A PXC cluster can remain down after every member stops or restarts:
 stopped runtimes are not started again and returning members abort ordinary
 joins without a Primary component. Do not bootstrap manually or use
-`karactl mysql recover-quorum` for this case; restore a backup into a new
-cluster and preserve the original data. Group Replication re-forms once its
-runtimes are started again. See [the PXC full-outage warning](limitations.md#pxc-full-outage-does-not-recover)
-and [engine-specific recovery limits](mysql/operations.md#full-outage-recovery).
+`karactl mysql recover-quorum` for this case; use the
+[tested retained-volume suspend/resume procedure](mysql/operations.md#full-outage-recovery)
+with original data volumes intact. Restoring a backup into a new cluster
+remains the fallback; preserve the original data. Group Replication re-forms
+once its runtimes are started again. See
+[the PXC full-outage warning](limitations.md#pxc-full-outage-does-not-recover).
 
 Recovery records an infrastructure operation and a `RuntimeRecovery` event. Failed or ambiguous submissions have a one-minute per-member cooldown, extended by any later provider `Retry-After` deadline and retained across control-plane restarts. Accepted recovery work must drain before MongoDB, RabbitMQ or Elasticsearch cleanup/suspension or a queued imperative operation can take ownership. Absent or stale inventory does not release an accepted import handle. Runtime imports first persist their exact secret-free batch; incomplete provider reservations resume that original batch, not a new subset or changed resource request. Deliberate cluster cleanup/suspension, removal and restore/maintenance workflows retain ownership of their stops; a stopped service is not a supported way to suspend an otherwise desired-running cluster.
 
