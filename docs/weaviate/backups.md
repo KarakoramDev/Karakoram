@@ -87,14 +87,14 @@ karactl -n default backups delete vectors baseline --yes
 
 Deletion observes or cancels any active native writer before removing objects. Karakoram recursively deletes only the recorded `<path>/<native-ID>/` prefix, then removes inventory; retention cleanup uses the same isolated identity. Keep S3 delete permissions and the matching storage registration available until cleanup completes. Retained backups can be cleaned without a live source runtime, but pending/running backups cannot be treated as writer-free retained objects.
 
-**Known issue:** after the registered storage bucket or endpoint changes,
-retained deletion returns HTTP 400
-`backup lacks a matching immutable Weaviate S3 identity`, but the record is
-already `Deleting` and unavailable to Karakoram restore. Restore the original
-storage binding before deletion; if already stuck, restore that binding and
-retry the delete so it can complete. No supported record reset exists in these
-releases; do not delete repository objects by hand. See
-[the retained-backup warning](../limitations.md#retained-backup-deletion-stuck);
-a fix is planned for v0.4.11.
+After the registered storage bucket or endpoint changes, retained deletion is
+refused (`backup lacks a matching immutable Weaviate S3 identity`). From v0.4.11
+the refusal happens before the record is marked `Deleting`, so the backup stays
+available to Karakoram restore; restore the original storage binding before
+deleting it. Earlier releases marked the record `Deleting` first; such a record
+stays `Deleting` after the upgrade: restore the original binding and retry the
+delete so it can complete. No supported record reset exists; do not delete
+repository objects by hand. See
+[the retained-backup known issue](../limitations.md#retained-backup-deletion-stuck).
 
 Cluster deletion follows shared `--keep-backups` and `--keep-volumes` semantics. Retaining volumes is not a backup; retaining backup objects is not a control-plane state backup. See [deletion and suspension](../clusters.md#delete-or-suspend) and inspect operations, retained inventory and orphaned volumes separately.

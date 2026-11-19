@@ -528,17 +528,24 @@ connection. Reconnect and retry reads. If the connection drops during `COMMIT`,
 the outcome is unknown: check whether the write landed before replaying it.
 Use bounded, idempotent application retry for both errors.
 
-Member loss or replacement can make Group Replication commits slow. When a
-member's node or container goes down, or a member whose volume was lost is
-replaced, survivors keep trying to reach it while its name no longer resolves.
-Individual commits can take 2–5 seconds roughly every 12–14 seconds for about
-five to seven minutes, plus one stall of up to about 8 seconds at member loss.
-Writes continue between stalls and no acknowledged write is lost. Replacing
-a healthy member does not have this window. On Dokploy, `replace-member` for a
-member whose node is down stays `Pending` until the node returns.
-See [the known issue](../limitations.md#mysql-gr-commit-stalls-after-lost-member-replacement):
-a fix for confirmed-lost-volume replacements is planned for v0.4.11; stalls
-after node/container failure remain. A client whose read timeout expires
+Member loss can make Group Replication commits slow. When a member's node or
+container goes down, survivors keep trying to reach it while its name no longer
+resolves. On Dokploy, after a node loss individual commits took 2–3 seconds
+roughly every 12 seconds for about six minutes, starting with a stall of about
+8 seconds; a container failure on a running node caused one stall of about
+9 seconds until Swarm restarted the container. On Nomad a node loss caused no
+stalls in testing because the member's name stays registered while the node is
+down. Writes continue between
+stalls and no acknowledged write is lost. On Dokploy and Nomad,
+`replace-member` for a member whose node is down stays `Pending` until the node
+returns. From v0.4.11, replacing a member whose volume was confirmed lost keeps
+its retired name failing fast on every survivor once all surviving members run
+the v0.4.11 agent, so the replacement no longer adds a stall window; with older
+agents the cluster shows the `RetirementUnprotected` warning and commits can
+still stall for about five minutes after the lost member is retired. Replacing a
+healthy member does not have this window. See
+[the known issue](../limitations.md#mysql-gr-stalls-after-member-failure).
+A client whose read timeout expires
 during `COMMIT` sees error 2013 ("Lost connection to MySQL server during query"),
 usually without a SQLSTATE, and does not learn the outcome. In testing, every
 commit that timed out this way had been applied. Treat a timed-out commit as
@@ -889,10 +896,12 @@ Cancellation acknowledgement is not completed recovery. See
 [current retirement/recovery guidance](#gr-retirement-and-legacy-recovery).
 
 Explicit replacement is unchanged and retains the native safety checks below.
-Expect occasional multi-second commits while the replacement joins. A node or
-container failure, or withdrawal of a lost member's name during replacement,
-can also cause periodic stalls for about five to seven minutes
-([known issue](../limitations.md#mysql-gr-commit-stalls-after-lost-member-replacement));
+Expect occasional multi-second commits while the replacement joins. A node
+failure can also cause periodic stalls for several minutes (on Dokploy; a
+container failure causes a single stall), as can
+withdrawal of a lost member's name during replacement while a surviving member
+still runs an agent older than v0.4.11
+([known issue](../limitations.md#mysql-gr-stalls-after-member-failure));
 a commit that times out may still have been applied (see
 [client errors during rollout and replacement](#agent-rollout)).
 While a confirmed-lost member awaits explicit replacement, new rolling

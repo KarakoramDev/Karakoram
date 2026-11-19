@@ -6,12 +6,27 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 
 ## Upgrading to v0.4.11
 
+When upgrading from v0.4.9 or earlier, also follow
+[upgrading to v0.4.10](#upgrading-to-v0410); in particular, set
+`spec.version: 8.4.11-12.1` on every PXC 8.4 cluster after the control-plane
+upgrade ([withdrawn PXC 8.4 artifact](#withdrawn-pxc-84-artifact)).
+
 Confirmed-lost MySQL Group Replication replacement now retains local resolver
 entries for the retired hostname on surviving data members before withdrawing
 its discovery registration. The fixed rejection addresses are `239.192.0.1`
 and `ff18::4b4b:1`. Agents verify the complete set through libc resolution and
 fast-failing TCP probes independently of native configuration rendering.
 Resolver-only changes do not restart MySQL.
+This fixes the v0.4.9 known issue
+[commit stalls after lost-member replacement](limitations.md#mysql-gr-commit-stalls-after-lost-member-replacement)
+for replacements of members whose volume was confirmed lost. Stalls after a
+node or container failure remain, and the fix does not prevent the single
+stall at the moment of loss, before the replacement runs (about 9 seconds on
+Dokploy); see [known issues in v0.4.11](#known-issues-in-v0411). Live tests
+covered a single member replacement on Nomad and, with an earlier v0.4.11
+candidate, on Dokploy, including a surviving member restart during the hold on
+Nomad; control-plane restarts during the hold or clone and concurrent
+replacements are covered by automated tests only. Zerops was not verified live.
 
 - **Nomad:** the hosts template arrives through controlled job re-registration
   during the normal agent upgrade roll. Upgrade surviving members before relying
@@ -92,6 +107,22 @@ See [retained backup recovery guidance](backups.md#delete-or-preserve-recovery-o
 ### API
 
 - `deleteBackup` now documents its existing `503 Unavailable` response; runtime behavior is unchanged.
+- Retained-backup deletion refusals (Elasticsearch, Weaviate,
+  PostgreSQL/Supabase) now return `409 conflict` before the record changes;
+  earlier releases returned `400` or `500` after marking it `Deleting`.
+
+### Known issues in v0.4.11
+
+The [known issues in v0.4.10](#known-issues-in-v0410) that are not marked fixed
+still apply to v0.4.11. New or re-scoped in v0.4.11 (details and workarounds in
+[limitations](limitations.md#known-issues-in-v0411)):
+
+- MySQL Group Replication commits can still stall after a member's node or
+  container fails without confirmed volume loss; on Dokploy a node loss caused
+  2–3-second stalls about every 12 seconds for about six minutes.
+- On Dokploy and Nomad, `replace-member` for a member whose node is down stays
+  `Pending` with no reason until the node returns, and status shows serving
+  members as unhealthy meanwhile.
 
 ## Upgrading to v0.4.10
 
@@ -571,7 +602,8 @@ release, is in [known issues in v0.4.9](limitations.md#known-issues-in-v049).
   `karactl clusters get CLUSTER` conditions after configuration changes and
   failovers. MySQL/PXC binlog archive failures and MongoDB PBM inventory failures
   similarly leave the cluster `Ready`; watch the `BinlogArchive` and `Backup`
-  conditions. A fix is planned for v0.4.11.
+  conditions. **Fixed in v0.4.11:** these failures now report `Degraded`; see
+  [continuous archive health](#continuous-archive-health).
 - **After a MySQL Group Replication member is lost or replaced, commits can stall
   for several seconds at a time for several minutes** (also present in
   v0.4.7 and v0.4.8). When a member fails (its node or container goes down) or a
@@ -589,9 +621,11 @@ release, is in [known issues in v0.4.9](limitations.md#known-issues-in-v049).
   idempotent; a longer client read timeout (for example 10 seconds) can turn
   these errors into slower commits; expect slower commits for about five
   minutes after a lost-member replacement; keep automatic replacement of lost
-  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled. A fix for
-  replacements of members whose volume was confirmed lost is planned for
-  v0.4.11; stalls after a node or container failure remain.
+  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled.
+  Replacements of members whose volume was confirmed lost are fixed in v0.4.11
+  once every surviving member runs the v0.4.11 agent; stalls after a node or
+  container failure remain; see
+  [known issues in v0.4.11](#known-issues-in-v0411).
 - **During a long operation, status can report a serving cluster as
   Degraded** (status only; also present in v0.4.7 and v0.4.8). While
   `karactl clusters upgrade-agents`, `karactl clusters replace-member` or a
@@ -690,9 +724,11 @@ workarounds still apply.
   idempotent; a longer client read timeout (for example 10 seconds) can turn
   these errors into slower commits; expect slower commits for about five
   minutes after a lost-member replacement; keep automatic replacement of lost
-  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled. A fix for
-  replacements of members whose volume was confirmed lost is planned for
-  v0.4.11; stalls after a node or container failure remain.
+  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled.
+  Replacements of members whose volume was confirmed lost are fixed in v0.4.11
+  once every surviving member runs the v0.4.11 agent; stalls after a node or
+  container failure remain; see
+  [known issues in v0.4.11](#known-issues-in-v0411).
 
 ## Upgrading to v0.4.7
 

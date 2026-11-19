@@ -46,6 +46,12 @@ ordinary start/restart, and recovery of an already-submitted old app version do
 not install newly rendered preparation commands. After the first fresh deployment,
 ordinary startup reuses the installed helper and replays the desired tombstones.
 
+v0.4.11 did not verify this protection live on Zerops: the end-to-end
+replacement test of a lost Group Replication member could not run, because
+replacement is blocked once the member's service is deleted (see
+[known issues](limitations.md#zerops-deleted-member-service)). Protection is
+covered by automated tests and the runtime observations above only.
+
 ## How it maps
 
 | Karakoram | Zerops |

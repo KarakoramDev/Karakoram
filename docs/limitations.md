@@ -72,6 +72,47 @@ These cross-engine constraints define the operating model; engine-specific limit
 - Result/rate/concurrency bounds are not query-cost guarantees. Stored data can inject prompts; confirmations do not provide rollback. RabbitMQ peeking consumes/requeues and therefore needs write access. Elasticsearch hidden/system/dot indices and streams backed by them are refused.
 - PostgreSQL's companion connects to the first scoped database (default `postgres`); existing PUBLIC grants are not revoked and can weaken scope isolation. See [scope and identity caveats](data-mcp.md#managed-identities-and-rotation).
 
+## Known issues in v0.4.11
+
+The [known issues in v0.4.10](#known-issues-in-v0410) that are not marked fixed
+still apply to v0.4.11.
+
+<a id="mysql-gr-stalls-after-member-failure"></a>
+
+- **MySQL Group Replication commits can still stall after a member's node or
+  container fails** (also present in v0.4.7–v0.4.10). v0.4.11 keeps a retired
+  member's name failing fast on the survivors only when a member whose volume
+  was confirmed lost is replaced, and only after every surviving member runs
+  the v0.4.11 agent; otherwise the cluster shows the `RetirementUnprotected`
+  warning. This was verified live on Nomad and, with an earlier v0.4.11
+  candidate, on Dokploy; it was not verified on Zerops. It does not prevent the
+  single stall at the moment a member is lost, before any replacement exists.
+  When a node or container fails without confirmed volume loss, nothing is
+  retained for the member's name. On Dokploy, after a node loss commits
+  stalled for 2–3 seconds about every 12 seconds for about six minutes, the
+  first stall for about 8 seconds; a container killed on a running node caused
+  one stall of about 9 seconds until Swarm restarted it (also when its volume
+  was lost and it was then replaced). On Nomad a node loss caused no stalls in
+  testing, because the member's name stays registered while the node is down.
+  Workaround: as for the
+  [earlier commit-stall issue](#mysql-gr-commit-stalls-after-lost-member-replacement)
+  — treat a timeout or error 2013 at COMMIT as an unknown outcome and check
+  whether the write was applied before retrying.
+
+<a id="replace-member-pending-while-node-down"></a>
+
+- **`replace-member` waits without a reason while the member's node is down,
+  and status shows serving members as unhealthy** (also present in earlier
+  releases). On Dokploy and Nomad, `karactl clusters replace-member` for a
+  member whose node is down stays `Pending` (`Queued replace-member…`) with no
+  further reason until the node returns (in both tests the node was down for
+  about 15 minutes; the replacement then completed within a few minutes).
+  While the node is down, Dokploy status shows every member and
+  proxy as unhealthy and disconnected, and Nomad status shows the surviving
+  members and the proxy as unhealthy, although they keep serving. Workaround:
+  bring the node back or restore its capacity, confirm serving with client
+  checks, and do not submit another replacement over the pending one.
+
 ## Known issues in v0.4.10
 
 The [known issues in v0.4.9](#known-issues-in-v049) that are not marked fixed
@@ -291,7 +332,9 @@ still apply to v0.4.9.
   binding and retry deletion: deletion can then complete, but Karakoram restore
   remains unavailable while the record is `Deleting`. There is no supported
   way to reset a stuck record in these releases; do not delete repository
-  objects by hand. A fix is planned for v0.4.11.
+  objects by hand. **Fixed in v0.4.11;** records already stuck keep the
+  documented native recovery; see the
+  [v0.4.11 upgrade notes](upgrade.md#retained-backup-deletion-refusals).
 
 <a id="postgres-wal-archive-not-degraded"></a>
 
@@ -311,7 +354,8 @@ still apply to v0.4.9.
   `karactl clusters get CLUSTER` conditions after configuration changes and
   failovers. MySQL/PXC binlog archive failures and MongoDB PBM inventory failures
   similarly leave the cluster `Ready`; watch the `BinlogArchive` and `Backup`
-  conditions. A fix is planned for v0.4.11.
+  conditions. **Fixed in v0.4.11:** these failures now report `Degraded`; see
+  [continuous archive health](upgrade.md#continuous-archive-health).
 
 <a id="mysql-gr-commit-stalls-after-lost-member-replacement"></a>
 
@@ -332,9 +376,11 @@ still apply to v0.4.9.
   idempotent; a longer client read timeout (for example 10 seconds) can turn
   these errors into slower commits; expect slower commits for about five
   minutes after a lost-member replacement; keep automatic replacement of lost
-  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled. A fix for
-  replacements of members whose volume was confirmed lost is planned for
-  v0.4.11; stalls after a node or container failure remain.
+  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled.
+  Replacements of members whose volume was confirmed lost are fixed in v0.4.11
+  once every surviving member runs the v0.4.11 agent; stalls after a node or
+  container failure remain; see
+  [known issues in v0.4.11](#mysql-gr-stalls-after-member-failure).
 
 <a id="status-during-long-operations"></a>
 
@@ -377,9 +423,11 @@ workarounds still apply.
   idempotent; a longer client read timeout (for example 10 seconds) can turn
   these errors into slower commits; expect slower commits for about five
   minutes after a lost-member replacement; keep automatic replacement of lost
-  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled. A fix for
-  replacements of members whose volume was confirmed lost is planned for
-  v0.4.11; stalls after a node or container failure remain.
+  MySQL volumes (`KARAKORAM_MYSQL_AUTO_REPLACE_LOST_VOLUMES`) disabled.
+  Replacements of members whose volume was confirmed lost are fixed in v0.4.11
+  once every surviving member runs the v0.4.11 agent; stalls after a node or
+  container failure remain; see
+  [known issues in v0.4.11](#mysql-gr-stalls-after-member-failure).
 
 ## Known issues in v0.4.7
 
