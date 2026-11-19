@@ -77,6 +77,22 @@ These cross-engine constraints define the operating model; engine-specific limit
 The [known issues in v0.4.7](#known-issues-in-v047) that are not marked fixed
 still apply to v0.4.9.
 
+<a id="pxc-ist-gtid-accounting"></a>
+
+- **PXC incremental backups can stop after a member recovers from a crash**
+  (also present in v0.4.0–v0.4.6). After a PXC member crashes and catches up
+  through IST, PXC can record the same transactions under a different GTID
+  source ID on that member, and Karakoram then reports `GTIDHistorySafe` False
+  or Unknown. Incremental backups are refused, point-in-time recovery stops
+  extending, and lost-volume replacement can be refused; previously proven
+  recovery windows remain available. Full backups keep running and remain the
+  recovery baseline, and the cluster keeps serving. This accounting mismatch is
+  not by itself evidence of data corruption. A new full backup can clear the
+  state only once every member's accounting is compatible again and observable;
+  it does not repair mixed source IDs. Do not reset or inject GTIDs. If the
+  state persists, open an issue on GitHub with the cluster's status and events.
+  A fix is planned for a later release.
+
 <a id="postgres-ha-lost-volume-replacement"></a>
 
 - **A PostgreSQL HA member whose volume is lost can't be replaced** (also

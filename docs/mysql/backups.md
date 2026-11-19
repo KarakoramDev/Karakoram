@@ -18,6 +18,29 @@ karactl -n NS backups get CLUSTER baseline -o json
 
 Creation returns an operation; observe that existing operation and terminal backup inventory rather than submitting again after a timeout. A streaming backup is not complete merely because one side of the upload finished. Interrupted backups are reported as failed, not silently repeated. Backups use DDL locking; schedule with DDL contention, donor load and available capacity in mind. Group Replication normally prefers an online secondary; when binary-log PITR is enabled, the backup must anchor the current archive writer instead.
 
+**Known issue since v0.4.0:** after crash recovery through IST, a PXC member can
+account replicated transactions under the bytewise complement of the Galera
+state UUID rather than the source ID used by its peers. Native evidence found
+equivalent row events with different source IDs and transaction numbers on
+PXC 8.4.11-11.1 and 8.4.11-12.1; this is not by itself evidence of corrupted
+data, and blindly merging or renaming those GTID intervals is unsafe.
+Karakoram can report `GTIDHistorySafe=False` (`GTIDHistoryDiverged` or the
+latched `GTIDHistoryDiscontinuityLatched`) or
+`GTIDHistorySafe=Unknown` (`QuorumComparisonUnavailable`). Incrementals and
+new PITR continuity are blocked; previously proven windows remain available.
+A history latch or incompatible survivor histories also refuses lost-volume
+replacement. Full backups keep running and remain the recovery baseline;
+serving is not stopped by this accounting check.
+
+A recorded incident does not clear merely because a member restarts or is
+replaced. A fresh successful full started after detection can acknowledge a
+new baseline only when all members have complete observable, compatible
+accounting and no unrepaired mixed-mapping evidence remains. A full does not
+repair mixed source IDs. Keep full backups, never reset or inject GTIDs, and
+open an issue on GitHub with cluster status and events if the condition
+persists. See [the known issue](../limitations.md#pxc-ist-gtid-accounting);
+a fix is planned for a later release.
+
 Streaming backups explicitly use one XtraBackup copy thread and 1 MiB read/chunk
 buffers, with two concurrent xbcloud uploads. The server's default buffer-pool
 sizing reserves non-pool and backup headroom, including for 1 GiB singletons;
