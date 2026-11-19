@@ -743,6 +743,27 @@
     ]
   },
   {
+    "name": "percona-xtradb-cluster-8.4.11-12.1",
+    "version": "8.4.11-12.1",
+    "file": "Percona-XtraDB-Cluster_8.4.11-12.1_Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "8ae35d537c467320fd16e6c5858a4701430923f01da8dc6a9a377e653e70bbc4",
+    "size": 234499079,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-XtraDB-Cluster-84/Percona-XtraDB-Cluster-8.4.11/binary/tarball/Percona-XtraDB-Cluster_8.4.11-12.1_Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-xtradb-cluster",
+      "commit": "dca75e8faed5348be08b159f7d5b1088427928dc"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64",
+      "socat",
+      "openssl"
+    ]
+  },
+  {
     "name": "percona-xtradb-cluster-8.4.11-11.1",
     "version": "8.4.11-11.1",
     "file": "Percona-XtraDB-Cluster_8.4.11-11.1_Linux.x86_64.glibc2.35-minimal.tar.gz",

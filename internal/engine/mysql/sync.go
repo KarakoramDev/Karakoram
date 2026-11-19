@@ -450,7 +450,13 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			// A retained volume keeps its backend size, not the runtime desire.
 			m.Resources.MinDisk, m.Resources.MaxDisk = disk.MinDisk, disk.MaxDisk
 			m.Replicas = desired.Replicas
-			m.Version = rc.Cluster.Spec.Version
+			if m.Role == "data" {
+				if e := p.setDeployVersion(ctx, rc, m, rc.Cluster.Spec.Version); e != nil {
+					return result, e
+				}
+			} else {
+				m.Version = rc.Cluster.Spec.Version
+			}
 			options, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
 			if e != nil {
 				return result, e
@@ -534,6 +540,13 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 		if m.Stage != "imported" {
 			continue
+		}
+		if m.Role == "data" && deployVersion(p.Name(), m.Version) != m.Version {
+			if e := p.setDeployVersion(ctx, rc, m, m.Version); e != nil {
+				return result, e
+			}
+			publishRevision(s)
+			return result, nil
 		}
 		spec, e := p.runtimeSpec(rc, m)
 		if e != nil {
@@ -653,7 +666,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			continue
 		}
 		desired := desiredComponent(rc, m)
-		if rollingNeedsWindow(m, rc.Cluster.Spec.Version, desired, parameters) || m.Replicas != desired.Replicas {
+		version := rc.Cluster.Spec.Version
+		if m.Role == "data" && versionSatisfies(p.Name(), m.Version, version) {
+			version = m.Version
+		}
+		if rollingNeedsWindow(m, version, desired, parameters) || m.Replicas != desired.Replicas {
 			converged = false
 		}
 		if m.Stage != "deployed" && m.Stage != "joined" {

@@ -97,20 +97,20 @@ A development build needs a mirror or an explicit published artifact release for
 
 <a id="withdrawn-pxc-download"></a>
 
-**Urgent known issue:** the upstream
+**Known issue in v0.4.0–v0.4.9:** the upstream
 `Percona-XtraDB-Cluster_8.4.11-11.1_Linux.x86_64.glibc2.35-minimal.tar.gz`
-download pinned by v0.4.0–v0.4.9 now returns 404. PXC preparation on all providers
-depends on it; Nomad also prepares existing members again on a new allocation.
-An existing running container/allocation does not redownload it on a process
-restart. There is no generally available workaround:
+download pinned by those releases now returns 404. Their PXC preparation on all
+providers depends on it; Nomad also prepares existing members again on a new
+allocation. An existing running container/allocation does not redownload it on
+a process restart. There is no generally available workaround on those releases:
 `KARAKORAM_ARTIFACT_MIRROR` helps only if you retained the exact original archive,
 SHA-256 `739c4a5ff8a356760e370a1d487aa2587eabca31a452b22e8c320af69416f8b0`.
 Do not substitute the new archive under the old filename or weaken checksum
 verification. PXC 8.0 cannot be freshly created, and Percona `.deb` packages do
 not implement this tarball preparation path. ProxySQL and plain MySQL are not
-affected. Avoid creating or rescheduling PXC data members and keep backups
-current; see [the affected operations](limitations.md#pxc-withdrawn-upstream-download).
-Fixed in the next release (re-pinned to 8.4.11-12.1).
+affected. Fixed in v0.4.10, which installs 8.4.11-12.1 for new and replaced data
+members (see [Percona MySQL](#percona-mysql) and
+[the affected operations](limitations.md#pxc-withdrawn-upstream-download)).
 
 `git describe` versions such as `v1.2.3-4-gabcdef0` (including a trailing
 `-dirty`) identify development builds, not published native-asset releases.
@@ -187,7 +187,24 @@ Consumers select new extension bundles through `nativeartifacts.ExtensionArtifac
 Application tarballs also retain the frozen validator source and original `application` invocation so their existing deployment commands remain byte-identical. Only explicitly typed PostgreSQL extension artifacts select the generalized validator.
 ### Percona MySQL
 
-[MySQL](https://www.oracle.com/mysql/) catalog releases pair a versioned `percona-server-<version>` entry with the same-major `percona-xtrabackup-<version>` entry. These are official GPL-2.0-only [Linux](https://www.kernel.org/) amd64 glibc2.35 **minimal** tarballs, with immutable upstream tag commits and verified download hashes and sizes. The 8.4 line uses [XtraBackup](https://www.percona.com/mysql/software/percona-xtrabackup) 8.4.0-7; the 8.0 line uses 8.0.35-36. The lock also pins [Percona](https://www.percona.com/) XtraDB Cluster 8.4.11-11.1 and 8.0.46-38.1 as official GPL-2.0-only Linux amd64 glibc2.35 minimal tarballs. The Server and XtraBackup entries use `libaio1t64`, `libnuma1`, and `libev4t64` (the latter is needed by `xbcloud`); [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster) additionally uses `socat` and `openssl` for its SST scripts.
+[MySQL](https://www.oracle.com/mysql/) catalog releases pair a versioned `percona-server-<version>` entry with the same-major `percona-xtrabackup-<version>` entry. These are official GPL-2.0-only [Linux](https://www.kernel.org/) amd64 glibc2.35 **minimal** tarballs, with immutable upstream tag commits and verified download hashes and sizes. The 8.4 line uses [XtraBackup](https://www.percona.com/mysql/software/percona-xtrabackup) 8.4.0-7; the 8.0 line uses 8.0.35-36. The lock also pins [Percona](https://www.percona.com/) XtraDB Cluster 8.4.11-12.1 and 8.0.46-38.1 as official GPL-2.0-only Linux amd64 glibc2.35 minimal tarballs. The Server and XtraBackup entries use `libaio1t64`, `libnuma1`, and `libev4t64` (the latter is needed by `xbcloud`); [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster) additionally uses `socat` and `openssl` for its SST scripts.
+
+PXC [8.4.11-12.1](https://docs.percona.com/percona-xtradb-cluster/8.4/release-notes/8.4.11-12.html)
+uses the official download sidecar SHA-256
+`8ae35d537c467320fd16e6c5858a4701430923f01da8dc6a9a377e653e70bbc4`
+and source commit `dca75e8faed5348be08b159f7d5b1088427928dc`.
+Percona withdrew the 8.4.11-11.1 tarball. Its lock entry remains unchanged
+solely to preserve existing member configuration and deployment identity.
+New clusters must select 12.1. Existing 11.1 specifications remain valid and do
+not trigger an automatic roll, including mixed 11.1/12.1 data members. Fresh
+data-member installations (scale-up, replacement, and resource or parameter rolls)
+use 12.1 and record a replacement event before changing the member's version.
+The cluster specification and rolling targets remain unchanged; proxy versions
+continue to follow `spec.version`. Only data-member installation substitutes the artifact.
+`upgrade-agents` is refused while any PXC data member is recorded at withdrawn
+11.1. Set `spec.version: 8.4.11-12.1` first: the normal rolling engine upgrade also
+installs the current agent, after which `upgrade-agents` can be retried.
+A `VersionWithdrawn` condition shows this guidance while the specification is 11.1.
 
 Percona Server/PXC/XtraBackup 8.0 reached [community EOL](https://www.percona.com/release-lifecycle-overview/)
 on 2026-04-01. The existing Server 8.0.46-37 / 8.0.45-36, PXC 8.0.46-38.1 and

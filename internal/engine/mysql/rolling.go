@@ -174,9 +174,13 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			restartingScale := m.Role == "proxy" && m.Replicas != desired.Replicas && (!serving || !rc.Backend.Capabilities().ReplicaScalePreservesServing || m.ProxyRuntimeHash != runtimeHash)
 			changed = changed || runtimeChanged
 			needsWindow = needsWindow || runtimeChanged || restartingScale
-			changed = changed || m.Version != rc.Cluster.Spec.Version || m.Replicas != desired.Replicas || !reflect.DeepEqual(m.Resources, desired.Resources)
+			version := rc.Cluster.Spec.Version
+			if m.Role == "data" && versionSatisfies(p.Name(), m.Version, version) {
+				version = m.Version
+			}
+			changed = changed || m.Version != version || m.Replicas != desired.Replicas || !reflect.DeepEqual(m.Resources, desired.Resources)
 			changed = changed || m.Role == "data" && !reflect.DeepEqual(m.Parameters, parameters)
-			needsWindow = needsWindow || rollingNeedsWindow(m, rc.Cluster.Spec.Version, desired, parameters)
+			needsWindow = needsWindow || rollingNeedsWindow(m, version, desired, parameters)
 			if m.Role == "data" {
 				from = m.Version
 			}
@@ -213,14 +217,15 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if err := maintenanceAllowed(ctx, rc, s); err != nil {
 			return true, err
 		}
-		if from != rc.Cluster.Spec.Version && !upgradeAllowed(from, rc.Cluster.Spec.Version) {
+		to := rc.Cluster.Spec.Version
+		if !versionSatisfies(p.Name(), from, to) && !upgradeAllowed(from, to) {
 			return true, engine.Invalid("unsupported MySQL version transition")
 		}
 		order, err := rollingOrder(ctx, rc, s)
 		if err != nil {
 			return true, err
 		}
-		u := &rollingState{From: from, To: rc.Cluster.Spec.Version, Major: mysqlMajor(from) != mysqlMajor(rc.Cluster.Spec.Version), RequestedAt: now(rc), Order: order, Stage: "backup", Targets: map[string]domain.ComponentSpec{}}
+		u := &rollingState{From: from, To: to, Major: mysqlMajor(from) != mysqlMajor(to), RequestedAt: now(rc), Order: order, Stage: "backup", Targets: map[string]domain.ComponentSpec{}}
 		u.Parameters = parameters
 		for _, m := range s.Members {
 			u.Targets[m.Name] = desiredComponent(rc, m)
@@ -293,10 +298,14 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		return true, err
 	}
 	restartingScale := m.Role == "proxy" && m.Replicas != target.Replicas && (!serving || !rc.Backend.Capabilities().ReplicaScalePreservesServing || m.ProxyRuntimeHash != runtimeHash)
-	needsWindow := runtimeChanged || restartingScale || rollingNeedsWindow(m, u.To, target, u.Parameters)
+	version := u.To
+	if m.Role == "data" && versionSatisfies(p.Name(), m.Version, version) {
+		version = m.Version
+	}
+	needsWindow := runtimeChanged || restartingScale || rollingNeedsWindow(m, version, target, u.Parameters)
 	switch u.Stage {
 	case "prepare":
-		if !runtimeChanged && m.Version == u.To && m.Replicas == target.Replicas && reflect.DeepEqual(m.Resources, target.Resources) && (m.Role != "data" || reflect.DeepEqual(m.Parameters, u.Parameters)) {
+		if !runtimeChanged && m.Version == version && m.Replicas == target.Replicas && reflect.DeepEqual(m.Resources, target.Resources) && (m.Role != "data" || reflect.DeepEqual(m.Parameters, u.Parameters)) {
 			u.Index++
 			return true, nil
 		}
@@ -663,7 +672,13 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 				return true, err
 			}
 		}
-		m.Version = u.To
+		if m.Role == "data" {
+			if err := p.setDeployVersion(ctx, rc, m, u.To); err != nil {
+				return true, err
+			}
+		} else {
+			m.Version = u.To
+		}
 		m.Resources = target.Resources
 		m.Replicas = target.Replicas
 		if m.Role == "data" {
@@ -672,6 +687,13 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		publishRevision(s)
 		u.Stage = "deploy"
 	case "deploy":
+		if m.Role == "data" && deployVersion(p.Name(), m.Version) != m.Version {
+			if err := p.setDeployVersion(ctx, rc, m, m.Version); err != nil {
+				return true, err
+			}
+			publishRevision(s)
+			return true, nil
+		}
 		spec, err := p.runtimeSpec(rc, m)
 		if err != nil {
 			return true, err

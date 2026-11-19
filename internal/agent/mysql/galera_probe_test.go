@@ -253,7 +253,7 @@ func TestGaleraHistoryProbePreservesBorrowedPool(t *testing.T) {
 			// Exercise the actual native-status SQL path used by CP polling,
 			// not merely a separate fresh connection like /sql/status.
 			connector.queries = append(connector.queries,
-				groupQuery{contains: "SELECT @@server_uuid", values: []driver.Value{uuid, expectedGTID, true, true, "8.4.11-11.1"}},
+				groupQuery{contains: "SELECT @@server_uuid", values: []driver.Value{uuid, expectedGTID, true, true, "8.4.11-12.1"}},
 				groupQuery{contains: "SELECT @@GLOBAL.gtid_executed", values: []driver.Value{expectedGTID, uuid, fenced}},
 			)
 			var status myspec.StatusResponse

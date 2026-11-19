@@ -48,9 +48,9 @@ func nativeGaleraConfigs(t *testing.T, file string) []nativeGaleraConfig {
 	}
 	version := os.Getenv("KARAKORAM_PXC_VERSION")
 	if version == "" {
-		version = "8.4.11-11.1"
+		version = "8.4.11-12.1"
 	}
-	if version != "8.4.11-11.1" && version != "8.0.46-38.1" {
+	if version != "8.4.11-12.1" && version != "8.4.11-11.1" && version != "8.0.46-38.1" {
 		t.Fatalf("unsupported native PXC catalog version %s", version)
 	}
 	var data, proxy []nativeGaleraConfig

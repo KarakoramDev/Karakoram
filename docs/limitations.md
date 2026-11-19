@@ -156,9 +156,12 @@ still apply to v0.4.9.
   Creating or restoring a PXC cluster, `replace-member` and adding data members
   fail (on Zerops: `commandExec … exit status 22`); on Nomad, a member whose
   allocation is replaced (job update, agent upgrade, node drain or loss) can't
-  come back. Running members keep serving. Until the fix release, avoid
-  operations that create or reschedule PXC data members, and keep backups
-  current. Fixed in the next release (re-pinned to 8.4.11-12.1).
+  come back. Running members keep serving. Until you upgrade, avoid operations
+  that create or reschedule PXC data members, and keep backups current.
+  **Fixed in v0.4.10:** new and replaced PXC 8.4 data members install
+  8.4.11-12.1; after upgrading the control plane, set
+  `spec.version: 8.4.11-12.1` on every PXC 8.4 cluster
+  ([upgrade guide](upgrade.md#withdrawn-pxc-84-artifact)).
 
 <a id="pxc-interrupted-sst-temporary-directory"></a>
 

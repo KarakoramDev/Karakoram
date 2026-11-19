@@ -85,6 +85,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		return status, err
 	}
 	defer func() {
+		if replacement := deployVersion(p.Name(), rc.Cluster.Spec.Version); replacement != rc.Cluster.Spec.Version {
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "VersionWithdrawn", Status: "True", Reason: "UpstreamArtifactWithdrawn", Message: "Percona withdrew spec.version " + rc.Cluster.Spec.Version + "; new and replaced data members run " + replacement + ". Set spec.version: " + replacement + "; upgrade-agents is blocked while any data member still runs the withdrawn build", LastTransitionTime: now(rc)})
+		}
 		p.applyMySQLRuntimeRecoveryStatus(&status, s, now(rc))
 		if cp := s.Replacement; cp != nil {
 			if next := s.find(cp.New); next != nil && next.ImportAmbiguity != "" {

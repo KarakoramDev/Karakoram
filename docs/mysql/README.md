@@ -15,19 +15,16 @@ Karakoram offers two native [MySQL](https://www.mysql.com/)-compatible engine dr
 | Backup types | XtraBackup `full`, `incremental`; optional binary-log PITR | Same lifecycle, separate engine driver provenance and repository |
 | Native access | MySQL users, databases and database-level grants | Same MySQL access interface |
 
-Use `karactl providers get mysql -o json` or `karactl providers get pxc -o json` for exact available versions, presets, resources and upgrade paths. Version strings are engine driver-specific; do not substitute a [Percona Server](https://docs.percona.com/percona-server/) version for a [PXC](https://docs.percona.com/percona-xtradb-cluster/) version. Catalog defaults currently select Percona Server **8.4.11-11** and PXC **8.4.11-11.1**. A compatible, checksum-locked [XtraBackup](https://docs.percona.com/percona-xtrabackup/) release is selected with the server; its own compatibility check is not bypassed. Native artifacts target [Linux](https://www.kernel.org/) amd64 with the declared [Ubuntu](https://ubuntu.com/) 24.04 runtime dependencies; see [native artifacts](../native-artifacts.md).
+Use `karactl providers get mysql -o json` or `karactl providers get pxc -o json` for exact available versions, presets, resources and upgrade paths. Version strings are engine driver-specific; do not substitute a [Percona Server](https://docs.percona.com/percona-server/) version for a [PXC](https://docs.percona.com/percona-xtradb-cluster/) version. Catalog defaults currently select Percona Server **8.4.11-11** and PXC **8.4.11-12.1**. A compatible, checksum-locked [XtraBackup](https://docs.percona.com/percona-xtrabackup/) release is selected with the server; its own compatibility check is not bypassed. Native artifacts target [Linux](https://www.kernel.org/) amd64 with the declared [Ubuntu](https://ubuntu.com/) 24.04 runtime dependencies; see [native artifacts](../native-artifacts.md).
 
-**Urgent known issue:** the pinned PXC 8.4.11-11.1 tarball was withdrawn upstream
-and now returns 404. New PXC data-member preparation fails on every provider;
-on Nomad, replacing an existing member's allocation also requires this download.
-Running members and restarts within the same container/allocation keep working.
-ProxySQL and plain MySQL (Percona Server) are not affected. Avoid creating,
-restoring into new clusters, replacing, scaling out or rescheduling PXC data
-members until the fix release; keep backups current. PXC 8.0 is not an alternative
-for new clusters, and upstream `.deb` packages are not a substitute for this
-locked tarball. See [the known issue](../limitations.md#pxc-withdrawn-upstream-download)
-and [the exact-byte mirror limitation](../native-artifacts.md#withdrawn-pxc-download).
-Fixed in the next release (re-pinned to 8.4.11-12.1).
+**PXC 8.4.11-11.1 was withdrawn upstream:** Percona replaced it with 8.4.11-12.1,
+and the 8.4.11-11.1 tarball pinned by v0.4.0–v0.4.9 now returns 404, so those
+releases can't prepare new PXC data members (on Nomad also rescheduled
+allocations). From v0.4.10, new and replaced data members install 8.4.11-12.1
+and new clusters can no longer select 8.4.11-11.1. After upgrading the control
+plane, set `spec.version: 8.4.11-12.1` on every PXC 8.4 cluster; see
+[upgrading to v0.4.10](../upgrade.md#withdrawn-pxc-84-artifact) and
+[the known issue](../limitations.md#pxc-withdrawn-upstream-download).
 
 Percona Server, PXC and XtraBackup **8.0 reached community end of life on
 2026-04-01** ([Percona lifecycle](https://www.percona.com/release-lifecycle-overview/)).

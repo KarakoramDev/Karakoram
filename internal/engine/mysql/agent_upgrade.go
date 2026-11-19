@@ -77,6 +77,18 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			err = e
 		}
 	}()
+	// Refuse before selecting or touching any member. ErrInvalid is terminal;
+	// cancellation and settlement of already submitted receipts remain allowed.
+	if !cancel && cp.Stage != "waiting" && cp.Stage != "settling" {
+		for _, m := range s.Members {
+			if m.Role != "data" {
+				continue
+			}
+			if replacement := deployVersion(p.Name(), m.Version); replacement != m.Version {
+				return result, engine.Invalid("PXC member %s runs %s, which Percona withdrew; set spec.version: %s first (the rolling upgrade also installs the current agent), then retry upgrade-agents", m.Name, m.Version, replacement)
+			}
+		}
+	}
 	if cp.Member == "" && cp.StopReason != "" {
 		return agentUpgradeRetired(&cp, cancel)
 	}

@@ -24,7 +24,7 @@ Release status and provider-specific availability are centralized in [engine ava
 | OpenBao | OpenBao 2.7.1 | 1/3/5 members; integrated Raft or bound PostgreSQL storage | Raft snapshots to S3; PostgreSQL storage uses source recovery; no PITR for Raft | [OpenBao](docs/openbao/README.md) |
 | Temporal | Temporal 1.32.1 (also 1.31.4); ui-server 2.56.0 | Combined server; split stateless roles on bound PostgreSQL; Dokploy/Nomad only, not Zerops | Source PostgreSQL backup plus cluster-state manifest; requires binding service | [Temporal](docs/temporal/README.md) |
 | MySQL | Percona Server for MySQL 8.4.11-11 default; majors 8.4/8.0 | Single; Group Replication single-primary (3/5); ProxySQL | XtraBackup full/incremental and GTID-based PITR | [MySQL](docs/mysql/README.md) |
-| Percona XtraDB Cluster | PXC 8.4.11-11.1 default; majors 8.4/8.0; separate `pxc` engine driver | Galera cluster (3/5); one ProxySQL-routed writer | Separate PXC backup provenance; full/incremental and PITR | [PXC](docs/mysql/README.md) |
+| Percona XtraDB Cluster | PXC 8.4.11-12.1 default; majors 8.4/8.0; separate `pxc` engine driver | Galera cluster (3/5); one ProxySQL-routed writer | Separate PXC backup provenance; full/incremental and PITR | [PXC](docs/mysql/README.md) |
 | Neo4j Community | Neo4j 2026.09.0 / 2026.10.0 (default); Temurin Java 21 | Single member only | Offline system + graph dumps; full outage; no PITR | [Neo4j](docs/neo4j/README.md) |
 
 ## Providers

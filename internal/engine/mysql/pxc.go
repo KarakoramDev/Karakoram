@@ -3,15 +3,54 @@
 package mysql
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
 
 var pxcCatalog = []domain.VersionInfo{
-	{Version: "8.4.11-11.1", Major: "8.4", Default: true, Status: "supported"},
+	{Version: "8.4.11-12.1", Major: "8.4", Default: true, Status: "supported"},
+	{Version: "8.4.11-11.1", Major: "8.4", Status: "deprecated"},
 	{Version: "8.0.46-38.1", Major: "8.0", Status: "deprecated"},
+}
+
+// Withdrawn entries stay in the catalog and artifact lock for existing member
+// identity. Only fresh deployments substitute the available upstream release.
+var withdrawnPXC = map[string]string{"8.4.11-11.1": "8.4.11-12.1"}
+
+func deployVersion(engineName, version string) string {
+	if engineName == "pxc" {
+		if replacement, ok := withdrawnPXC[version]; ok {
+			return replacement
+		}
+	}
+	return version
+}
+
+func versionSatisfies(engineName, memberVersion, specVersion string) bool {
+	return memberVersion == specVersion || memberVersion == deployVersion(engineName, specVersion)
+}
+
+func (p *Core) setDeployVersion(ctx context.Context, rc *engine.Context, m *member, version string) error {
+	if m.Role != "data" {
+		m.Version = version
+		return nil
+	}
+	target := deployVersion(p.Name(), version)
+	withdrawn := m.Version
+	if deployVersion(p.Name(), withdrawn) == withdrawn {
+		withdrawn = version
+	}
+	if m.Version != target && deployVersion(p.Name(), withdrawn) != withdrawn && rc.Events != nil {
+		if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Type: "Normal", Reason: "WithdrawnVersionReplaced", Message: fmt.Sprintf("Member %s moves from %s to %s because Percona withdrew the %s artifact", m.Name, withdrawn, target, withdrawn)}); err != nil {
+			return err
+		}
+	}
+	m.Version = target
+	return nil
 }
 
 func (p *Core) versions() []domain.VersionInfo {

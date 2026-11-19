@@ -181,6 +181,9 @@ func (p *Core) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if !known {
 		return engine.Invalid("unsupported MySQL version")
 	}
+	if replacement := deployVersion(p.Name(), s.Version); old == nil && replacement != s.Version {
+		return engine.InvalidField("spec.version", domain.ReasonUnsupported, "Percona withdrew PXC %s; new clusters must use %s, including dataSource restores", s.Version, replacement)
+	}
 	// Physical recovery requires the source major. Data-source creates still
 	// pass the ordinary backup provenance and same-provider/major validation.
 	if old == nil && s.DataSource == nil && major(s.Version) == "8.0" {

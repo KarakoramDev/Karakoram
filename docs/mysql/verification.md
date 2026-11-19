@@ -86,7 +86,7 @@ and transport, not the security policy. It writes initial, formed, traffic-rotat
 and 3→5 membership checkpoints with their actual credentials, so protect and
 remove this directory after acceptance.
 
-Run the following procedure separately for catalog versions `8.4.11-11.1` and
+Run the following procedure separately for catalog versions `8.4.11-12.1` and
 `8.0.46-38.1`, selecting that version's checksum-verified PXC artifact and bundled
 compatible XtraBackup. Use a separate export directory for each version:
 

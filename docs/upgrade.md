@@ -9,7 +9,37 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 These instructions apply when upgrading from v0.4.9. The health-observation and
 platform-read changes below take effect when the control plane is upgraded; they
 need no agent rollout. Only the Dokploy sudo policy arrives with the member
-images, through the normal agent upgrade roll.
+images, through the normal agent upgrade roll. PXC 8.4 clusters additionally
+need `spec.version: 8.4.11-12.1` after the control-plane upgrade; see
+[withdrawn PXC 8.4 artifact](#withdrawn-pxc-84-artifact).
+
+### Withdrawn PXC 8.4 artifact
+
+The PXC default is now **8.4.11-12.1** because Percona withdrew the
+8.4.11-11.1 tarball. This fixes the v0.4.9 known issue
+[withdrawn PXC download](limitations.md#pxc-withdrawn-upstream-download).
+New 11.1 clusters, including restores to new clusters, are
+rejected. Existing clusters keep their specification and running members:
+upgrading the control plane does not roll them automatically. Scale-up,
+replacement and resource/parameter rolls install 12.1 on data members instead,
+recording `WithdrawnVersionReplaced` events before changing their recorded version.
+The cluster specification and rolling targets remain unchanged, and proxy versions
+continue to follow `spec.version`. Mixed 11.1/12.1 data members satisfy an 11.1
+specification without triggering another roll.
+
+The `VersionWithdrawn` condition remains until you set
+`spec.version: 8.4.11-12.1`. While any PXC data member is recorded at withdrawn
+11.1, `upgrade-agents` is refused before selecting or touching a member. Set the
+replacement version first: the normal rolling engine upgrade also installs the
+current agent. After that roll completes, retry `upgrade-agents` if needed.
+The old artifact lock is retained unchanged for existing member identity, not
+as an available download. See [artifact provenance](native-artifacts.md#percona-mysql).
+
+Set the new version promptly. A data member whose runtime is re-prepared by the
+platform rather than by Karakoram still runs its original 11.1 preparation and
+cannot start. An example is a [Nomad](https://developer.hashicorp.com/nomad)
+allocation rescheduled after node loss or drain. Running members are unaffected
+until that happens.
 
 ### Health observation during long operations
 

@@ -412,11 +412,12 @@ blocked birth may instead be deleted/re-created.
 
 
 [Galera](https://galeracluster.com/) `Synced` and matching rows are not sufficient proof of MySQL GTID
-continuity. On the pinned PXC 8.0.46-38.1 and 8.4.11-11.1 releases, a missing-write
-IST rejoin can assign a replicated application row a different GTID on the
+continuity. On PXC 8.0.46-38.1 and 8.4.11-11.1, a missing-write IST rejoin was
+observed to assign a replicated application row a different GTID on the
 receiver, including a SID that is the bitwise inverse of the Galera state UUID.
 This is not an extra application transaction or a restore-time account write,
 but it can invalidate asynchronous-replica and binary-log recovery continuity.
+The v0.4.10 re-pin to 8.4.11-12.1 is not a fix for this continuity issue.
 PXC's [SID initialization](https://github.com/percona/percona-xtradb-cluster/blob/33f7510189c5719c852837d7ad9ba5e7d6431f4d/sql/wsrep_mysqld.cc#L673-L693)
 and [automatic GTID assignment](https://github.com/percona/percona-xtradb-cluster/blob/33f7510189c5719c852837d7ad9ba5e7d6431f4d/sql/binlog.cc#L1787-L1809)
 distinguish cluster and local GTID identities; the inverse SID alone is not an

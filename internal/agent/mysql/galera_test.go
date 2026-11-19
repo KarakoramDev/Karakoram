@@ -18,8 +18,8 @@ import (
 func testGaleraSpec() myspec.Spec {
 	s := coreTestSpec()
 	s.Topology = myspec.TopologyCluster
-	s.ServerDir = "/opt/karakoram/percona-xtradb-cluster-8.4.11-11.1"
-	s.Version = "8.4.11-11.1"
+	s.ServerDir = "/opt/karakoram/percona-xtradb-cluster-8.4.11-12.1"
+	s.Version = "8.4.11-12.1"
 	s.Galera = &myspec.Galera{ClusterName: "test-cluster", FormationEpoch: 1, Peers: []myspec.Peer{{Name: s.Member, Host: "127.0.0.1", Port: 4567}}, GaleraPort: 4567, ISTPort: 4568, SSTPort: 4444, GCacheSize: "32M", Bootstrap: true}
 	s.Galera.TrafficCert = s.ServerCert
 	s.Galera.TrafficCAPEM = "-----BEGIN CERTIFICATE-----\nYg==\n-----END CERTIFICATE-----"

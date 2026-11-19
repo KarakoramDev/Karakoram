@@ -15,10 +15,18 @@ import (
 // Native integration binaries retain strict wire validation but run extracted
 // artifacts without privileged installation or production network listeners.
 func nativeSpec(s myspec.Spec) myspec.Spec {
-	if bin := os.Getenv("KARAKORAM_MYSQL_BIN_DIR"); bin != "" {
+	bin := os.Getenv("KARAKORAM_MYSQL_BIN_DIR_" + s.Member)
+	if bin == "" {
+		bin = os.Getenv("KARAKORAM_MYSQL_BIN_DIR")
+	}
+	if bin != "" {
 		s.ServerDir = filepath.Dir(bin)
 	}
-	if dir := os.Getenv("KARAKORAM_MYSQL_XTRABACKUP_DIR"); dir != "" {
+	dir := os.Getenv("KARAKORAM_MYSQL_XTRABACKUP_DIR_" + s.Member)
+	if dir == "" {
+		dir = os.Getenv("KARAKORAM_MYSQL_XTRABACKUP_DIR")
+	}
+	if dir != "" {
 		s.XtraBackupDir = dir
 	}
 	return s

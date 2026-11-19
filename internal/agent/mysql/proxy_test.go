@@ -117,7 +117,7 @@ func TestProxyTLSReloadStatements(t *testing.T) {
 
 func TestRestoreProxyCandidateUsesStrictAgentDecoder(t *testing.T) {
 	s := coreTestSpec()
-	s.Member, s.Role, s.Topology, s.Version, s.AllowInitialize = "proxy1", myspec.RoleProxy, myspec.TopologyCluster, "8.4.11-11.1", false
+	s.Member, s.Role, s.Topology, s.Version, s.AllowInitialize = "proxy1", myspec.RoleProxy, myspec.TopologyCluster, "8.4.11-12.1", false
 	s.Proxy = testProxySpec().Proxy
 	s.Proxy.Mode = "galera"
 	s.Proxy.Backends = []myspec.Peer{{Name: "seed1", Host: "seed1", Port: 3306}}

@@ -27,6 +27,9 @@ func TestPXCExportNativeMemberConfigs(t *testing.T) {
 	}
 	p, rc, b := setupPXC(t)
 	if version := os.Getenv("KARAKORAM_PXC_VERSION"); version != "" {
+		if version != "8.4.11-12.1" && version != "8.0.46-38.1" {
+			t.Fatalf("native config export requires an available PXC release (8.4.11-12.1 or 8.0.46-38.1), got %s", version)
+		}
 		rc.Cluster.Spec.Version = version
 	}
 	// Publicly supported parameter inputs bound native memory without altering
