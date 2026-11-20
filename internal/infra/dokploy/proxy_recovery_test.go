@@ -146,6 +146,25 @@ func TestOrdinaryProxyChangedTargetRecovery(t *testing.T) {
 					}
 				}
 			}
+			// The reconciler persists the observed generation before it completes
+			// the operation, so read the cluster only after the operation is
+			// terminal; a snapshot taken by wait itself can predate completion.
+			settle := func(id string) (*model.Operation, *model.Cluster) {
+				t.Helper()
+				wait(func(*model.Cluster) bool {
+					op, _ := st.GetOperation(t.Context(), id)
+					return op != nil && op.Terminal()
+				})
+				op, err := st.GetOperation(t.Context(), id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				c, err := st.GetCluster(t.Context(), current.Ref())
+				if err != nil {
+					t.Fatal(err)
+				}
+				return op, c
+			}
 			current = wait(func(c *model.Cluster) bool {
 				return c.Status.Phase == model.PhaseReady && c.Status.ObservedGeneration == c.Generation
 			})
@@ -172,13 +191,10 @@ func TestOrdinaryProxyChangedTargetRecovery(t *testing.T) {
 				t.Fatal(err)
 			}
 			previousGeneration := current.Status.ObservedGeneration
-			current = wait(func(c *model.Cluster) bool {
-				op, _ := st.GetOperation(t.Context(), failed.ID)
-				return op != nil && op.Terminal()
-			})
-			op, err := st.GetOperation(t.Context(), failed.ID)
-			if err != nil || op.Phase != model.PhaseFailed || op.CompletedAt == nil || op.Failures != 1 || !strings.Contains(op.Message, "manual recovery required") {
-				t.Fatalf("not immediately failed: %+v %v", op, err)
+			op, settled := settle(failed.ID)
+			current = settled
+			if op.Phase != model.PhaseFailed || op.CompletedAt == nil || op.Failures != 1 || !strings.Contains(op.Message, "manual recovery required") {
+				t.Fatalf("not immediately failed: %+v", op)
 			}
 			if current.Status.ObservedGeneration != previousGeneration {
 				t.Fatal("failed generation acknowledged")
@@ -225,13 +241,10 @@ func TestOrdinaryProxyChangedTargetRecovery(t *testing.T) {
 				t.Fatal("corrected target bypassed latest configuration acknowledgement")
 			}
 			holdAcknowledgement.Store(false)
-			current = wait(func(c *model.Cluster) bool {
-				op, _ := st.GetOperation(t.Context(), recovery.ID)
-				return op != nil && op.Terminal()
-			})
-			recovered, err := st.GetOperation(t.Context(), recovery.ID)
-			if err != nil || recovered.Phase != model.PhaseSucceeded || current.Status.ObservedGeneration != current.Generation {
-				t.Fatalf("corrected target did not converge: %+v status=%+v %v", recovered, current.Status, err)
+			recovered, settled := settle(recovery.ID)
+			current = settled
+			if recovered.Phase != model.PhaseSucceeded || current.Status.ObservedGeneration != current.Generation {
+				t.Fatalf("corrected target did not converge: %+v status=%+v", recovered, current.Status)
 			}
 			if fakeCalls(f, "application.reload") != before+1 {
 				t.Fatal("recovery did not submit exactly one replacement")
