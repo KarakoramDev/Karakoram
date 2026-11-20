@@ -5,6 +5,7 @@ package dokploy
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"time"
 
@@ -54,4 +55,41 @@ func TestContract(t *testing.T) {
 			Timeout:      3 * time.Second,
 		}
 	})
+}
+
+func TestFakeAPITargetStateLifetime(t *testing.T) {
+	active := newFakeAPI(t)
+	activeBackend := fakeBackend(t, active, nil)
+	activeBackend.remember("active", "active-id")
+	var retiredKey string
+	t.Run("retired-server", func(t *testing.T) {
+		retired := newFakeAPI(t)
+		first := fakeBackend(t, retired, nil)
+		second := fakeBackend(t, retired, nil)
+		first.remember("retired", "retired-id")
+		if second.state != first.state || second.remembered("retired") != "retired-id" {
+			t.Fatal("live clients stopped sharing target identity state")
+		}
+		retiredKey = retired.server.URL + "\x00environment"
+	})
+	if _, retained := targetLocks.Load(retiredKey); retained {
+		t.Error("closed fake retained target identity state for a reusable server address")
+	}
+	if again := fakeBackend(t, active, nil); again.state != activeBackend.state || again.remembered("active") != "active-id" {
+		t.Error("closing another fake discarded an active target's identity state")
+	}
+}
+
+func TestImportRememberedIdentityRemainsFailClosed(t *testing.T) {
+	f := newFakeAPI(t)
+	first := fakeBackend(t, f, nil)
+	op := importFake(t, first, volumeSpec("owned"))
+	id := op.Services["owned"]
+	f.mu.Lock()
+	f.apps[id].row["name"] = "foreign"
+	f.mu.Unlock()
+	second := fakeBackend(t, f, nil)
+	if _, err := second.ImportServices(t.Context(), []infra.ServiceSpec{volumeSpec("owned")}); !errors.Is(err, infra.ErrConflict) {
+		t.Fatalf("changed remembered identity was accepted: %v", err)
+	}
 }

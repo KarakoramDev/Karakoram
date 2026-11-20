@@ -106,9 +106,10 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	}
 	f.server = httptest.NewServer(http.HandlerFunc(f.serveHTTP))
 	t.Cleanup(func() {
-		// Discard this server's admission state before Close releases its port.
-		// A later fake can reuse both the URL and the generated application IDs.
+		// Discard all target identity/admission state before Close releases the
+		// port: a new fake database can reuse this URL and application IDs.
 		deploymentServers.Delete(f.server.URL)
+		targetLocks.Delete(f.server.URL + "\x00environment")
 		f.server.Close()
 	})
 	return f
